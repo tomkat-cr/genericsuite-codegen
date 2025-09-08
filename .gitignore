@@ -216,9 +216,17 @@ __marimo__/
 .idea
 
 # Cursor
+.cursor/
 
 # Windsurf
+.windsurf/
+
+# GS CodeGen
 
 node_modules
-server/genericsuite_codegen/api/utilities.py
+
+deploy/docker-compose.yml
 deploy/nginx.conf
+deploy/docker_images/Dockerfile.backup_*
+
+server/server-entrypoint.sh

@@ -9,22 +9,23 @@ packages = [{include = "genericsuite_codegen"}]
 
 [tool.poetry.dependencies]
 python = "^3.12,<3.14"
-fastapi = "^0.104.1"
-uvicorn = {extras = ["standard"], version = "^0.24.0"}
+fastapi = "^0.116.1"
+uvicorn = {extras = ["standard"], version = "^0.35.0"}
 pydantic = "^2.5.0"
-pydantic-ai = "^0.0.13"
+pydantic-ai = "^1.0.1"
 pymongo = "^4.6.0"
 openai = "^1.3.0"
 sentence-transformers = "^2.2.2"
 transformers = "^4.36.0"
 torch = "^2.1.0"
 pypdf2 = "^3.0.1"
-python-multipart = "^0.0.6"
+python-multipart = "^0.0.20"
 python-dotenv = "^1.0.0"
 litellm = "^1.17.0"
-httpx = "^0.27.2"
+httpx = "^0.28.1"
 aiofiles = "^23.2.0"
 gitpython = "^3.1.40"
+fastmcp = "^2.12.2"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.0"

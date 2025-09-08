@@ -19,7 +19,8 @@ from genericsuite_codegen.database.setup import (
     VectorSearchError,
     DatabaseConnectionError
 )
-from genericsuite_codegen.document_processing.embeddings import get_embedding_provider
+from genericsuite_codegen.document_processing.embeddings import \
+    create_embedding_generator
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -77,7 +78,7 @@ class KnowledgeBaseTool:
     def _initialize_embedding_provider(self) -> None:
         """Initialize the embedding provider for query vectorization."""
         try:
-            self.embedding_provider = get_embedding_provider()
+            self.embedding_provider = create_embedding_generator()
             logger.info("Initialized embedding provider for knowledge base tool")
         except Exception as e:
             logger.error(f"Failed to initialize embedding provider: {e}")

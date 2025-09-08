@@ -1,6 +1,6 @@
 # Manages Docker Compose services for production deployment
 
-.PHONY: help up down restart logs build clean status shell-server
+.PHONY: help up down restart logs build clean status shell-server sync-deps
 
 # Default target
 help:
@@ -14,6 +14,7 @@ help:
 	@echo "  clean       - Stop services and remove volumes"
 	@echo "  status      - Show service status"
 	@echo "  shell-server - Open shell in server container"
+	@echo "  sync-deps   - Synchronize dependencies from pyproject.toml to Dockerfile"
 
 # Start all services
 up:
@@ -61,3 +62,8 @@ status:
 # Open shell in server container
 shell-server:
 	docker compose exec gscodegen-server sh
+
+# Synchronize dependencies from pyproject.toml files to Dockerfile
+sync-deps:
+	@echo "Synchronizing dependencies from pyproject.toml files to Dockerfile..."
+	dependency-sync/sync_dependencies.sh --defaults
