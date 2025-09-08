@@ -1,0 +1,16 @@
+{
+  "name": "genericsuite-codegen-mcp-server",
+  "version": "1.0.0",
+  "description": "GenericSuite CodeGen MCP Server",
+  "scripts": {
+    "dev": "make dev",
+    "build": "make build",
+    "start": "make start",
+    "test": "make test",
+    "clean": "make clean",
+    "api:install": "make install"
+  },
+  "keywords": ["mcp", "python", "ai", "tools"],
+  "author": "Carlos J. Ramirez",
+  "license": "MIT"
+}

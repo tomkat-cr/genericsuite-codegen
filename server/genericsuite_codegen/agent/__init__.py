@@ -1,0 +1,1 @@
+"""Pydantic AI agent module for knowledge base queries and code generation."""
