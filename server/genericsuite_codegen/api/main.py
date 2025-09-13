@@ -50,18 +50,20 @@ from .utilities import (
     create_correlation_id,
     log_request_response,
 )
-from genericsuite_codegen.agent.agent import initialize_agent
 from genericsuite_codegen.database.setup import (
     get_database_connection,
     test_database_connection,
 )
 
+DEBUG = True
+
 # Configure logging
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO if DEBUG else logging.WARNING)
 
 
-# EP_PREFIX = '/api'
 EP_PREFIX = ''
+PERFORM_AGENT_HEALT_CHECK = os.getenv("PERFORM_AGENT_HEALT_CHECK", "0") == "1"
 
 
 @asynccontextmanager
@@ -83,10 +85,12 @@ async def lifespan(app: FastAPI):
             raise RuntimeError("Database connection failed")
 
         # Initialize AI agent
-        agent = initialize_agent()
-        health = await agent.health_check()
-        if health["status"] != "healthy":
-            logger.warning(f"Agent health check failed: {health}")
+        if PERFORM_AGENT_HEALT_CHECK:
+            from genericsuite_codegen.agent.agent import initialize_agent
+            agent = initialize_agent()
+            health = await agent.health_check()
+            if health["status"] != "healthy":
+                logger.warning(f"Agent health check failed: {health}")
 
         logger.info("API server startup completed successfully")
 
@@ -163,10 +167,17 @@ def setup_middleware(app: FastAPI) -> None:
 
     # Request logging middleware
     @app.middleware("http")
-    async def request_logging_middleware(request: Request, call_next):
+    async def request_logging_middleware(
+        request: Request,
+        call_next,
+    ):
         """Log requests and responses with correlation IDs."""
         correlation_id = create_correlation_id()
         request.state.correlation_id = correlation_id
+
+        if DEBUG:
+            api_requests_logger = logging.getLogger("api.requests")
+            api_requests_logger.setLevel(logging.INFO)
 
         # Log request
         log_request_response(
@@ -175,6 +186,8 @@ def setup_middleware(app: FastAPI) -> None:
             correlation_id=correlation_id,
             event_type="request",
         )
+
+        logger.info(f"request_logging_middleware | Request: {request}")
 
         # Process request
         response = await call_next(request)
@@ -204,7 +217,8 @@ def setup_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(
-        request: Request, exc: RequestValidationError
+        request: Request,
+        exc: RequestValidationError,
     ):
         """Handle request validation errors."""
         correlation_id = getattr(request.state, "correlation_id", "unknown")
@@ -223,7 +237,10 @@ def setup_exception_handlers(app: FastAPI) -> None:
         return Response(status_code=422, content=str(error_response))
 
     @app.exception_handler(HTTPException)
-    async def http_exception_handler(request: Request, exc: HTTPException):
+    async def http_exception_handler(
+        request: Request,
+        exc: HTTPException,
+    ):
         """Handle HTTP exceptions."""
         correlation_id = getattr(request.state, "correlation_id", "unknown")
 
@@ -244,7 +261,10 @@ def setup_exception_handlers(app: FastAPI) -> None:
                         content=str(error_response))
 
     @app.exception_handler(Exception)
-    async def general_exception_handler(request: Request, exc: Exception):
+    async def general_exception_handler(
+        request: Request,
+        exc: Exception
+    ):
         """Handle general exceptions."""
         correlation_id = getattr(request.state, "correlation_id", "unknown")
 
@@ -323,9 +343,15 @@ def setup_routes(app: FastAPI) -> None:
 
     # Agent Query Endpoints
 
-    @app.post(EP_PREFIX + "/query", response_model=QueryResponse,
-              tags=["Agent"])
-    async def query_agent(request: QueryRequest, req: Request):
+    @app.post(
+        EP_PREFIX + "/query",
+        # response_model=QueryResponse,
+        # response_model=Dict[str, Any],
+        tags=["Agent"])
+    async def query_agent(
+        req: Request,
+        request: Optional[QueryRequest] = Body(default=None),
+    ):
         """
         Query the AI agent.
 
@@ -339,10 +365,16 @@ def setup_routes(app: FastAPI) -> None:
         correlation_id = getattr(req.state, "correlation_id", "unknown")
         result = result_wrapper(await methods.query_agent(request,
                                                           correlation_id))
-        return result.result
+        logger.info(f"/query | query_agent | result.result: {result}")
+        logger.info(f"dict(result.result): {dict(result.result)}")
+        # return result.result
+        return dict(result.result)
 
     @app.post(EP_PREFIX + "/query/stream", tags=["Agent"])
-    async def stream_query_agent(request: QueryRequest, req: Request):
+    async def stream_query_agent(
+        req: Request,
+        request: Optional[QueryRequest] = Body(default=None),
+    ):
         """
         Stream AI agent query response.
 
@@ -370,7 +402,7 @@ def setup_routes(app: FastAPI) -> None:
     @app.post(EP_PREFIX + "/conversations", response_model=Conversation,
               tags=["Conversations"])
     async def create_conversation(
-        request: ConversationCreate,
+        request: Optional[ConversationCreate] = Body(default=None),
         user_id: str = "default_user",  # In a real app, this would come from
         # authentication
     ):
@@ -447,7 +479,7 @@ def setup_routes(app: FastAPI) -> None:
     )
     async def update_conversation(
         conversation_id: str,
-        request: ConversationUpdate,
+        request: Optional[ConversationUpdate] = Body(default=None),
         user_id: str = "default_user",  # In a real app, this would come from
         # authentication
     ):
@@ -625,7 +657,9 @@ def setup_routes(app: FastAPI) -> None:
         EP_PREFIX + "/generate-file", response_model=GeneratedFile,
         tags=["File Generation"]
     )
-    async def generate_file(request: FileGenerationRequest):
+    async def generate_file(
+        request:  Optional[FileGenerationRequest] = Body(default=None),
+    ):
         """
         Generate a file from content.
 

@@ -26,7 +26,7 @@ build:
 	npm run build
 
 # Build from root directory
-build:from_root:
+build_from_root:
 	cd ui && npm run build
 
 # Preview production build

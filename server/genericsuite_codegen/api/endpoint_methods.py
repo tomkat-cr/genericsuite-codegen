@@ -82,7 +82,7 @@ class EndpointMethods:
     # Agent Query Methods
 
     async def query_agent(self, request: QueryRequest, correlation_id: str
-                          ) -> QueryResponse:
+                          ) -> Dict[str, Any]:
         """
         Process an agent query request.
 

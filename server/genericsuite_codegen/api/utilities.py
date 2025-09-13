@@ -33,7 +33,8 @@ def std_response(
         error=error,
         error_message=error_message,
         status_code=status_code,
-        result=resultset,
+        result=result,
+        resultset=resultset,
     )
 
 

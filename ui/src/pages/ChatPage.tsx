@@ -162,6 +162,9 @@ export function ChatPage() {
     setStreamingMessage('')
     setError(null)
 
+    let assistantContent = ''
+    let sources: Message['sources'] = []
+
     try {
       const response = await fetch('/api/query', {
         method: 'POST',
@@ -173,43 +176,56 @@ export function ChatPage() {
       })
 
       if (!response.ok) {
-        throw new Error('Failed to get response from AI')
+        throw new Error('Failed to get response from AI [1]')
       }
 
       // Handle streaming response
       const reader = response.body?.getReader()
       const decoder = new TextDecoder()
-      let assistantContent = ''
-      let sources: Message['sources'] = []
 
       if (reader) {
         while (true) {
           const { done, value } = await reader.read()
+          console.log('>> ChatPage | value', value, 'done', done)
           if (done) break
-
           const chunk = decoder.decode(value)
           const lines = chunk.split('\n')
-
+          console.log('>> ChatPage | lines', lines)
           for (const line of lines) {
-            if (line.startsWith('data: ')) {
+            if (line.startsWith('{')) {
               try {
-                const data = JSON.parse(line.slice(6))
-                if (data.type === 'content') {
+                const data = JSON.parse(line)
+                if (data.content) {
                   assistantContent += data.content
                   setStreamingMessage(assistantContent)
-                } else if (data.type === 'sources') {
+                }
+                if (data.sources) {
                   sources = data.sources
-                } else if (data.type === 'done') {
+                }
+                if (data.done) {
                   // Streaming complete
                   break
                 }
               } catch (e) {
                 // Ignore malformed JSON
+                console.error('Malformed JSON:', e)
               }
             }
           }
         }
       }
+
+    } catch (error) {
+      setError('Failed to get response from AI [2]. Please try again.')
+      console.error('Chat error:', error)
+    } finally {
+      setIsLoading(false)
+      setIsStreaming(false)
+      setStreamingMessage('')
+      textareaRef.current?.focus()
+    }
+
+    try {
 
       // Create assistant message
       const assistantMessage: Message = {
@@ -231,7 +247,7 @@ export function ChatPage() {
       await saveConversation(finalConversation)
 
     } catch (error) {
-      setError('Failed to get response from AI. Please try again.')
+      setError('Failed to Saving the conversation. Please try again.')
       console.error('Chat error:', error)
     } finally {
       setIsLoading(false)

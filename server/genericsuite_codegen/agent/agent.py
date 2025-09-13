@@ -380,7 +380,9 @@ class GenericSuiteAgent:
             AgentResponse: Formatted response.
         """
         # Extract content from result
-        content = str(result.data) if hasattr(result, "data") else str(result)
+        logger.info(f">> _format_response | result: {result}")
+        content = str(result.output) if hasattr(
+            result, "output") else str(result)
 
         # Add source attribution if requested
         if request.include_sources and sources:
@@ -524,7 +526,8 @@ class GenericSuiteAgent:
         try:
             # Test basic query
             test_request = QueryRequest(
-                query="What is GenericSuite?", task_type="general",
+                query="In 10 words, what is GenericSuite?",
+                task_type="general",
                 context_limit=1000
             )
 

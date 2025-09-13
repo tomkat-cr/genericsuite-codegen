@@ -83,7 +83,8 @@ class StandardGsResponse(BaseModel):
     error_message: Optional[str] = Field(
         default=None,
         description="Error message if any")
-    status_code: int = Field(default=200, description="HTTP status code")
+    status_code: Optional[int] = Field(
+        default=200, description="HTTP status code")
     result: Optional[Any] = Field(
         default=None,
         description="Response data dict if successful"
