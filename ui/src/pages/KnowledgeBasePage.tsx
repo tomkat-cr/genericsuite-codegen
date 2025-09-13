@@ -60,17 +60,30 @@ export function KnowledgeBasePage() {
         await new Promise(resolve => setTimeout(resolve, 1500))
       }
 
+      const forceRefresh = false
+
       // Make actual API call
       const response = await fetch('/api/update-knowledge-base', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          force_refresh: forceRefresh
+        })
       })
 
       if (response.ok) {
         const result = await response.json()
+console.log('handleUpdateKnowledgeBase | result', result)
+        const resultData = result.result
+        if (!resultData.statistics.success) {
+          setStats(prev => ({ ...prev, status: 'error' }))
+          addAlert('error', resultData.statistics.error ?? 'Failed to update knowledge base')
+          return
+        }
         setStats(prev => ({
           ...prev,
-          documentCount: result.documentCount || prev.documentCount + 150,
+          // documentCount: result.documentCount || prev.documentCount + 150,
+          documentCount: resultData.statistics.total_documents ?? prev.documentCount,
           lastUpdated: new Date().toLocaleString(),
           status: 'healthy'
         }))

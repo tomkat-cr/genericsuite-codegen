@@ -2,18 +2,17 @@
 Database setup and connection utilities for GenericSuite CodeGen.
 
 This module provides MongoDB connection management, vector database operations,
-and schema initialization for the knowledge base, conversations, and users collections.
+and schema initialization for the knowledge base, conversations, and users
+collections.
 """
 
 import os
 import logging
-from typing import List, Dict, Any, Optional, Tuple
-from datetime import datetime
+from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 import asyncio
 from contextlib import asynccontextmanager
 
-import pymongo
 from pymongo import MongoClient, ASCENDING, DESCENDING
 from pymongo.collection import Collection
 from pymongo.database import Database
@@ -24,6 +23,8 @@ from pymongo.errors import (
     PyMongoError,
 )
 
+from genericsuite_codegen.document_processing.types import EmbeddedChunk
+
 # Configure logging
 logger = logging.getLogger(__name__)
 
@@ -31,25 +32,23 @@ logger = logging.getLogger(__name__)
 @dataclass
 class SearchResult:
     """Result from vector similarity search."""
-
     content: str
     metadata: Dict[str, Any]
     similarity_score: float
     document_path: str
 
 
-@dataclass
-class EmbeddedChunk:
-    """Document chunk with embedding vector."""
-
-    chunk_id: str
-    document_path: str
-    content: str
-    embedding: List[float]
-    chunk_index: int
-    file_type: str
-    metadata: Dict[str, Any]
-    created_at: datetime
+# @dataclass
+# class DocumentEmbeddedChunk:
+#     """Document chunk with embedding vector."""
+#     chunk_id: str
+#     document_path: str
+#     content: str
+#     embedding: List[float]
+#     chunk_index: int
+#     file_type: str
+#     metadata: Dict[str, Any]
+#     created_at: datetime
 
 
 class DatabaseConnectionError(Exception):
@@ -77,7 +76,8 @@ class DatabaseManager:
         Initialize database manager.
 
         Args:
-            mongodb_uri: MongoDB connection URI. If None, reads from environment.
+            mongodb_uri: MongoDB connection URI. If None, reads
+            from environment.
         """
         self.mongodb_uri = mongodb_uri or os.getenv(
             "MONGODB_URI", "mongodb://localhost:27017/"
@@ -94,14 +94,16 @@ class DatabaseManager:
         # Connection pool settings
         self.max_pool_size = int(os.getenv("MONGODB_MAX_POOL_SIZE", "10"))
         self.min_pool_size = int(os.getenv("MONGODB_MIN_POOL_SIZE", "1"))
-        self.max_idle_time_ms = int(os.getenv("MONGODB_MAX_IDLE_TIME_MS", "30000"))
+        self.max_idle_time_ms = int(os.getenv("MONGODB_MAX_IDLE_TIME_MS",
+                                              "30000"))
         self.server_selection_timeout_ms = int(
             os.getenv("MONGODB_SERVER_SELECTION_TIMEOUT_MS", "5000")
         )
 
     def connect(self) -> None:
         """
-        Establish connection to MongoDB with connection pooling and error handling.
+        Establish connection to MongoDB with connection pooling and error
+        handling.
 
         Raises:
             DatabaseConnectionError: If connection fails after retries.
@@ -181,7 +183,8 @@ class DatabaseManager:
             # Initialize users collection
             self._initialize_users_collection()
 
-            logger.info("Database schema initialization completed successfully")
+            logger.info("Database schema initialization completed"
+                        " successfully")
 
         except Exception as e:
             logger.error(f"Schema initialization failed: {e}")
@@ -197,7 +200,8 @@ class DatabaseManager:
             ("file_type", ASCENDING),
             ("chunk_index", ASCENDING),
             ("created_at", DESCENDING),
-            ([("path", ASCENDING), ("chunk_index", ASCENDING)], {"unique": True}),
+            ([("path", ASCENDING), ("chunk_index", ASCENDING)],
+             {"unique": True}),
         ]
 
         for index in indexes:
@@ -207,7 +211,8 @@ class DatabaseManager:
                 collection.create_index(index)
 
         # Create vector search index for embeddings
-        # Note: This requires MongoDB Atlas or MongoDB 6.0+ with vector search enabled
+        # Note: This requires MongoDB Atlas or MongoDB 6.0+ with vector search
+        # enabled
         try:
             vector_index = {
                 "name": "vector_index",
@@ -216,7 +221,8 @@ class DatabaseManager:
                         {
                             "type": "vector",
                             "path": "embedding",
-                            "numDimensions": 384,  # Default for gte-small model
+                            "numDimensions": 384,  # Default for
+                                                   # gte-small model
                             "similarity": "cosine",
                         }
                     ]
@@ -231,13 +237,14 @@ class DatabaseManager:
 
             if not vector_index_exists:
                 collection.create_search_index(vector_index)
-                logger.info("Created vector search index for knowledge_base collection")
+                logger.info("Created vector search index for knowledge_base"
+                            " collection")
 
         except Exception as e:
-            logger.warning(
-                f"Vector search index creation failed (may not be supported): {e}"
-            )
-            # Continue without vector search index - will use alternative search methods
+            logger.warning("Vector search index creation failed "
+                           f"(may not be supported): {e}")
+            # Continue without vector search index - will use alternative
+            # search methods
 
         logger.info("Initialized knowledge_base collection")
 
@@ -283,7 +290,8 @@ class DatabaseManager:
 
     # Vector Database Operations
 
-    def store_embeddings(self, embedded_chunks: List[EmbeddedChunk]) -> bool:
+    def store_embeddings(self, embedded_chunks: List[EmbeddedChunk]
+                         ) -> bool:
         """
         Store document embeddings in the knowledge base collection.
 
@@ -305,12 +313,23 @@ class DatabaseManager:
             # Prepare documents for insertion
             documents = []
             for chunk in embedded_chunks:
+                # Ensure embedding is a flat list of floats
+                embedding = chunk.embedding
+                if (isinstance(embedding, list) and len(embedding) > 0 and
+                        isinstance(embedding[0], list)):
+                    # Flatten nested list
+                    embedding = [float(item) for sublist in embedding
+                                 for item in sublist]
+                elif isinstance(embedding, list):
+                    # Ensure all elements are floats
+                    embedding = [float(item) for item in embedding]
                 doc = {
                     "_id": chunk.chunk_id,
-                    "path": chunk.document_path,
+                    # >>-->
+                    "path": chunk.metadata['original_document_path'],
                     "content": chunk.content,
-                    "embedding": chunk.embedding,
-                    "file_type": chunk.file_type,
+                    "embedding": embedding,
+                    "file_type": chunk.metadata['original_document_type'],
                     "chunk_index": chunk.chunk_index,
                     "metadata": chunk.metadata,
                     "created_at": chunk.created_at,
@@ -321,15 +340,13 @@ class DatabaseManager:
             if documents:
                 try:
                     result = collection.insert_many(documents, ordered=False)
-                    logger.info(
-                        f"Successfully stored {len(result.inserted_ids)} embeddings"
-                    )
+                    logger.info("Successfully stored "
+                                f"{len(result.inserted_ids)} embeddings")
                     return True
                 except DuplicateKeyError as e:
                     # Handle duplicate keys by updating existing documents
-                    logger.warning(
-                        f"Duplicate keys found, updating existing documents: {e}"
-                    )
+                    logger.warning("Duplicate keys found, updating existing"
+                                   f" documents: {e}")
                     return self._update_existing_embeddings(documents)
 
             return True
@@ -341,7 +358,8 @@ class DatabaseManager:
             logger.error(f"Unexpected error storing embeddings: {e}")
             raise VectorSearchError(f"Unexpected storage error: {e}")
 
-    def _update_existing_embeddings(self, documents: List[Dict[str, Any]]) -> bool:
+    def _update_existing_embeddings(self, documents: List[Dict[str, Any]]
+                                    ) -> bool:
         """Update existing documents with new embeddings."""
         try:
             collection = self.database[self.knowledge_base_collection]
@@ -388,9 +406,8 @@ class DatabaseManager:
                     collection, query_embedding, limit, file_type_filter
                 )
             except Exception as e:
-                logger.warning(
-                    f"Vector search failed, falling back to cosine similarity: {e}"
-                )
+                logger.warning("Vector search failed, falling back to"
+                               f" cosine similarity: {e}")
                 return self._cosine_similarity_search(
                     collection, query_embedding, limit, file_type_filter
                 )
@@ -454,120 +471,118 @@ class DatabaseManager:
         limit: int,
         file_type_filter: Optional[str],
     ) -> List[SearchResult]:
-        """Fallback cosine similarity search using aggregation pipeline."""
+        """Fallback cosine similarity search using Python calculation."""
         # Build match filter
         match_filter = {}
         if file_type_filter:
             match_filter["file_type"] = file_type_filter
 
-        pipeline = [
-            {"$match": match_filter} if match_filter else {"$match": {}},
-            {
-                "$addFields": {
-                    "similarity": {
-                        "$let": {
-                            "vars": {
-                                "dot_product": {
-                                    "$reduce": {
-                                        "input": {
-                                            "$range": [0, {"$size": "$embedding"}]
-                                        },
-                                        "initialValue": 0,
-                                        "in": {
-                                            "$add": [
-                                                "$$value",
-                                                {
-                                                    "$multiply": [
-                                                        {
-                                                            "$arrayElemAt": [
-                                                                "$embedding",
-                                                                "$$this",
-                                                            ]
-                                                        },
-                                                        {
-                                                            "$arrayElemAt": [
-                                                                query_embedding,
-                                                                "$$this",
-                                                            ]
-                                                        },
-                                                    ]
-                                                },
-                                            ]
-                                        },
-                                    }
-                                },
-                                "query_magnitude": {
-                                    "$sqrt": {
-                                        "$reduce": {
-                                            "input": query_embedding,
-                                            "initialValue": 0,
-                                            "in": {
-                                                "$add": [
-                                                    "$$value",
-                                                    {"$multiply": ["$$this", "$$this"]},
-                                                ]
-                                            },
-                                        }
-                                    }
-                                },
-                                "doc_magnitude": {
-                                    "$sqrt": {
-                                        "$reduce": {
-                                            "input": "$embedding",
-                                            "initialValue": 0,
-                                            "in": {
-                                                "$add": [
-                                                    "$$value",
-                                                    {"$multiply": ["$$this", "$$this"]},
-                                                ]
-                                            },
-                                        }
-                                    }
-                                },
-                            },
-                            "in": {
-                                "$divide": [
-                                    "$$dot_product",
-                                    {
-                                        "$multiply": [
-                                            "$$query_magnitude",
-                                            "$$doc_magnitude",
-                                        ]
-                                    },
-                                ]
-                            },
-                        }
-                    }
-                }
-            },
-            {"$sort": {"similarity": -1}},
-            {"$limit": limit},
-            {
-                "$project": {
-                    "content": 1,
-                    "path": 1,
-                    "file_type": 1,
-                    "metadata": 1,
-                    "similarity": 1,
-                }
-            },
-        ]
+        # Add filter to ensure embedding field exists and is an array
+        match_filter["embedding"] = {"$exists": True, "$type": "array"}
 
-        # Remove empty match stage
-        if not match_filter:
-            pipeline = pipeline[1:]
-
+        # Use Python-based calculation instead of complex aggregation
+        # This avoids the $multiply array type issues
         results = []
-        for doc in collection.aggregate(pipeline):
-            result = SearchResult(
-                content=doc["content"],
-                metadata=doc.get("metadata", {}),
-                similarity_score=doc.get("similarity", 0.0),
-                document_path=doc["path"],
-            )
-            results.append(result)
+
+        try:
+            # Get all documents matching the filter
+            docs = collection.find(match_filter)
+
+            # Calculate similarity for each document
+            doc_similarities = []
+            for doc in docs:
+                if not doc.get("embedding") or not isinstance(
+                    doc["embedding"], list
+                ):
+                    continue
+
+                # Calculate cosine similarity in Python
+                similarity = self._calculate_cosine_similarity(
+                    query_embedding, doc["embedding"]
+                )
+
+                doc_similarities.append({
+                    "doc": doc,
+                    "similarity": similarity
+                })
+
+            # Sort by similarity and take top results
+            doc_similarities.sort(key=lambda x: x["similarity"], reverse=True)
+
+            for item in doc_similarities[:limit]:
+                doc = item["doc"]
+                result = SearchResult(
+                    content=doc["content"],
+                    metadata=doc.get("metadata", {}),
+                    similarity_score=item["similarity"],
+                    document_path=doc["path"],
+                )
+                results.append(result)
+
+        except Exception as e:
+            logger.error(f"Cosine similarity search failed: {e}")
+            # Return empty results instead of raising exception
+            return []
 
         return results
+
+    def _calculate_cosine_similarity(
+        self, vec1: List[float], vec2: List[float]
+    ) -> float:
+        """Calculate cosine similarity between two vectors."""
+        try:
+            # Convert vectors to floats and filter out non-numeric values
+            def safe_float_convert(vec):
+                """Convert vector elements to float, filtering out non-numeric values."""  # noqa: E501
+                result = []
+                for item in vec:
+                    try:
+                        # Handle case where item is a list (flatten it)
+                        if isinstance(item, list):
+                            for sub_item in item:
+                                try:
+                                    result.append(float(sub_item))
+                                except (ValueError, TypeError):
+                                    item_type = type(sub_item).__name__
+                                    logger.warning(
+                                        "Skipping non-numeric value in "
+                                        " nestedlist "
+                                        f"({item_type}): {sub_item}")
+                        else:
+                            result.append(float(item))
+                    except (ValueError, TypeError):
+                        logger.warning(
+                            f"Skipping non-numeric value in vector "
+                            f"({type(item).__name__}): {item}")
+                        continue
+                return result
+
+            # Convert both vectors to ensure they contain only floats
+            vec1_float = safe_float_convert(vec1)
+            vec2_float = safe_float_convert(vec2)
+            # Ensure vectors are the same length
+            min_len = min(len(vec1_float), len(vec2_float))
+            if min_len == 0:
+                return 0.0
+
+            # Calculate dot product
+            dot_product = sum(
+                vec1_float[i] * vec2_float[i] for i in range(min_len)
+            )
+
+            # Calculate magnitudes
+            mag1 = sum(x * x for x in vec1_float[:min_len]) ** 0.5
+            mag2 = sum(x * x for x in vec2_float[:min_len]) ** 0.5
+
+            # Avoid division by zero
+            if mag1 == 0 or mag2 == 0:
+                return 0.0
+
+            return dot_product / (mag1 * mag2)
+
+        except Exception as e:
+            logger.error(f"Error calculating cosine similarity: {e}")
+            return 0.0
 
     def delete_all_vectors(self) -> bool:
         """
@@ -583,7 +598,8 @@ class DatabaseManager:
             collection = self.database[self.knowledge_base_collection]
             result = collection.delete_many({})
 
-            logger.info(f"Deleted {result.deleted_count} vectors from knowledge base")
+            logger.info(f"Deleted {result.deleted_count} vectors"
+                        " from knowledge base")
             return True
 
         except PyMongoError as e:
@@ -608,20 +624,21 @@ class DatabaseManager:
 
         try:
             collection = self.database[self.knowledge_base_collection]
-            result = collection.delete_many({"path": document_path})
+            _ = collection.delete_many({"path": document_path})
 
             logger.info(
-                f"Deleted {result.deleted_count} vectors for path: {document_path}"
+                "Deleted {result.deleted_count} vectors for "
+                f"path: {document_path}"
             )
             return True
 
         except PyMongoError as e:
-            logger.error(f"Failed to delete vectors for path {document_path}: {e}")
+            logger.error("Failed to delete vectors for path"
+                         f" {document_path}: {e}")
             return False
         except Exception as e:
-            logger.error(
-                f"Unexpected error deleting vectors for path {document_path}: {e}"
-            )
+            logger.error("Unexpected error deleting vectors for"
+                         f" path {document_path}: {e}")
             return False
 
     def get_document_count(self) -> int:
@@ -650,7 +667,8 @@ class DatabaseManager:
         Get statistics about the knowledge base collection.
 
         Returns:
-            Dict[str, Any]: Statistics including document count, file types, etc.
+            Dict[str, Any]: Statistics including document count, file types,
+                etc.
         """
         if self.database is None:
             self.connect()
@@ -757,40 +775,40 @@ async def health_check() -> Dict[str, Any]:
 # Utility functions for common operations
 
 
-def create_embedded_chunk(
-    chunk_id: str,
-    document_path: str,
-    content: str,
-    embedding: List[float],
-    chunk_index: int,
-    file_type: str,
-    metadata: Optional[Dict[str, Any]] = None,
-) -> EmbeddedChunk:
-    """
-    Create an EmbeddedChunk instance with current timestamp.
+# def create_embedded_chunk(
+#     chunk_id: str,
+#     document_path: str,
+#     content: str,
+#     embedding: List[float],
+#     chunk_index: int,
+#     file_type: str,
+#     metadata: Optional[Dict[str, Any]] = None,
+# ) -> DocumentEmbeddedChunk:
+#     """
+#     Create an DocumentEmbeddedChunk instance with current timestamp.
 
-    Args:
-        chunk_id: Unique identifier for the chunk.
-        document_path: Path to the source document.
-        content: Text content of the chunk.
-        embedding: Vector embedding for the chunk.
-        chunk_index: Index of the chunk within the document.
-        file_type: Type of the source file.
-        metadata: Optional metadata dictionary.
+#     Args:
+#         chunk_id: Unique identifier for the chunk.
+#         document_path: Path to the source document.
+#         content: Text content of the chunk.
+#         embedding: Vector embedding for the chunk.
+#         chunk_index: Index of the chunk within the document.
+#         file_type: Type of the source file.
+#         metadata: Optional metadata dictionary.
 
-    Returns:
-        EmbeddedChunk: New embedded chunk instance.
-    """
-    return EmbeddedChunk(
-        chunk_id=chunk_id,
-        document_path=document_path,
-        content=content,
-        embedding=embedding,
-        chunk_index=chunk_index,
-        file_type=file_type,
-        metadata=metadata or {},
-        created_at=datetime.utcnow(),
-    )
+#     Returns:
+#         DocumentEmbeddedChunk: New embedded chunk instance.
+#     """
+#     return DocumentEmbeddedChunk(
+#         chunk_id=chunk_id,
+#         document_path=document_path,
+#         content=content,
+#         embedding=embedding,
+#         chunk_index=chunk_index,
+#         file_type=file_type,
+#         metadata=metadata or {},
+#         created_at=datetime.utcnow(),
+#     )
 
 
 def validate_embedding_dimensions(
@@ -838,7 +856,7 @@ async def test_database_connection(db: DatabaseManager) -> bool:
         db.client.admin.command("ping")
 
         # Get basic stats
-        stats = db.get_knowledge_base_stats()
+        _ = db.get_knowledge_base_stats()
 
         return True
 
@@ -849,8 +867,6 @@ async def test_database_connection(db: DatabaseManager) -> bool:
 
 if __name__ == "__main__":
     # Example usage and testing
-    import asyncio
-
     async def main():
         """Test database operations."""
         try:

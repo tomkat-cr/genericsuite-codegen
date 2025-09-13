@@ -1,3 +1,6 @@
+# Ignore larga lines
+# pylint: disable=line-too-long
+# flake8: noqa: E501
 """
 System prompts and templates for the GenericSuite CodeGen AI agent.
 
@@ -5,18 +8,18 @@ This module contains all system prompts, templates, and prompt management
 for the Pydantic AI agent specialized in GenericSuite development.
 """
 
-from typing import Dict, Any, Optional, List
+from typing import Optional, List
 from datetime import datetime
 
 
 class GenericSuitePrompts:
     """
     System prompts and templates for GenericSuite CodeGen AI agent.
-    
+
     Contains specialized prompts for different types of code generation
     and query responses related to GenericSuite development.
     """
-    
+
     # Base system prompt for the GenericSuite AI agent
     SYSTEM_PROMPT = """You are a specialized AI assistant for GenericSuite development, a comprehensive Python framework for building web applications with automatic CRUD operations, authentication, and database management.
 
@@ -161,27 +164,27 @@ Always be accurate, helpful, and focused on practical GenericSuite development n
 class PromptManager:
     """
     Manager for dynamic prompt generation and customization.
-    
+
     Handles prompt selection, context injection, and template rendering
     for different types of agent interactions.
     """
-    
+
     def __init__(self):
         """Initialize the prompt manager."""
         self.prompts = GenericSuitePrompts()
-    
+
     def get_system_prompt(self, task_type: str = "general") -> str:
         """
         Get the appropriate system prompt for a task type.
-        
+
         Args:
             task_type: Type of task (general, json, python, frontend, backend).
-            
+
         Returns:
             str: System prompt for the task type.
         """
         base_prompt = self.prompts.SYSTEM_PROMPT
-        
+
         task_prompts = {
             "json": self.prompts.JSON_CONFIG_PROMPT,
             "python": self.prompts.PYTHON_CODE_PROMPT,
@@ -189,29 +192,30 @@ class PromptManager:
             "backend": self.prompts.BACKEND_CODE_PROMPT,
             "general": self.prompts.GENERAL_QUERY_PROMPT
         }
-        
-        task_prompt = task_prompts.get(task_type, self.prompts.GENERAL_QUERY_PROMPT)
-        
+
+        task_prompt = task_prompts.get(
+            task_type, self.prompts.GENERAL_QUERY_PROMPT)
+
         return f"{base_prompt}\n\n{task_prompt}"
-    
-    def format_context_prompt(self, context: str, sources: List[str], 
-                            query: str) -> str:
+
+    def format_context_prompt(self, context: str, sources: List[str],
+                              query: str) -> str:
         """
         Format context information for inclusion in prompts.
-        
+
         Args:
             context: Retrieved context from knowledge base.
             sources: List of source document paths.
             query: Original user query.
-            
+
         Returns:
             str: Formatted context prompt.
         """
         if not context or context.strip() == "No relevant context found.":
             return "No specific context was found in the knowledge base for this query. Please provide a general response based on your GenericSuite knowledge."
-        
+
         formatted_sources = self._format_sources(sources)
-        
+
         context_prompt = f"""
 RETRIEVED CONTEXT FROM KNOWLEDGE BASE:
 {context}
@@ -224,31 +228,32 @@ ORIGINAL QUERY: {query}
 Please use this context to provide an accurate and helpful response. Reference the sources when appropriate and ensure your answer is based on the retrieved GenericSuite documentation and examples.
 """
         return context_prompt.strip()
-    
+
     def _format_sources(self, sources: List[str]) -> str:
         """Format source paths for display."""
         if not sources:
             return "No sources available"
-        
+
         return "\n".join([f"- {source}" for source in sources])
-    
-    def create_generation_prompt(self, task_type: str, requirements: str, 
-                               context: str, sources: List[str]) -> str:
+
+    def create_generation_prompt(self, task_type: str, requirements: str,
+                                 context: str, sources: List[str]) -> str:
         """
         Create a complete prompt for code generation tasks.
-        
+
         Args:
             task_type: Type of generation task.
             requirements: User requirements and specifications.
             context: Retrieved context from knowledge base.
             sources: List of source document paths.
-            
+
         Returns:
             str: Complete generation prompt.
         """
         system_prompt = self.get_system_prompt(task_type)
-        context_prompt = self.format_context_prompt(context, sources, requirements)
-        
+        context_prompt = self.format_context_prompt(
+            context, sources, requirements)
+
         generation_prompt = f"""
 {system_prompt}
 
@@ -260,23 +265,23 @@ USER REQUIREMENTS:
 Please generate the requested {task_type} code/configuration based on the requirements and retrieved context. Ensure the output follows GenericSuite patterns and best practices.
 """
         return generation_prompt.strip()
-    
-    def create_query_prompt(self, query: str, context: str, 
-                          sources: List[str]) -> str:
+
+    def create_query_prompt(self, query: str, context: str,
+                            sources: List[str]) -> str:
         """
         Create a prompt for general query responses.
-        
+
         Args:
             query: User query.
             context: Retrieved context from knowledge base.
             sources: List of source document paths.
-            
+
         Returns:
             str: Complete query response prompt.
         """
         system_prompt = self.get_system_prompt("general")
         context_prompt = self.format_context_prompt(context, sources, query)
-        
+
         query_prompt = f"""
 {system_prompt}
 
@@ -285,14 +290,14 @@ Please generate the requested {task_type} code/configuration based on the requir
 Please provide a comprehensive answer to the user's query based on the retrieved context and your GenericSuite knowledge.
 """
         return query_prompt.strip()
-    
+
     def get_framework_specific_prompt(self, framework: str) -> str:
         """
         Get framework-specific guidance for backend generation.
-        
+
         Args:
             framework: Backend framework (fastapi, flask, chalice).
-            
+
         Returns:
             str: Framework-specific prompt addition.
         """
@@ -325,13 +330,13 @@ CHALICE SPECIFIC GUIDELINES:
 - Use Chalice's local development features
 """
         }
-        
+
         return framework_prompts.get(framework.lower(), "")
-    
+
     def add_timestamp_context(self) -> str:
         """
         Add current timestamp context for generation.
-        
+
         Returns:
             str: Timestamp context string.
         """
@@ -346,15 +351,15 @@ _prompt_manager: Optional[PromptManager] = None
 def get_prompt_manager() -> PromptManager:
     """
     Get or create the global prompt manager instance.
-    
+
     Returns:
         PromptManager: Global prompt manager instance.
     """
     global _prompt_manager
-    
+
     if _prompt_manager is None:
         _prompt_manager = PromptManager()
-    
+
     return _prompt_manager
 
 
@@ -363,11 +368,11 @@ def get_prompt_manager() -> PromptManager:
 def format_code_block(code: str, language: str = "python") -> str:
     """
     Format code in markdown code blocks.
-    
+
     Args:
         code: Code content to format.
         language: Programming language for syntax highlighting.
-        
+
     Returns:
         str: Formatted code block.
     """
@@ -377,11 +382,11 @@ def format_code_block(code: str, language: str = "python") -> str:
 def create_example_prompt(example_type: str, example_content: str) -> str:
     """
     Create an example prompt for demonstration.
-    
+
     Args:
         example_type: Type of example (table, form, component, etc.).
         example_content: Content of the example.
-        
+
     Returns:
         str: Formatted example prompt.
     """
@@ -396,11 +401,11 @@ Use this example as a reference for structure and patterns, but adapt it to the 
 def validate_prompt_length(prompt: str, max_length: int = 8000) -> bool:
     """
     Validate that a prompt doesn't exceed maximum length.
-    
+
     Args:
         prompt: Prompt text to validate.
         max_length: Maximum allowed length.
-        
+
     Returns:
         bool: True if prompt is within limits, False otherwise.
     """
@@ -410,11 +415,11 @@ def validate_prompt_length(prompt: str, max_length: int = 8000) -> bool:
 if __name__ == "__main__":
     # Example usage and testing
     prompt_manager = get_prompt_manager()
-    
+
     # Test system prompt generation
     system_prompt = prompt_manager.get_system_prompt("json")
     print(f"System prompt length: {len(system_prompt)}")
-    
+
     # Test context formatting
     context_prompt = prompt_manager.format_context_prompt(
         "Example context content",
@@ -422,7 +427,7 @@ if __name__ == "__main__":
         "How to create a table?"
     )
     print(f"Context prompt: {context_prompt}")
-    
+
     # Test generation prompt
     gen_prompt = prompt_manager.create_generation_prompt(
         "python",

@@ -9,12 +9,15 @@ import os
 import logging
 from contextlib import asynccontextmanager
 from datetime import datetime
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Union
 
-from fastapi import FastAPI, HTTPException, Request, UploadFile, BackgroundTasks
+from fastapi import FastAPI, HTTPException, Request, \
+    UploadFile, BackgroundTasks, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import StreamingResponse, Response
+
+# from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 import uvicorn
 
@@ -38,6 +41,8 @@ from .types import (
     FileGenerationRequest,
     GeneratedFile,
     FilePackage,
+    StandardGsResponse,
+    StandardGsErrorResponse,
 )
 from .utilities import (
     setup_logging,
@@ -45,7 +50,7 @@ from .utilities import (
     create_correlation_id,
     log_request_response,
 )
-from genericsuite_codegen.agent.agent import initialize_agent, get_agent
+from genericsuite_codegen.agent.agent import initialize_agent
 from genericsuite_codegen.database.setup import (
     get_database_connection,
     test_database_connection,
@@ -53,6 +58,10 @@ from genericsuite_codegen.database.setup import (
 
 # Configure logging
 logger = logging.getLogger(__name__)
+
+
+# EP_PREFIX = '/api'
+EP_PREFIX = ''
 
 
 @asynccontextmanager
@@ -148,7 +157,8 @@ def setup_middleware(app: FastAPI) -> None:
     )
 
     # Trusted host middleware
-    allowed_hosts = os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+    allowed_hosts = os.getenv("ALLOWED_HOSTS",
+                              "localhost,127.0.0.1").split(",")
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts)
 
     # Request logging middleware
@@ -208,7 +218,9 @@ def setup_exception_handlers(app: FastAPI) -> None:
 
         logger.error(f"Validation error [{correlation_id}]: {exc.errors()}")
 
-        return JSONResponse(status_code=422, content=error_response.model_dump())
+        # return JSONResponse(status_code=422,
+        #                     content=error_response.model_dump())
+        return Response(status_code=422, content=str(error_response))
 
     @app.exception_handler(HTTPException)
     async def http_exception_handler(request: Request, exc: HTTPException):
@@ -216,14 +228,20 @@ def setup_exception_handlers(app: FastAPI) -> None:
         correlation_id = getattr(request.state, "correlation_id", "unknown")
 
         error_response = ErrorResponse(
-            error_code="HTTP_ERROR", message=exc.detail, correlation_id=correlation_id
+            error_code="HTTP_ERROR", message=exc.detail,
+            correlation_id=correlation_id
         )
 
-        logger.error(f"HTTP error [{correlation_id}]: {exc.status_code} - {exc.detail}")
-
-        return JSONResponse(
-            status_code=exc.status_code, content=error_response.model_dump()
+        logger.error(
+            f"HTTP error [{correlation_id}]: {exc.status_code}"
+            f" - {exc.detail}"
         )
+
+        # return JSONResponse(
+        #     status_code=exc.status_code, content=error_response.model_dump()
+        # )
+        return Response(status_code=exc.status_code,
+                        content=str(error_response))
 
     @app.exception_handler(Exception)
     async def general_exception_handler(request: Request, exc: Exception):
@@ -234,14 +252,29 @@ def setup_exception_handlers(app: FastAPI) -> None:
             error_code="INTERNAL_ERROR",
             message="An internal server error occurred",
             details=(
-                {"error": str(exc)} if os.getenv("SERVER_DEBUG", "0") == "1" else None
+                {"error": str(exc)} if os.getenv(
+                    "SERVER_DEBUG", "0") == "1" else None
             ),
             correlation_id=correlation_id,
         )
 
-        logger.error(f"Internal error [{correlation_id}]: {exc}", exc_info=True)
+        logger.error(
+            f"Internal error [{correlation_id}]: {exc}", exc_info=True)
 
-        return JSONResponse(status_code=500, content=error_response.model_dump())
+        # return JSONResponse(status_code=500,
+        #                     content=error_response.model_dump())
+        return Response(status_code=500, content=str(error_response))
+
+
+def result_wrapper(
+    result: Union[StandardGsResponse, StandardGsErrorResponse],
+) -> Union[HTTPException, StandardGsResponse]:
+    if result.error:
+        raise HTTPException(
+            status_code=result.status_code,
+            detail=result.error_message,
+        )
+    return result
 
 
 def setup_routes(app: FastAPI) -> None:
@@ -265,40 +298,7 @@ def setup_routes(app: FastAPI) -> None:
         Returns:
             HealthResponse: Application health status.
         """
-        try:
-            # Check database connection
-            db = get_database_connection()
-            db_healthy = await test_database_connection(db)
-
-            # Check agent health
-            agent = get_agent()
-            agent_health = await agent.health_check()
-
-            # Determine overall status
-            status = (
-                "healthy"
-                if db_healthy and agent_health["status"] == "healthy"
-                else "unhealthy"
-            )
-
-            return HealthResponse(
-                status=status,
-                timestamp=None,  # Will be set by model default
-                version=get_app_info().version,
-                components={
-                    "database": "healthy" if db_healthy else "unhealthy",
-                    "agent": agent_health["status"],
-                    "model": agent_health.get("model", "unknown"),
-                },
-            )
-
-        except Exception as e:
-            logger.error(f"Health check failed: {e}")
-            return HealthResponse(
-                status="unhealthy",
-                version=get_app_info().version,
-                components={"error": str(e)},
-            )
+        return methods.health_check_endpoint()
 
     @app.get("/", response_model=AppInfo, tags=["Info"])
     async def root():
@@ -318,48 +318,13 @@ def setup_routes(app: FastAPI) -> None:
         Returns:
             Dict[str, Any]: Detailed application status.
         """
-        try:
-            # Get database stats
-            db = get_database_connection()
-            db_stats = {}
-
-            try:
-                # Get collection counts
-                knowledge_base = db.knowledge_base
-                conversations = db.ai_chatbot_conversations
-
-                db_stats = {
-                    "knowledge_base_documents": await knowledge_base.count_documents(
-                        {}
-                    ),
-                    "conversations": await conversations.count_documents({}),
-                    "connection_status": "connected",
-                }
-            except Exception as e:
-                db_stats = {"connection_status": "error", "error": str(e)}
-
-            # Get agent info
-            agent = get_agent()
-            agent_info = agent.get_model_info()
-
-            return {
-                "application": get_app_info().model_dump(),
-                "database": db_stats,
-                "agent": agent_info,
-                "environment": {
-                    "debug": os.getenv("SERVER_DEBUG", "0") == "1",
-                    "cors_origins": os.getenv("CORS_ORIGINS", "").split(","),
-                    "allowed_hosts": os.getenv("ALLOWED_HOSTS", "").split(","),
-                },
-            }
-
-        except Exception as e:
-            logger.error(f"Status check failed: {e}")
-            raise HTTPException(status_code=500, detail=f"Status check failed: {e}")
+        result = result_wrapper(methods.status_endpoint())
+        return result.result
 
     # Agent Query Endpoints
 
-    @app.post("/api/query", response_model=QueryResponse, tags=["Agent"])
+    @app.post(EP_PREFIX + "/query", response_model=QueryResponse,
+              tags=["Agent"])
     async def query_agent(request: QueryRequest, req: Request):
         """
         Query the AI agent.
@@ -372,9 +337,11 @@ def setup_routes(app: FastAPI) -> None:
             QueryResponse: Agent response.
         """
         correlation_id = getattr(req.state, "correlation_id", "unknown")
-        return await methods.query_agent(request, correlation_id)
+        result = result_wrapper(await methods.query_agent(request,
+                                                          correlation_id))
+        return result.result
 
-    @app.post("/api/query/stream", tags=["Agent"])
+    @app.post(EP_PREFIX + "/query/stream", tags=["Agent"])
     async def stream_query_agent(request: QueryRequest, req: Request):
         """
         Stream AI agent query response.
@@ -400,10 +367,12 @@ def setup_routes(app: FastAPI) -> None:
 
     # Conversation Management Endpoints
 
-    @app.post("/api/conversations", response_model=Conversation, tags=["Conversations"])
+    @app.post(EP_PREFIX + "/conversations", response_model=Conversation,
+              tags=["Conversations"])
     async def create_conversation(
         request: ConversationCreate,
-        user_id: str = "default_user",  # In a real app, this would come from authentication
+        user_id: str = "default_user",  # In a real app, this would come from
+        # authentication
     ):
         """
         Create a new conversation.
@@ -415,15 +384,20 @@ def setup_routes(app: FastAPI) -> None:
         Returns:
             Conversation: Created conversation.
         """
-        return await methods.create_conversation(request, user_id)
+        result = result_wrapper(
+            await methods.create_conversation(
+                request, user_id))
+        return result.result
 
     @app.get(
-        "/api/conversations", response_model=ConversationList, tags=["Conversations"]
+        EP_PREFIX + "/conversations", response_model=ConversationList,
+        tags=["Conversations"]
     )
     async def get_conversations(
         page: int = 1,
         page_size: int = 20,
-        user_id: str = "default_user",  # In a real app, this would come from authentication
+        user_id: str = "default_user",  # In a real app, this would come from
+        # authentication
     ):
         """
         Get user conversations with pagination.
@@ -436,16 +410,20 @@ def setup_routes(app: FastAPI) -> None:
         Returns:
             ConversationList: Paginated conversation list.
         """
-        return await methods.get_conversations(user_id, page, page_size)
+        result = result_wrapper(
+            await methods.get_conversations(user_id, page, page_size)
+        )
+        return result.result
 
     @app.get(
-        "/api/conversations/{conversation_id}",
+        EP_PREFIX + "/conversations/{conversation_id}",
         response_model=Conversation,
         tags=["Conversations"],
     )
     async def get_conversation(
         conversation_id: str,
-        user_id: str = "default_user",  # In a real app, this would come from authentication
+        user_id: str = "default_user",  # In a real app, this would come from
+        # authentication
     ):
         """
         Get a specific conversation.
@@ -457,17 +435,21 @@ def setup_routes(app: FastAPI) -> None:
         Returns:
             Conversation: Conversation data.
         """
-        return await methods.get_conversation(conversation_id, user_id)
+        result = result_wrapper(
+            await methods.get_conversation(conversation_id, user_id)
+        )
+        return result.result
 
     @app.put(
-        "/api/conversations/{conversation_id}",
+        EP_PREFIX + "/conversations/{conversation_id}",
         response_model=Conversation,
         tags=["Conversations"],
     )
     async def update_conversation(
         conversation_id: str,
         request: ConversationUpdate,
-        user_id: str = "default_user",  # In a real app, this would come from authentication
+        user_id: str = "default_user",  # In a real app, this would come from
+        # authentication
     ):
         """
         Update a conversation.
@@ -480,12 +462,18 @@ def setup_routes(app: FastAPI) -> None:
         Returns:
             Conversation: Updated conversation.
         """
-        return await methods.update_conversation(conversation_id, request, user_id)
+        result = result_wrapper(
+            await methods.update_conversation(conversation_id, request,
+                                              user_id)
+        )
+        return result.result
 
-    @app.delete("/api/conversations/{conversation_id}", tags=["Conversations"])
+    @app.delete(EP_PREFIX + "/conversations/{conversation_id}",
+                tags=["Conversations"])
     async def delete_conversation(
         conversation_id: str,
-        user_id: str = "default_user",  # In a real app, this would come from authentication
+        user_id: str = "default_user",  # In a real app, this would come from
+        # authentication
     ):
         """
         Delete a conversation.
@@ -497,13 +485,17 @@ def setup_routes(app: FastAPI) -> None:
         Returns:
             Dict[str, str]: Deletion confirmation.
         """
-        return await methods.delete_conversation(conversation_id, user_id)
+        result = result_wrapper(
+            await methods.delete_conversation(conversation_id, user_id)
+        )
+        return result.result
 
     # Knowledge Base Management Endpoints
 
-    @app.post("/api/update-knowledge-base", tags=["Knowledge Base"])
+    @app.post("/update-knowledge-base", tags=["Knowledge Base"])
     async def update_knowledge_base(
-        request: KnowledgeBaseUpdate, background_tasks: BackgroundTasks
+        background_tasks: BackgroundTasks,
+        request: Optional[KnowledgeBaseUpdate] = Body(default=None),
     ):
         """
         Trigger knowledge base update.
@@ -515,10 +507,19 @@ def setup_routes(app: FastAPI) -> None:
         Returns:
             Dict[str, str]: Update initiation response.
         """
-        return await methods.update_knowledge_base(request, background_tasks)
+        # Use default values if no request body provided
+        if request is None:
+            request = KnowledgeBaseUpdate()
+
+        logger.info(f"Received update request: {request}")
+        result = result_wrapper(
+            await methods.update_knowledge_base(request, background_tasks)
+            # await methods.update_knowledge_base(request)
+        )
+        return result.result
 
     @app.get(
-        "/api/knowledge-base/status",
+        EP_PREFIX + "/knowledge-base/status",
         response_model=KnowledgeBaseStatus,
         tags=["Knowledge Base"],
     )
@@ -529,12 +530,15 @@ def setup_routes(app: FastAPI) -> None:
         Returns:
             KnowledgeBaseStatus: Current knowledge base status.
         """
-        return await methods.get_knowledge_base_status()
+        result = result_wrapper(await methods.get_knowledge_base_status())
+        return result.result
 
     @app.post(
-        "/api/upload-document", response_model=DocumentInfo, tags=["Knowledge Base"]
+        EP_PREFIX + "/upload-document", response_model=DocumentInfo,
+        tags=["Knowledge Base"]
     )
-    async def upload_document(file: UploadFile, description: Optional[str] = None):
+    async def upload_document(file: UploadFile,
+                              description: Optional[str] = None):
         """
         Upload and process a document.
 
@@ -545,10 +549,12 @@ def setup_routes(app: FastAPI) -> None:
         Returns:
             DocumentInfo: Information about the uploaded document.
         """
-        return await methods.upload_document(file, description)
+        result = result_wrapper(await methods.upload_document(file,
+                                                              description))
+        return result.result
 
     @app.get(
-        "/api/knowledge-base/progress/{operation_id}",
+        EP_PREFIX + "/knowledge-base/progress/{operation_id}",
         response_model=ProgressUpdate,
         tags=["Knowledge Base"],
     )
@@ -573,7 +579,7 @@ def setup_routes(app: FastAPI) -> None:
         )
 
     @app.get(
-        "/api/knowledge-base/statistics",
+        EP_PREFIX + "/knowledge-base/statistics",
         response_model=Statistics,
         tags=["Knowledge Base"],
     )
@@ -584,9 +590,11 @@ def setup_routes(app: FastAPI) -> None:
         Returns:
             Statistics: Knowledge base and system statistics.
         """
-        return await methods.get_statistics()
+        result = result_wrapper(await methods.get_statistics())
+        return result.result
 
-    @app.post("/api/search", response_model=SearchResponse, tags=["Knowledge Base"])
+    @app.post(EP_PREFIX + "/search", response_model=SearchResponse,
+              tags=["Knowledge Base"])
     async def search_knowledge_base(query: SearchQuery):
         """
         Search the knowledge base.
@@ -597,12 +605,25 @@ def setup_routes(app: FastAPI) -> None:
         Returns:
             SearchResponse: Search results.
         """
-        return await methods.search_knowledge_base(query)
+        result = result_wrapper(await methods.search_knowledge_base(query))
+        return result.result
+
+    @app.post(EP_PREFIX + "/knowledge-base/clean", tags=["Knowledge Base"])
+    async def clean_knowledge_base():
+        """
+        Clean all vectors from the knowledge base.
+
+        Returns:
+            Dict[str, str]: Cleanup confirmation.
+        """
+        result = result_wrapper(await methods.clean_knowledge_base())
+        return result.result
 
     # File Generation and Download Endpoints
 
     @app.post(
-        "/api/generate-file", response_model=GeneratedFile, tags=["File Generation"]
+        EP_PREFIX + "/generate-file", response_model=GeneratedFile,
+        tags=["File Generation"]
     )
     async def generate_file(request: FileGenerationRequest):
         """
@@ -614,10 +635,12 @@ def setup_routes(app: FastAPI) -> None:
         Returns:
             GeneratedFile: Generated file information.
         """
-        return await methods.generate_file(request)
+        result = result_wrapper(await methods.generate_file(request))
+        return result.result
 
     @app.post(
-        "/api/generate-package", response_model=FilePackage, tags=["File Generation"]
+        EP_PREFIX + "/generate-package", response_model=FilePackage,
+        tags=["File Generation"]
     )
     async def create_file_package(files: List[GeneratedFile]):
         """
@@ -629,9 +652,10 @@ def setup_routes(app: FastAPI) -> None:
         Returns:
             FilePackage: File package information.
         """
-        return await methods.create_file_package(files)
+        result = result_wrapper(await methods.create_file_package(files))
+        return await result.result
 
-    @app.get("/api/download/file/{filename}", tags=["File Generation"])
+    @app.get(EP_PREFIX + "/download/file/{filename}", tags=["File Generation"])
     async def download_file(filename: str, content: str):
         """
         Download a generated file.
@@ -643,30 +667,18 @@ def setup_routes(app: FastAPI) -> None:
         Returns:
             Response: File download response.
         """
-        from fastapi.responses import Response
-        from .utilities import sanitize_filename
-
-        # Sanitize filename for security
-        safe_filename = sanitize_filename(filename)
-
-        # Determine content type based on file extension
-        content_type = "text/plain"
-        if safe_filename.endswith(".json"):
-            content_type = "application/json"
-        elif safe_filename.endswith(".py"):
-            content_type = "text/x-python"
-        elif safe_filename.endswith((".js", ".jsx")):
-            content_type = "application/javascript"
-        elif safe_filename.endswith((".ts", ".tsx")):
-            content_type = "application/typescript"
-
+        result = result_wrapper(methods.get_filename_data(filename))
         return Response(
             content=content,
-            media_type=content_type,
-            headers={"Content-Disposition": f"attachment; filename={safe_filename}"},
+            media_type=result.result["content_type"],
+            headers={
+                "Content-Disposition":
+                f"attachment; filename={result.result['safe_filename']}"
+            },
         )
 
-    @app.get("/api/download/package/{package_name}", tags=["File Generation"])
+    @app.get(EP_PREFIX + "/download/package/{package_name}",
+             tags=["File Generation"])
     async def download_package(package_name: str):
         """
         Download a file package as ZIP.
@@ -678,44 +690,25 @@ def setup_routes(app: FastAPI) -> None:
             StreamingResponse: ZIP file download.
         """
         import io
-        import zipfile
-        from fastapi.responses import StreamingResponse
-        from .utilities import sanitize_filename
 
-        # This is a placeholder implementation
-        # In a real system, you would retrieve the package from storage
-
-        # Create a ZIP file in memory
-        zip_buffer = io.BytesIO()
-
-        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
-            # Add placeholder files (in real implementation, get from storage)
-            zip_file.writestr(
-                "README.md",
-                "# Generated Code Package\n\nThis package contains generated code files.",
-            )
-            zip_file.writestr(
-                "example.json", '{"message": "This is a generated JSON file"}'
-            )
-
-        zip_buffer.seek(0)
-
-        safe_package_name = sanitize_filename(package_name)
-
+        result = result_wrapper(
+            methods.download_package_endpoint(package_name))
         return StreamingResponse(
-            io.BytesIO(zip_buffer.read()),
+            io.BytesIO(result.result["zip_buffer"].read()),
             media_type="application/zip",
             headers={
-                "Content-Disposition": f"attachment; filename={safe_package_name}.zip"
+                "Content-Disposition": "attachment; filename="
+                + f"${result.result['safe_package_name']}.zip"
             },
         )
 
     @app.post(
-        "/api/generate/json-config",
+        EP_PREFIX + "/generate/json-config",
         response_model=GeneratedFile,
         tags=["Code Generation"],
     )
-    async def generate_json_config(requirements: str, config_type: str = "table"):
+    async def generate_json_config(requirements: str,
+                                   config_type: str = "table"):
         """
         Generate JSON configuration for GenericSuite.
 
@@ -726,41 +719,13 @@ def setup_routes(app: FastAPI) -> None:
         Returns:
             GeneratedFile: Generated JSON configuration file.
         """
-        try:
-            # Use agent to generate JSON config
-            agent = get_agent()
-            response = await agent.generate_json_config(requirements, config_type)
-
-            # Extract JSON from response content
-            from .utilities import extract_code_blocks
-
-            code_blocks = extract_code_blocks(response.content, "json")
-
-            if not code_blocks:
-                raise HTTPException(
-                    status_code=400,
-                    detail="No JSON configuration found in agent response",
-                )
-
-            json_content = code_blocks[0]["code"]
-            filename = f"{config_type}_config_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.json"
-
-            return GeneratedFile(
-                filename=filename,
-                content=json_content,
-                file_type="json",
-                size=len(json_content.encode("utf-8")),
-                description=f"Generated {config_type} configuration",
-            )
-
-        except Exception as e:
-            logger.error(f"JSON config generation failed: {e}")
-            raise HTTPException(
-                status_code=500, detail=f"Failed to generate JSON config: {str(e)}"
-            )
+        result = result_wrapper(
+            methods.generate_json_config_endpoint(requirements, config_type)
+        )
+        return result.result
 
     @app.post(
-        "/api/generate/python-code",
+        EP_PREFIX + "/generate/python-code",
         response_model=GeneratedFile,
         tags=["Code Generation"],
     )
@@ -775,40 +740,13 @@ def setup_routes(app: FastAPI) -> None:
         Returns:
             GeneratedFile: Generated Python code file.
         """
-        try:
-            # Use agent to generate Python code
-            agent = get_agent()
-            response = await agent.generate_python_code(requirements, code_type)
-
-            # Extract Python code from response content
-            from .utilities import extract_code_blocks
-
-            code_blocks = extract_code_blocks(response.content, "python")
-
-            if not code_blocks:
-                raise HTTPException(
-                    status_code=400, detail="No Python code found in agent response"
-                )
-
-            python_content = code_blocks[0]["code"]
-            filename = f"{code_type}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.py"
-
-            return GeneratedFile(
-                filename=filename,
-                content=python_content,
-                file_type="python",
-                size=len(python_content.encode("utf-8")),
-                description=f"Generated {code_type} Python code",
-            )
-
-        except Exception as e:
-            logger.error(f"Python code generation failed: {e}")
-            raise HTTPException(
-                status_code=500, detail=f"Failed to generate Python code: {str(e)}"
-            )
+        result = result_wrapper(
+            methods.generate_python_code_endpoint(requirements, code_type)
+        )
+        return result.result
 
     @app.post(
-        "/api/generate/frontend-code",
+        EP_PREFIX + "/generate/frontend-code",
         response_model=List[GeneratedFile],
         tags=["Code Generation"],
     )
@@ -822,63 +760,17 @@ def setup_routes(app: FastAPI) -> None:
         Returns:
             List[GeneratedFile]: Generated frontend code files.
         """
-        try:
-            # Use agent to generate frontend code
-            agent = get_agent()
-            response = await agent.generate_frontend_code(requirements)
-
-            # Extract code blocks from response
-            from .utilities import extract_code_blocks
-
-            generated_files = []
-
-            # Extract different types of code blocks
-            for lang in ["jsx", "tsx", "javascript", "typescript", "css"]:
-                code_blocks = extract_code_blocks(response.content, lang)
-
-                for i, block in enumerate(code_blocks):
-                    ext = "jsx" if lang in ["jsx", "tsx"] else lang[:2]
-                    filename = f"component_{i+1}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.{ext}"
-
-                    generated_files.append(
-                        GeneratedFile(
-                            filename=filename,
-                            content=block["code"],
-                            file_type=lang,
-                            size=len(block["code"].encode("utf-8")),
-                            description=f"Generated {lang} frontend code",
-                        )
-                    )
-
-            if not generated_files:
-                # Fallback: create a single file with the full response
-                filename = (
-                    f"frontend_code_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.jsx"
-                )
-                generated_files.append(
-                    GeneratedFile(
-                        filename=filename,
-                        content=response.content,
-                        file_type="jsx",
-                        size=len(response.content.encode("utf-8")),
-                        description="Generated frontend code",
-                    )
-                )
-
-            return generated_files
-
-        except Exception as e:
-            logger.error(f"Frontend code generation failed: {e}")
-            raise HTTPException(
-                status_code=500, detail=f"Failed to generate frontend code: {str(e)}"
-            )
+        result = result_wrapper(
+            methods.generate_frontend_code_endpoint(requirements))
+        return result.result
 
     @app.post(
-        "/api/generate/backend-code",
+        EP_PREFIX + "/generate/backend-code",
         response_model=List[GeneratedFile],
         tags=["Code Generation"],
     )
-    async def generate_backend_code(requirements: str, framework: str = "fastapi"):
+    async def generate_backend_code(requirements: str,
+                                    framework: str = "fastapi"):
         """
         Generate backend code for specified framework.
 
@@ -889,51 +781,10 @@ def setup_routes(app: FastAPI) -> None:
         Returns:
             List[GeneratedFile]: Generated backend code files.
         """
-        try:
-            # Use agent to generate backend code
-            agent = get_agent()
-            response = await agent.generate_backend_code(requirements, framework)
-
-            # Extract Python code blocks from response
-            from .utilities import extract_code_blocks
-
-            code_blocks = extract_code_blocks(response.content, "python")
-
-            generated_files = []
-
-            for i, block in enumerate(code_blocks):
-                filename = f"{framework}_backend_{i+1}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.py"
-
-                generated_files.append(
-                    GeneratedFile(
-                        filename=filename,
-                        content=block["code"],
-                        file_type="python",
-                        size=len(block["code"].encode("utf-8")),
-                        description=f"Generated {framework} backend code",
-                    )
-                )
-
-            if not generated_files:
-                # Fallback: create a single file with the full response
-                filename = f"{framework}_backend_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.py"
-                generated_files.append(
-                    GeneratedFile(
-                        filename=filename,
-                        content=response.content,
-                        file_type="python",
-                        size=len(response.content.encode("utf-8")),
-                        description=f"Generated {framework} backend code",
-                    )
-                )
-
-            return generated_files
-
-        except Exception as e:
-            logger.error(f"Backend code generation failed: {e}")
-            raise HTTPException(
-                status_code=500, detail=f"Failed to generate backend code: {str(e)}"
-            )
+        result = result_wrapper(
+            methods.generate_backend_code_endpoint(requirements, framework)
+        )
+        return result.result
 
 
 # Create the application instance

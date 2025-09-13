@@ -4,14 +4,13 @@ services:
   gscodegen-server:
     container_name: gscodegen-server
     image: gscodegen_python
-    command: sh -c "bash /code/server-entrypoint.sh"
+    command: sh -c "bash /var/scripts/server-entrypoint.sh"
     volumes:
-      - ../server:/code
+      - ../server:/code/server
       - ../mcp-server:/code/mcp-server
-      - ../server/genericsuite_codegen:/code/mcp-server/genericsuite_codegen
-      - ./server-entrypoint.sh:/code/server-entrypoint.sh
-      - ./local_repo_files:/code/local_repo_files
-      - ../.env:/code/.env
+      - ./server-entrypoint.sh:/var/scripts/server-entrypoint.sh
+      - ../.env:/var/scripts/.env
+      - ../local_repo_files:/var/local_repo_files
     environment:
       # Server environment variables
       - SERVER_PORT=${SERVER_PORT:-8000}
@@ -23,11 +22,11 @@ services:
       - REMOTE_REPO_URL=${REMOTE_REPO_URL}
       - LOCAL_REPO_DIR=${LOCAL_REPO_DIR}
       - HF_TOKEN=${HF_TOKEN}
-      - OPENAI_BASE_URL=${OPENAI_BASE_URL}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
       - LLM_API=${LLM_API}
       - LLM_PROVIDER=${LLM_PROVIDER}
       - LLM_MODEL=${LLM_MODEL}
+      - LLM_API_KEY=${LLM_API_KEY}
+      - LLM_BASE_URL=${LLM_BASE_URL}
       - LLM_TEMPERATURE=${LLM_TEMPERATURE}
       - LLM_MAX_TOKENS=${LLM_MAX_TOKENS}
       - LLM_TOP_P=${LLM_TOP_P}
@@ -38,7 +37,10 @@ services:
       - MCP_API_KEY=${MCP_API_KEY}
       - MCP_SERVER_PORT=${MCP_SERVER_PORT:-8070}
       - MCP_SERVER_HOST=${MCP_SERVER_HOST:-0.0.0.0}
+      # Common environment variables
+      - LOCAL_REPO_DIR=${LOCAL_REPO_DIR:-/var/local_repo_files}
     ports: ["8000:8000", "8070:8070"]
+    # depends_on: [gscodegen-ollama]
     networks:
       - my_shared_network
     restart: unless-stopped
@@ -62,13 +64,21 @@ services:
       - my_shared_network
     restart: unless-stopped
 
-  mongo:
+  gscodegen-mongo:
     container_name: gscodegen-mongo-db
-    image: mongo:latest
+    # https://hub.docker.com/r/mongodb/mongodb-atlas-local
+    # image: mongodb/mongodb-atlas-local
+    image: gscodegen_mongo_db_atlas
+    hostname: gscodegen-mongo
     restart: unless-stopped
     environment:
-      MONGO_INITDB_ROOT_USERNAME: root
-      MONGO_INITDB_ROOT_PASSWORD: example
+      # MONGODB_INITDB_ROOT_USERNAME: root
+      # MONGODB_INITDB_ROOT_PASSWORD: example
+      MONGOT_LOG_FILE: /dev/null
+      RUNNER_LOG_FILE: /dev/null
+    volumes:
+      - ../local_mongodb_data/data:/data/db
+      - ../local_mongodb_data/config:/data/configdb
     ports:
       - 27017:27017
     expose:
@@ -76,19 +86,37 @@ services:
     networks:
       - my_shared_network
 
-  mongo-express:
+  gscodegen-mongo-express:
     container_name: gscodegen-mongo-express
     image: mongo-express
     restart: unless-stopped
     ports:
       - 8081:8081
     environment:
-      ME_CONFIG_MONGODB_ADMINUSERNAME: root
-      ME_CONFIG_MONGODB_ADMINPASSWORD: example
-      ME_CONFIG_MONGODB_URL: mongodb://root:example@mongo:27017/
-    depends_on: [mongo]
+      # ME_CONFIG_MONGODB_ADMINUSERNAME: root
+      # ME_CONFIG_MONGODB_ADMINPASSWORD: example
+      # ME_CONFIG_MONGODB_URL: mongodb://root:example@gscodegen-mongo:27017/
+      #
+      ME_CONFIG_MONGODB_URL: mongodb://gscodegen-mongo:27017/?directConnection=true
+      # 
+      # To access the MongoDB Express UI: http://localhost:8081
+      # User: admin
+      # Password: pass
+      #
+    depends_on: [gscodegen-mongo]
     networks:
       - my_shared_network
+
+  # gscodegen-ollama:
+  #   container_name: gscodegen-ollama
+  #   image: gscodegen_ollama
+  #   environment:
+  #     - OLLAMA_HOST=0.0.0.0
+  #   restart: unless-stopped
+  #   ports:
+  #     - 11434:11434
+  #   networks:
+  #     - my_shared_network
 
 networks:
   my_shared_network:

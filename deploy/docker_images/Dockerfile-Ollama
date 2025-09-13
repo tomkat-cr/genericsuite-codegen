@@ -1,0 +1,9 @@
+# deploy/docker_images/Dockerfile-Ollama
+
+FROM ollama/ollama
+
+ENV PULL_MODEL_NAME=gpt-oss:20b
+
+RUN ollama serve & sleep 5 ; ollama pull $PULL_MODEL_NAME ; echo "kill 'ollama serve' process" ; ps -ef | grep 'ollama serve' | grep -v grep | awk '{print $2}' | xargs -r kill -9
+
+EXPOSE 11434

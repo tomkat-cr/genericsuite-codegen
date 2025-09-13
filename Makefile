@@ -20,7 +20,7 @@ restart:
 
 # Restart all services
 hard-restart:
-	make build && cd deploy && make down && make up && make logs-f
+	make build && cd deploy && make hard-restart
 
 # Show logs
 logs:
@@ -28,7 +28,11 @@ logs:
 
 # Follow logs
 logs-f:
-	cd deploy && make logs-f
+	# cd deploy && make logs-f
+	cd deploy && make logs-f-server-client
+
+server-logs:
+	docker logs gscodegen-server -f
 
 # Clean up - stop services and remove volumes
 clean-docker:
@@ -37,9 +41,11 @@ clean-docker:
 	@echo ""
 	@echo "Done cleaning up"
 
+docker-prune: clean-docker
+
 # Show service status
 status:
-	docker compose ps
+	cd deploy && docker compose ps
 
 install:
 	npm run install:all
@@ -71,3 +77,11 @@ init-app-environment:
 	bash ./scripts/init_app_environment.sh
 	@echo ""
 	@echo "Done initializing app environment"
+	@echo "Please update the .env file with your own values"
+	@echo "and then run 'make run' to start the services"
+
+py-env-activate:
+	cd server && poetry env activate
+
+py-env-remove:
+	cd server && poetry env remove

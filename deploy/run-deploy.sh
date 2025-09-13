@@ -23,6 +23,8 @@ clean_up_function() {
     rm -rf ../server/server-entrypoint.sh
     rm -rf ../server/local_repo_files
     rm -rf ../server/.env
+    rm -rf ../server/mcp-server
+    rm -rf ../deploy/local_repo_files
 }
 
 create_docker_images() {
@@ -79,6 +81,10 @@ elif [ "$ACTION" = "logs" ]; then
 elif [ "$ACTION" = "logs-f" ]; then
     echo "Showing logs..."
     docker compose --project-name ${APP_NAME_LOWERCASE} logs -f
+    exit 0
+elif [ "$ACTION" = "logs-f-server-client" ]; then
+    echo "Showing logs..."
+    docker compose --project-name ${APP_NAME_LOWERCASE} logs -f gscodegen-server gscodegen-client
     exit 0
 else
     echo "Error: Invalid action specified"

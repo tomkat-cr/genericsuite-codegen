@@ -15,7 +15,7 @@ PYTHON_SCRIPT="${SCRIPT_DIR}/sync_dependencies.py"
 # Default file paths (relative to project root)
 DEFAULT_SERVER_PYPROJECT="server/pyproject.toml"
 DEFAULT_MCP_PYPROJECT="mcp-server/pyproject.toml"
-DEFAULT_DOCKERFILE="deploy/docker_images/Dockerfile"
+DEFAULT_DOCKERFILE="deploy/docker_images/Dockerfile-Python"
 
 # Colors for output
 RED='\033[0;31m'

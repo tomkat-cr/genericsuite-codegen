@@ -8,26 +8,16 @@ LLM provider configuration for GenericSuite development assistance.
 
 import os
 import logging
-from typing import Dict, Any, Optional, List, Union, Tuple
-from dataclasses import dataclass
-from datetime import datetime
-import json
+from typing import Dict, Any, Optional, List, Tuple
 
-from pydantic_ai import Agent, RunContext
+from pydantic_ai import Agent
+# from pydantic_ai import RunContext
 from pydantic_ai.models import Model
-from pydantic_ai.models.openai import OpenAIModel
+from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.settings import ModelSettings
 
-from pydantic import BaseModel, Field
-
-try:
-    import litellm
-
-    LITELLM_AVAILABLE = True
-except ImportError:
-    LITELLM_AVAILABLE = False
-    logging.warning("LiteLLM not available, using OpenAI only")
+from .types import AgentConfig, QueryRequest, AgentContext, AgentResponse
 
 from .tools import (
     get_all_agent_tools,
@@ -35,72 +25,24 @@ from .tools import (
     validate_search_query,
     format_sources_for_attribution,
 )
-from .prompts import get_prompt_manager, PromptManager
+from .prompts import get_prompt_manager
+
+
+DEBUG = True
+DEBUG_DETAILED = False
 
 # Configure logging
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO if DEBUG else logging.WARNING)
 
-
-class AgentConfig(BaseModel):
-    """Configuration for the GenericSuite AI agent."""
-
-    model_provider: str = Field(
-        default="openai", description="LLM provider (openai, litellm)"
-    )
-    model_name: str = Field(default="gpt-4", description="Model name to use")
-    temperature: float = Field(
-        default=0.1, description="Model temperature (0.0 to 1.0)"
-    )
-    max_tokens: Optional[int] = Field(
-        default=None, description="Maximum tokens for responses"
-    )
-    timeout: int = Field(default=60, description="Request timeout in seconds")
-    api_key: Optional[str] = Field(default=None, description="API key for the provider")
-    base_url: Optional[str] = Field(default=None, description="Custom base URL for API")
-
-
-class QueryRequest(BaseModel):
-    """Request model for agent queries."""
-
-    query: str = Field(description="User query or request")
-    task_type: str = Field(
-        default="general",
-        description="Type of task (general, json, python, frontend, backend)",
-    )
-    framework: Optional[str] = Field(
-        default=None, description="Backend framework for code generation"
-    )
-    context_limit: int = Field(default=4000, description="Maximum context length")
-    include_sources: bool = Field(
-        default=True, description="Include source attribution in response"
-    )
-
-
-class AgentResponse(BaseModel):
-    """Response model from the agent."""
-
-    content: str = Field(description="Generated response content")
-    sources: List[str] = Field(
-        default_factory=list, description="Source documents used"
-    )
-    task_type: str = Field(description="Type of task performed")
-    timestamp: datetime = Field(
-        default_factory=datetime.utcnow, description="Response timestamp"
-    )
-    model_used: str = Field(description="Model used for generation")
-    token_usage: Optional[Dict[str, int]] = Field(
-        default=None, description="Token usage statistics"
-    )
-
-
-@dataclass
-class AgentContext:
-    """Context information for agent operations."""
-
-    user_id: Optional[str] = None
-    session_id: Optional[str] = None
-    conversation_history: List[Dict[str, Any]] = None
-    preferences: Dict[str, Any] = None
+try:
+    import litellm
+    if DEBUG:
+        logging.info(f"LiteLLM loaded: {litellm}")
+    LITELLM_AVAILABLE = True
+except ImportError:
+    LITELLM_AVAILABLE = False
+    logging.warning("LiteLLM not available, using OpenAI only")
 
 
 class GenericSuiteAgent:
@@ -130,24 +72,32 @@ class GenericSuiteAgent:
         self.agent = self._create_agent()
 
         logger.info(
-            f"Initialized GenericSuite agent with {self.config.model_provider} provider"
+            "Initialized GenericSuite agent with "
+            f"{self.config.model_provider} provider"
         )
 
     def _create_default_config(self) -> AgentConfig:
         """Create default configuration from environment variables."""
-        return AgentConfig(
-            model_provider=os.getenv("LLM_PROVIDER", "openai"),
-            model_name=os.getenv("LLM_MODEL", "gpt-4"),
-            temperature=float(os.getenv("LLM_TEMPERATURE", "0.1")),
-            max_tokens=(
+        config_args = {
+            "model_provider": os.getenv("LLM_PROVIDER", "openai"),
+            "model_name": os.getenv("LLM_MODEL", "gpt-4o-mini"),
+            "temperature": float(os.getenv("LLM_TEMPERATURE", "0.5")),
+            "max_tokens": (
                 int(os.getenv("LLM_MAX_TOKENS", "4000"))
                 if os.getenv("LLM_MAX_TOKENS")
                 else None
             ),
-            timeout=int(os.getenv("LLM_TIMEOUT", "60")),
-            api_key=os.getenv("OPENAI_API_KEY"),
-            base_url=os.getenv("LLM_BASE_URL"),
+            "timeout": int(os.getenv("LLM_TIMEOUT", "60")),
+            "api_key": os.getenv("LLM_API_KEY"),
+        }
+        base_url = os.getenv("LLM_BASE_URL")
+        if base_url is not None and base_url != '':
+            config_args["base_url"] = base_url
+        agent_config = AgentConfig(**config_args)
+        logger.info(
+            f"Agent config: {agent_config}"
         )
+        return agent_config
 
     def _initialize_model(self) -> Model:
         """
@@ -166,7 +116,8 @@ class GenericSuiteAgent:
                 return self._create_litellm_model()
             else:
                 logger.warning(
-                    f"Unsupported provider {self.config.model_provider}, falling back to OpenAI"
+                    "Unsupported provider "
+                    f"{self.config.model_provider}, falling back to OpenAI"
                 )
                 return self._create_openai_model()
 
@@ -174,7 +125,7 @@ class GenericSuiteAgent:
             logger.error(f"Failed to initialize model: {e}")
             raise ValueError(f"Model initialization failed: {e}")
 
-    def _create_openai_model(self) -> OpenAIModel:
+    def _create_openai_model(self) -> OpenAIChatModel:
         """Create OpenAI model configuration."""
         self.inference_args["temperature"] = self.config.temperature
         self.inference_args["timeout"] = self.config.timeout
@@ -186,17 +137,22 @@ class GenericSuiteAgent:
         if self.config.api_key:
             model_kwargs["api_key"] = self.config.api_key
 
-        if self.config.base_url:
+        if self.config.base_url is None or self.config.base_url == '':
+            model_kwargs["base_url"] = 'https://api.openai.com/v1'
+        else:
             model_kwargs["base_url"] = self.config.base_url
 
-        return OpenAIModel(
-            self.config.model_name, provider=OpenAIProvider(**model_kwargs)
+        logger.info(f"Model kwargs: {model_kwargs}")
+
+        return OpenAIChatModel(
+            self.config.model_name,
+            provider=OpenAIProvider(**model_kwargs)
         )
 
     def _create_litellm_model(self) -> Model:
         """Create LiteLLM model configuration."""
-        # Note: This would need to be implemented based on Pydantic AI's LiteLLM support
-        # For now, fall back to OpenAI
+        # TODO: Note: This would need to be implemented based on Pydantic AI's
+        # LiteLLM support. For now, fall back to OpenAI
         logger.warning("LiteLLM integration not yet implemented, using OpenAI")
         return self._create_openai_model()
 
@@ -213,17 +169,21 @@ class GenericSuiteAgent:
         # Create agent with system prompt
         system_prompt = self.prompt_manager.get_system_prompt("general")
 
-        agent = Agent(
-            model=self.model,
-            system_prompt=system_prompt,
-            tools=tools,
-            model_settings=ModelSettings(**self.inference_args),
-        )
-
+        agent_args = {
+            "model": self.model,
+            "system_prompt": system_prompt,
+            "tools": tools,
+            "model_settings": ModelSettings(**self.inference_args),
+        }
+        _ = DEBUG_DETAILED and logger.info(f"Agent args: {agent_args}")
+        agent = Agent(**agent_args)
         return agent
 
     async def query(
-        self, request: QueryRequest, context: Optional[AgentContext] = None
+        self,
+        request: QueryRequest,
+        context: Optional[AgentContext] = None,
+        run_context: Optional[Dict[str, Any]] = None
     ) -> AgentResponse:
         """
         Process a user query and generate a response.
@@ -245,7 +205,8 @@ class GenericSuiteAgent:
                 raise ValueError("Invalid query: must be 3-1000 characters")
 
             logger.info(
-                f"Processing query: '{request.query}' (type: {request.task_type})"
+                f"Processing query: '{request.query}' "
+                f"(type: {request.task_type})"
             )
 
             # Get relevant context from knowledge base
@@ -257,16 +218,35 @@ class GenericSuiteAgent:
             # Run agent with context
             run_context = self._create_run_context(context, request)
 
+        except ValueError as e:
+            logger.error(f"Query preparation validation error: {e}")
+            raise
+        except Exception as e:
+            logger.error(
+                f"Query preparation failed for query: {request.query}: {e}")
+            raise RuntimeError(f"Failed to process query: {e}")
+
+        try:
             # Execute query
+
+            logger.info(f">> Running agent with System prompt: {prompt}")
+            logger.info(f">> Running agent with User prompt: {request.query}")
+            logger.info(f">> Run context: {run_context}")
+
             result = await self.agent.run(
-                prompt, message_history=run_context.get("history", [])
+                request.query,
+                message_history=run_context.get("history", [])
             )
 
+            logger.info(f">> Agent result: {result}")
+
             # Format response
-            response = self._format_response(result, request, sources, kb_context)
+            response = self._format_response(
+                result, request, sources, kb_context)
 
             logger.info(
-                f"Generated response ({len(response.content)} chars) with {len(sources)} sources"
+                f"Generated response ({len(response.content)} chars) with"
+                f" {len(sources)} sources"
             )
             return response
 
@@ -274,10 +254,12 @@ class GenericSuiteAgent:
             logger.error(f"Query validation error: {e}")
             raise
         except Exception as e:
-            logger.error(f"Query processing failed: {e}")
+            logger.error(
+                f"Query processing failed for query: {request.query}: {e}")
             raise RuntimeError(f"Failed to process query: {e}")
 
-    async def _get_query_context(self, request: QueryRequest) -> Tuple[str, List[str]]:
+    async def _get_query_context(self, request: QueryRequest
+                                 ) -> Tuple[str, List[str]]:
         """
         Retrieve relevant context from the knowledge base.
 
@@ -315,7 +297,10 @@ class GenericSuiteAgent:
         return filters.get(task_type)
 
     def _create_task_prompt(
-        self, request: QueryRequest, context: str, sources: List[str]
+        self,
+        request: QueryRequest,
+        context: str,
+        sources: List[str]
     ) -> str:
         """
         Create a task-specific prompt for the agent.
@@ -328,12 +313,18 @@ class GenericSuiteAgent:
         Returns:
             str: Formatted prompt for the agent.
         """
+
+        logger.info(f">> Creating task prompt for request: {request}")
+        logger.info(f">> Context: {context}")
+        logger.info(f">> Sources: {sources}")
+
         if request.task_type in ["json", "python", "frontend", "backend"]:
             # Add framework-specific guidance for backend tasks
             if request.task_type == "backend" and request.framework:
-                framework_prompt = self.prompt_manager.get_framework_specific_prompt(
-                    request.framework
-                )
+                framework_prompt = \
+                    self.prompt_manager.get_framework_specific_prompt(
+                        request.framework
+                    )
                 context += f"\n\n{framework_prompt}"
 
             return self.prompt_manager.create_generation_prompt(
@@ -344,11 +335,15 @@ class GenericSuiteAgent:
             )
         else:
             return self.prompt_manager.create_query_prompt(
-                query=request.query, context=context, sources=sources
+                query=request.query,
+                context=context,
+                sources=sources,
             )
 
     def _create_run_context(
-        self, context: Optional[AgentContext], request: QueryRequest
+        self,
+        context: Optional[AgentContext],
+        request: QueryRequest,
     ) -> Dict[str, Any]:
         """Create run context for the agent."""
         run_context = {}
@@ -358,13 +353,19 @@ class GenericSuiteAgent:
             history = []
             for msg in context.conversation_history[-5:]:  # Last 5 messages
                 if msg.get("role") in ["user", "assistant"]:
-                    history.append({"role": msg["role"], "content": msg["content"]})
+                    history.append(
+                        {"role": msg["role"],
+                         "content": msg["content"]}
+                    )
             run_context["history"] = history
 
         return run_context
 
     def _format_response(
-        self, result: Any, request: QueryRequest, sources: List[str], context: str
+        self, result: Any,
+        request: QueryRequest,
+        sources: List[str],
+        context: str
     ) -> AgentResponse:
         """
         Format the agent result into a structured response.
@@ -391,7 +392,8 @@ class GenericSuiteAgent:
         if hasattr(result, "usage") and result.usage:
             token_usage = {
                 "prompt_tokens": getattr(result.usage, "prompt_tokens", 0),
-                "completion_tokens": getattr(result.usage, "completion_tokens", 0),
+                "completion_tokens": getattr(
+                    result.usage, "completion_tokens", 0),
                 "total_tokens": getattr(result.usage, "total_tokens", 0),
             }
 
@@ -522,7 +524,8 @@ class GenericSuiteAgent:
         try:
             # Test basic query
             test_request = QueryRequest(
-                query="What is GenericSuite?", task_type="general", context_limit=1000
+                query="What is GenericSuite?", task_type="general",
+                context_limit=1000
             )
 
             response = await self.query(test_request)
@@ -567,7 +570,8 @@ def get_agent(config: Optional[AgentConfig] = None) -> GenericSuiteAgent:
     return _agent_instance
 
 
-def initialize_agent(config: Optional[AgentConfig] = None) -> GenericSuiteAgent:
+def initialize_agent(config: Optional[AgentConfig] = None
+                     ) -> GenericSuiteAgent:
     """
     Initialize the GenericSuite AI agent.
 

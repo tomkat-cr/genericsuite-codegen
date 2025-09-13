@@ -227,6 +227,5 @@ node_modules
 
 deploy/docker-compose.yml
 deploy/nginx.conf
-deploy/docker_images/Dockerfile.backup_*
-
-server/server-entrypoint.sh
+deploy/docker_images/Dockerfile-Python.backup_*
+deploy/docker_images/Dockerfile-Ollama.backup_*

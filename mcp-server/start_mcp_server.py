@@ -82,6 +82,29 @@ def validate_environment():
     return True
 
 
+def get_mcp_config():
+    """Get MCP server configuration from environment variables."""
+    return MCPConfig(
+        server_name=os.getenv("MCP_SERVER_NAME", "genericsuite-codegen"),
+        server_version=os.getenv("MCP_SERVER_VERSION", "1.0.0"),
+        api_key=os.getenv("MCP_API_KEY"),
+        host=os.getenv("MCP_SERVER_HOST", "0.0.0.0"),
+        port=int(os.getenv("MCP_SERVER_PORT", "8070")),
+        debug=os.getenv("MCP_DEBUG", "0") == "1"
+    )
+
+
+def report_mcp_config(config: MCPConfig):
+    """Report MCP server configuration."""
+    logger.info(f"Server configuration:")
+    logger.info(f"  Name: {config.server_name}")
+    logger.info(f"  Version: {config.server_version}")
+    logger.info(f"  Host: {config.host}")
+    logger.info(f"  Port: {config.port}")
+    logger.info(f"  Debug: {config.debug}")
+    logger.info(f"  API Key: {'Set' if config.api_key else 'Not set'}")
+
+
 def main():
     """Main entry point for the MCP server startup script."""
     try:
@@ -97,22 +120,8 @@ def main():
             sys.exit(1)
         
         # Create MCP server configuration
-        config = MCPConfig(
-            server_name=os.getenv("MCP_SERVER_NAME", "genericsuite-codegen"),
-            server_version=os.getenv("MCP_SERVER_VERSION", "1.0.0"),
-            api_key=os.getenv("MCP_API_KEY"),
-            host=os.getenv("MCP_SERVER_HOST", "0.0.0.0"),
-            port=int(os.getenv("MCP_SERVER_PORT", "8070")),
-            debug=os.getenv("MCP_DEBUG", "0") == "1"
-        )
-        
-        logger.info(f"Server configuration:")
-        logger.info(f"  Name: {config.server_name}")
-        logger.info(f"  Version: {config.server_version}")
-        logger.info(f"  Host: {config.host}")
-        logger.info(f"  Port: {config.port}")
-        logger.info(f"  Debug: {config.debug}")
-        logger.info(f"  API Key: {'Set' if config.api_key else 'Not set'}")
+        config = get_mcp_config()
+        report_mcp_config(config)
         
         # Create and start MCP server
         logger.info("Creating MCP server...")
@@ -144,21 +153,8 @@ async def main_async():
             sys.exit(1)
         
         # Create MCP server configuration
-        config = MCPConfig(
-            server_name=os.getenv("MCP_SERVER_NAME", "genericsuite-codegen"),
-            server_version=os.getenv("MCP_SERVER_VERSION", "1.0.0"),
-            api_key=os.getenv("MCP_API_KEY"),
-            host=os.getenv("MCP_SERVER_HOST", "0.0.0.0"),
-            port=int(os.getenv("MCP_SERVER_PORT", "8070")),
-            debug=os.getenv("MCP_DEBUG", "0") == "1"
-        )
-        
-        logger.info(f"Server configuration:")
-        logger.info(f"  Name: {config.server_name}")
-        logger.info(f"  Version: {config.server_version}")
-        logger.info(f"  Host: {config.host}")
-        logger.info(f"  Port: {config.port}")
-        logger.info(f"  Debug: {config.debug}")
+        config = get_mcp_config()
+        report_mcp_config(config)
         
         # Create and start MCP server
         logger.info("Creating MCP server...")
