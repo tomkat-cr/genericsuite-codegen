@@ -10,7 +10,8 @@ from typing import List, Dict, Any, Optional, Tuple
 from pydantic_ai import Tool
 
 from genericsuite_codegen.database.setup import (
-    get_database_manager,
+    # get_database_manager,
+    initialize_database,
     SearchResult,
     VectorSearchError,
     DatabaseConnectionError
@@ -54,7 +55,8 @@ class KnowledgeBaseTool:
 
     def __init__(self):
         """Initialize the knowledge base tool."""
-        self.db_manager = get_database_manager()
+        # self.db_manager = get_database_manager()
+        self.db_manager = initialize_database()
         self.embedding_provider = None
         self._initialize_embedding_provider()
 

@@ -25,8 +25,11 @@ from pymongo.errors import (
 
 from genericsuite_codegen.document_processing.types import EmbeddedChunk
 
+DEBUG = True
+
 # Configure logging
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO if DEBUG else logging.WARNING)
 
 
 @dataclass
@@ -159,6 +162,42 @@ class DatabaseManager:
             logger.error(f"Database operation error: {e}")
             raise
 
+    def collection_exists(self, collection_name: str) -> bool:
+        """Check if a collection exists in the database."""
+        return collection_name in self.database.list_collection_names()
+
+    def create_indexes(self, collection: Collection, indexes: List[Any]
+                       ) -> None:
+        """Create indexes for a collection."""
+        for index in indexes:
+            logger.info(
+                f"Creating index: {index} for the "
+                f"{collection.name} collection")
+            if isinstance(index, tuple) and len(index) == 2 and \
+                    isinstance(index[0], str):
+                collection.create_index([index])
+            elif isinstance(index, tuple) and len(index) == 2 and \
+                    isinstance(index[0], list) and isinstance(index[1], dict):
+                collection.create_index(index[0], **index[1])
+            elif isinstance(index, tuple) and len(index) == 3:
+                collection.create_index([(index[0], index[1])], **index[2])
+            else:
+                collection.create_index(index)
+
+    def create_vector_index(self, collection: Collection, name: str,
+                            index_structure: Dict[str, Any]) -> None:
+        """Create a vector index for a collection."""
+        existing_indexes = list(collection.list_search_indexes())
+        vector_index_exists = any(
+            idx.get("name") == name for idx in existing_indexes
+        )
+        if not vector_index_exists:
+            logger.info(f"Creating vector search index: {name} for the"
+                        f" {collection.name} collection")
+            collection.create_search_index(index_structure)
+            logger.info(f"Created vector search index {name} for the"
+                        f" {collection.name} collection")
+
     def initialize_schema(self) -> None:
         """
         Initialize database schema and create indexes for all collections.
@@ -192,6 +231,11 @@ class DatabaseManager:
 
     def _initialize_knowledge_base_collection(self) -> None:
         """Initialize knowledge_base collection with vector search index."""
+        if self.collection_exists(self.knowledge_base_collection):
+            logger.info("Knowledge_base collection already exists")
+            return
+
+        logger.info("Initializing knowledge_base collection")
         collection = self.database[self.knowledge_base_collection]
 
         # Create indexes for efficient querying
@@ -204,11 +248,7 @@ class DatabaseManager:
              {"unique": True}),
         ]
 
-        for index in indexes:
-            if isinstance(index, tuple) and len(index) == 2:
-                collection.create_index(index[0], **index[1])
-            else:
-                collection.create_index(index)
+        self.create_indexes(collection, indexes)
 
         # Create vector search index for embeddings
         # Note: This requires MongoDB Atlas or MongoDB 6.0+ with vector search
@@ -230,15 +270,10 @@ class DatabaseManager:
             }
 
             # Check if vector search is available
-            existing_indexes = list(collection.list_search_indexes())
-            vector_index_exists = any(
-                idx.get("name") == "vector_index" for idx in existing_indexes
-            )
+            self.create_vector_index(collection, "vector_index", vector_index)
 
-            if not vector_index_exists:
-                collection.create_search_index(vector_index)
-                logger.info("Created vector search index for knowledge_base"
-                            " collection")
+            logger.info("Created vector search index for knowledge_base"
+                        " collection")
 
         except Exception as e:
             logger.warning("Vector search index creation failed "
@@ -250,6 +285,11 @@ class DatabaseManager:
 
     def _initialize_conversations_collection(self) -> None:
         """Initialize ai_chatbot_conversations collection."""
+        if self.collection_exists(self.conversations_collection):
+            logger.info("ai_chatbot_conversations collection already exists")
+            return
+
+        logger.info("Initializing ai_chatbot_conversations collection")
         collection = self.database[self.conversations_collection]
 
         # Create indexes
@@ -260,16 +300,17 @@ class DatabaseManager:
             ([("user_id", ASCENDING), ("creation_date", DESCENDING)]),
         ]
 
-        for index in indexes:
-            if isinstance(index, tuple) and len(index) == 2:
-                collection.create_index(index[0], **index[1])
-            else:
-                collection.create_index(index)
+        self.create_indexes(collection, indexes)
 
         logger.info("Initialized ai_chatbot_conversations collection")
 
     def _initialize_users_collection(self) -> None:
         """Initialize users collection."""
+        if self.collection_exists(self.users_collection):
+            logger.info("users collection already exists")
+            return
+
+        logger.info("Initializing users collection")
         collection = self.database[self.users_collection]
 
         # Create indexes
@@ -280,11 +321,7 @@ class DatabaseManager:
             ("superuser", ASCENDING),
         ]
 
-        for index in indexes:
-            if len(index) == 3:
-                collection.create_index(index[0], **index[2])
-            else:
-                collection.create_index(index)
+        self.create_indexes(collection, indexes)
 
         logger.info("Initialized users collection")
 

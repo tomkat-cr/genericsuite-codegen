@@ -58,7 +58,8 @@ from genericsuite_codegen.agent.agent import (
     QueryRequest as AgentQueryRequest
 )
 from genericsuite_codegen.database.setup import (
-    get_database_connection,
+    # get_database_connection,
+    initialize_database,
     test_database_connection,
 )
 
@@ -76,7 +77,8 @@ class EndpointMethods:
 
     def __init__(self):
         """Initialize endpoint methods."""
-        self.db = get_database_connection()
+        # self.db = get_database_connection()
+        self.db = initialize_database().database
         self.agent = get_agent()
 
     # Agent Query Methods
@@ -226,7 +228,7 @@ class EndpointMethods:
                     "token_usage": None
                 })
 
-            result = await conversations.insert_one(conversation_data)
+            result = conversations.insert_one(conversation_data)
             conversation_data["_id"] = result.inserted_id
 
             return std_response(
@@ -265,14 +267,14 @@ class EndpointMethods:
             skip = (page - 1) * page_size
 
             # Get total count
-            total = await conversations.count_documents({"user_id": user_id})
+            total = conversations.count_documents({"user_id": user_id})
 
             # Get conversations
             cursor = conversations.find(
                 {"user_id": user_id}
             ).sort("update_date", -1).skip(skip).limit(page_size)
 
-            conversation_docs = await cursor.to_list(length=page_size)
+            conversation_docs = cursor.to_list(length=page_size)
             conversation_list = [
                 self._convert_conversation_document(doc)
                 for doc in conversation_docs
@@ -310,7 +312,7 @@ class EndpointMethods:
 
             conversations = self.db.ai_chatbot_conversations
 
-            conversation_doc = await conversations.find_one({
+            conversation_doc = conversations.find_one({
                 "_id": ObjectId(conversation_id),
                 "user_id": user_id
             })
@@ -364,7 +366,7 @@ class EndpointMethods:
             if request.title is not None:
                 update_data["title"] = request.title
 
-            result = await conversations.update_one(
+            result = conversations.update_one(
                 {"_id": ObjectId(conversation_id), "user_id": user_id},
                 {"$set": update_data}
             )
@@ -408,7 +410,7 @@ class EndpointMethods:
 
             conversations = self.db.ai_chatbot_conversations
 
-            result = await conversations.delete_one({
+            result = conversations.delete_one({
                 "_id": ObjectId(conversation_id),
                 "user_id": user_id
             })
@@ -498,7 +500,7 @@ class EndpointMethods:
             knowledge_base = self.db.knowledge_base
 
             # Get document and chunk counts
-            document_count = await knowledge_base.count_documents({})
+            document_count = knowledge_base.count_documents({})
 
             # Get unique file count (chunks from same file)
             pipeline = [
@@ -506,7 +508,7 @@ class EndpointMethods:
                 {"$count": "unique_files"}
             ]
 
-            unique_files_result = await knowledge_base.aggregate(pipeline) \
+            unique_files_result = knowledge_base.aggregate(pipeline) \
                 .to_list(1)
             unique_files = unique_files_result[0]["unique_files"] \
                 if unique_files_result else 0
@@ -742,8 +744,8 @@ class EndpointMethods:
             knowledge_base = self.db.knowledge_base
             conversations = self.db.ai_chatbot_conversations
 
-            kb_count = await knowledge_base.count_documents({})
-            conv_count = await conversations.count_documents({})
+            kb_count = knowledge_base.count_documents({})
+            conv_count = conversations.count_documents({})
 
             # Get agent info
             agent_info = self.agent.get_model_info()
@@ -847,7 +849,7 @@ class EndpointMethods:
                 }
             ]
 
-            await conversations.update_one(
+            conversations.update_one(
                 {"_id": ObjectId(conversation_id)},
                 {
                     "$push": {"messages": {"$each": messages_to_add}},
@@ -902,7 +904,8 @@ class EndpointMethods:
         """
         try:
             # Check database connection
-            db = get_database_connection()
+            # db = get_database_connection()
+            db = initialize_database()
             db_healthy = await test_database_connection(db)
 
             # Check agent health
@@ -944,6 +947,7 @@ class EndpointMethods:
         """
         try:
             # Get database stats
+            # db = get_database_connection()
             db = get_database_connection()
             db_stats = {}
 
@@ -954,8 +958,8 @@ class EndpointMethods:
 
                 db_stats = {
                     "knowledge_base_documents":
-                        await knowledge_base.count_documents({}),
-                    "conversations": await conversations.count_documents({}),
+                        knowledge_base.count_documents({}),
+                    "conversations": conversations.count_documents({}),
                     "connection_status": "connected",
                 }
             except Exception as e:

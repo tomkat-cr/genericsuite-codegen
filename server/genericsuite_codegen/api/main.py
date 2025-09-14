@@ -51,7 +51,8 @@ from .utilities import (
     log_request_response,
 )
 from genericsuite_codegen.database.setup import (
-    get_database_connection,
+    # get_database_connection,
+    initialize_database,
     test_database_connection,
 )
 
@@ -79,7 +80,8 @@ async def lifespan(app: FastAPI):
 
     try:
         # Initialize database connection
-        db = get_database_connection()
+        # db = get_database_connection()
+        db = initialize_database()
         if not await test_database_connection(db):
             logger.error("Database connection failed during startup")
             raise RuntimeError("Database connection failed")
@@ -345,7 +347,7 @@ def setup_routes(app: FastAPI) -> None:
 
     @app.post(
         EP_PREFIX + "/query",
-        # response_model=QueryResponse,
+        response_model=QueryResponse,
         # response_model=Dict[str, Any],
         tags=["Agent"])
     async def query_agent(
