@@ -365,8 +365,8 @@ def setup_routes(app: FastAPI) -> None:
             QueryResponse: Agent response.
         """
         correlation_id = getattr(req.state, "correlation_id", "unknown")
-        result = result_wrapper(await methods.query_agent(request,
-                                                          correlation_id))
+        result = result_wrapper(
+            await methods.query_agent(request, correlation_id))
         logger.info(f"/query | query_agent | result.result: {result}")
         logger.info(f"dict(result.result): {dict(result.result)}")
         # return result.result

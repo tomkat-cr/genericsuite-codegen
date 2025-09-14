@@ -6,9 +6,13 @@ help:
 
 # Start all services
 up:
-	make build && cd deploy && make up && make logs-f
+	make build && cd deploy && make up && make logs-f-server-client
 
 run: up
+
+run-db-only:
+	# To run only the containerized database:
+	CONTAINER_TO_RUN=gscodegen-mongo make run
 
 # Stop all services
 down:
@@ -85,3 +89,6 @@ py-env-activate:
 
 py-env-remove:
 	cd server && poetry env remove
+
+rebuild-ui:
+	cd ui && make build && cd .. && docker restart gscodegen-client

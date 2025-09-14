@@ -55,7 +55,7 @@ services:
       - UI_PORT=${UI_PORT:-3000}
       - UI_SECURE_PORT=${UI_SECURE_PORT:-3001}
       - UI_APP_DOMAIN_NAME=${APP_DOMAIN_NAME}
-      - UI_API_BASE_URL=${UI_API_BASE_URL}
+      - UI_API_BASE_URL=${UI_API_BASE_URL_FOR_DOCKER:=http://localhost:3000/api}
       - UI_APP_SUBDIR=${UI_APP_SUBDIR}
       - UI_DEBUG=${UI_DEBUG}
     ports: ["3000:80", "3001:443"]

@@ -17,6 +17,14 @@ from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.settings import ModelSettings
 
+from pydantic_ai.messages import (
+    # ModelMessage,
+    ModelRequest,
+    ModelResponse,
+    TextPart,
+    UserPromptPart,
+)
+
 from .types import AgentConfig, QueryRequest, AgentContext, AgentResponse
 
 from .tools import (
@@ -352,12 +360,20 @@ class GenericSuiteAgent:
             # Convert conversation history to agent format
             history = []
             for msg in context.conversation_history[-5:]:  # Last 5 messages
-                if msg.get("role") in ["user", "assistant"]:
-                    history.append(
-                        {"role": msg["role"],
-                         "content": msg["content"]}
-                    )
+                if msg.get("role") not in ["user", "assistant"]:
+                    continue
+                if msg.get("role") == "user":
+                    history.append(ModelRequest(
+                        parts=[
+                            UserPromptPart(
+                                content=msg.get("content"))]))
+                if msg.get("role") == "assistant":
+                    history.append(ModelResponse(
+                        parts=[
+                            TextPart(content=msg.get("content"))]))
             run_context["history"] = history
+
+        logger.info(f">> _create_run_context | Run context: {run_context}")
 
         return run_context
 

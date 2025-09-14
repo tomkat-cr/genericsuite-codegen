@@ -17,7 +17,7 @@ install:
 
 # Run development server
 dev:
-	npm run dev
+	bash ./run-client.sh run
 
 run: dev
 

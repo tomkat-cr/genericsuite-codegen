@@ -7,6 +7,7 @@ separated from the route definitions for better organization and testing.
 
 import os
 import logging
+import uuid
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 
@@ -33,6 +34,7 @@ from .types import (
 )
 from genericsuite_codegen.agent.types import (
     AgentModel,
+    AgentContext,
 )
 from genericsuite_codegen.api.types import (
     KnowledgeBaseStatistics,
@@ -63,8 +65,11 @@ from genericsuite_codegen.database.setup import (
     test_database_connection,
 )
 
+DEBUG = True
+
 # Configure logging
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO if DEBUG else logging.WARNING)
 
 
 class EndpointMethods:
@@ -83,8 +88,11 @@ class EndpointMethods:
 
     # Agent Query Methods
 
-    async def query_agent(self, request: QueryRequest, correlation_id: str
-                          ) -> Dict[str, Any]:
+    async def query_agent(
+        self,
+        request: QueryRequest,
+        correlation_id: str
+    ) -> Dict[str, Any]:
         """
         Process an agent query request.
 
@@ -103,6 +111,38 @@ class EndpointMethods:
                 "Processing agent query "
                 f"[{correlation_id}]: {request.query[:100]}...")
 
+            # Validate request
+            if not request.query or not request.query.strip():
+                return std_error_response(
+                    status_code=400,
+                    detail="Query cannot be empty"
+                )
+
+            # If no conversation_id provided, create a new conversation
+            conversation_id = request.conversation_id
+            if not conversation_id:
+                # Create new conversation with the query as initial message
+                from .types import ConversationCreate
+                create_request = ConversationCreate(
+                    initial_message=request.query.strip()
+                )
+
+                # TODO: Use default user for now (in real app, this would come
+                # from auth)
+                user_id = "default_user"
+
+                create_result = await self.create_conversation(
+                    create_request, user_id)
+                if create_result.error:
+                    logger.error(
+                        "Failed to create conversation:"
+                        f" {create_result.error_message}")
+                    return create_result
+
+                conversation_id = create_result.result.id
+                logger.info(
+                    f"Created new conversation {conversation_id} for query")
+
             # Convert API request to agent request
             agent_request = AgentQueryRequest(
                 query=request.query,
@@ -114,8 +154,15 @@ class EndpointMethods:
                 include_sources=request.include_sources
             )
 
+            # Get conversation context if conversation exists
+            agent_context = None
+            if conversation_id:
+                agent_context = await self._get_conversation_context(
+                    conversation_id)
+
             # Process query with agent
-            agent_response = await self.agent.query(agent_request)
+            agent_response = await self.agent.query(agent_request,
+                                                    context=agent_context)
 
             # Convert agent response to API response
             response = QueryResponse(
@@ -124,14 +171,24 @@ class EndpointMethods:
                 task_type=request.task_type,
                 model_used=agent_response.model_used,
                 token_usage=agent_response.token_usage,
-                conversation_id=request.conversation_id
+                conversation_id=conversation_id
             )
 
-            # Save to conversation if conversation_id provided
+            # Save messages to conversation (only if conversation already
+            # existed)
             if request.conversation_id:
                 await self._add_message_to_conversation(
-                    request.conversation_id,
+                    conversation_id,
                     request.query,
+                    agent_response.content,
+                    agent_response.sources,
+                    agent_response.token_usage
+                )
+            else:
+                # For new conversations, just add the assistant response
+                # (user message was already added during conversation creation)
+                await self._add_assistant_message_to_conversation(
+                    conversation_id,
                     agent_response.content,
                     agent_response.sources,
                     agent_response.token_usage
@@ -204,11 +261,29 @@ class EndpointMethods:
             Conversation: Created conversation.
         """
         try:
+            # Validate user_id
+            if not user_id or not user_id.strip():
+                return std_error_response(
+                    status_code=400,
+                    detail="User ID is required"
+                )
+
             conversations = self.db.ai_chatbot_conversations
 
-            # Generate title if not provided
-            title = request.title or \
-                f"Conversation {datetime.utcnow().strftime('%Y-%m-%d %H:%M')}"
+            # Generate unique title based on initial message or timestamp
+            if request.initial_message and request.initial_message.strip():
+                # Use first 50 characters of initial message for title
+                title = request.initial_message.strip()[:50]
+                if len(request.initial_message.strip()) > 50:
+                    title += "..."
+            elif request.title and request.title.strip():
+                title = request.title.strip()
+            else:
+                title = "New Conversation " + \
+                        f"{datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}"
+
+            # Ensure title uniqueness for this user
+            title = await self._ensure_unique_title(title, user_id)
 
             conversation_data = {
                 "user_id": user_id,
@@ -219,10 +294,12 @@ class EndpointMethods:
             }
 
             # Add initial message if provided
-            if request.initial_message:
+            if request.initial_message and request.initial_message.strip():
+                message_id = str(uuid.uuid4())
                 conversation_data["messages"].append({
+                    "id": message_id,
                     "role": "user",
-                    "content": request.initial_message,
+                    "content": request.initial_message.strip(),
                     "timestamp": datetime.utcnow(),
                     "sources": None,
                     "token_usage": None
@@ -231,10 +308,15 @@ class EndpointMethods:
             result = conversations.insert_one(conversation_data)
             conversation_data["_id"] = result.inserted_id
 
-            return std_response(
-                result=self._convert_conversation_document(
-                    conversation_data)
-            )
+            # Return the complete conversation object
+            created_conversation = self._convert_conversation_document(
+                conversation_data)
+
+            logger.info(
+                f"Created conversation {result.inserted_id} for user"
+                f" {user_id}")
+
+            return std_response(result=created_conversation)
 
         except Exception as e:
             logger.error(f"Failed to create conversation: {e}")
@@ -261,6 +343,25 @@ class EndpointMethods:
             ConversationList: Paginated conversation list.
         """
         try:
+            # Validate inputs
+            if not user_id or not user_id.strip():
+                return std_error_response(
+                    status_code=400,
+                    detail="User ID is required"
+                )
+
+            if page < 1:
+                return std_error_response(
+                    status_code=400,
+                    detail="Page number must be greater than 0"
+                )
+
+            if page_size < 1 or page_size > 100:
+                return std_error_response(
+                    status_code=400,
+                    detail="Page size must be between 1 and 100"
+                )
+
             conversations = self.db.ai_chatbot_conversations
 
             # Calculate skip value
@@ -310,6 +411,19 @@ class EndpointMethods:
         try:
             from bson import ObjectId
 
+            # Validate inputs
+            if not conversation_id or not conversation_id.strip():
+                return std_error_response(
+                    status_code=400,
+                    detail="Conversation ID is required"
+                )
+
+            if not user_id or not user_id.strip():
+                return std_error_response(
+                    status_code=400,
+                    detail="User ID is required"
+                )
+
             conversations = self.db.ai_chatbot_conversations
 
             conversation_doc = conversations.find_one({
@@ -320,20 +434,14 @@ class EndpointMethods:
             if not conversation_doc:
                 return std_error_response(
                     status_code=404,
-                    detail="Conversation not found"
+                    detail="Conversation not found or access denied"
                 )
 
             return std_response(
                 result=self._convert_conversation_document(conversation_doc))
 
         except Exception as e:
-            # if isinstance(e, HTTPException):
-            #     raise
-            # logger.error(f"Failed to get conversation: {e}")
-            # raise HTTPException(
-            #     status_code=500,
-            #     detail=f"Failed to get conversation: {str(e)}"
-            # )
+            logger.error(f"Failed to get conversation: {e}")
             return std_error_response(
                 status_code=500,
                 detail=f"Failed to get conversation: {str(e)}"
@@ -359,35 +467,80 @@ class EndpointMethods:
         try:
             from bson import ObjectId
 
+            # Validate inputs
+            if not conversation_id or not conversation_id.strip():
+                return std_error_response(
+                    status_code=400,
+                    detail="Conversation ID is required"
+                )
+
+            if not user_id or not user_id.strip():
+                return std_error_response(
+                    status_code=400,
+                    detail="User ID is required"
+                )
+
             conversations = self.db.ai_chatbot_conversations
 
             update_data = {"update_date": datetime.utcnow()}
 
             if request.title is not None:
-                update_data["title"] = request.title
+                # Validate title
+                title = request.title.strip()
+                if not title:
+                    return std_error_response(
+                        status_code=400,
+                        detail="Title cannot be empty"
+                    )
+
+                # Ensure title uniqueness (excluding current conversation)
+                existing = conversations.find_one({
+                    "user_id": user_id,
+                    "title": title,
+                    "_id": {"$ne": ObjectId(conversation_id)}
+                })
+
+                if existing:
+                    # Generate unique title
+                    title = await self._ensure_unique_title(title, user_id)
+
+                update_data["title"] = title
+
+            # Verify conversation exists and belongs to user
+            existing_conversation = conversations.find_one({
+                "_id": ObjectId(conversation_id),
+                "user_id": user_id
+            })
+
+            if not existing_conversation:
+                return std_error_response(
+                    status_code=404,
+                    detail="Conversation not found or access denied"
+                )
 
             result = conversations.update_one(
                 {"_id": ObjectId(conversation_id), "user_id": user_id},
                 {"$set": update_data}
             )
 
-            if result.matched_count == 0:
+            if result.modified_count == 0:
                 return std_error_response(
-                    status_code=404,
-                    detail="Conversation not found"
+                    status_code=500,
+                    detail="Failed to update conversation"
                 )
 
-            return std_response(
-                result=await self.get_conversation(conversation_id, user_id))
+            # Get updated conversation
+            updated_result = await self.get_conversation(conversation_id,
+                                                         user_id)
+            if updated_result.error:
+                return updated_result
+
+            logger.info(
+                f"Updated conversation {conversation_id} for user {user_id}")
+            return std_response(result=updated_result.result)
 
         except Exception as e:
-            # if isinstance(e, HTTPException):
-            #     raise
-            # logger.error(f"Failed to update conversation: {e}")
-            # raise HTTPException(
-            #     status_code=500,
-            #     detail=f"Failed to update conversation: {str(e)}"
-            # )
+            logger.error(f"Failed to update conversation: {e}")
             return std_error_response(
                 status_code=500,
                 detail=f"Failed to update conversation: {str(e)}"
@@ -408,7 +561,32 @@ class EndpointMethods:
         try:
             from bson import ObjectId
 
+            # Validate inputs
+            if not conversation_id or not conversation_id.strip():
+                return std_error_response(
+                    status_code=400,
+                    detail="Conversation ID is required"
+                )
+
+            if not user_id or not user_id.strip():
+                return std_error_response(
+                    status_code=400,
+                    detail="User ID is required"
+                )
+
             conversations = self.db.ai_chatbot_conversations
+
+            # Verify conversation exists and belongs to user before deletion
+            existing_conversation = conversations.find_one({
+                "_id": ObjectId(conversation_id),
+                "user_id": user_id
+            })
+
+            if not existing_conversation:
+                return std_error_response(
+                    status_code=404,
+                    detail="Conversation not found or access denied"
+                )
 
             result = conversations.delete_one({
                 "_id": ObjectId(conversation_id),
@@ -417,20 +595,17 @@ class EndpointMethods:
 
             if result.deleted_count == 0:
                 return std_error_response(
-                    status_code=404,
-                    detail="Conversation not found"
+                    status_code=500,
+                    detail="Failed to delete conversation"
                 )
 
-            return {"message": "Conversation deleted successfully"}
+            logger.info(
+                f"Deleted conversation {conversation_id} for user {user_id}")
+            return std_response(result={
+                "message": "Conversation deleted successfully"})
 
         except Exception as e:
-            # if isinstance(e, HTTPException):
-            #     raise
-            # logger.error(f"Failed to delete conversation: {e}")
-            # raise HTTPException(
-            #     status_code=500,
-            #     detail=f"Failed to delete conversation: {str(e)}"
-            # )
+            logger.error(f"Failed to delete conversation: {e}")
             return std_error_response(
                 status_code=500,
                 detail=f"Failed to delete conversation: {str(e)}"
@@ -801,7 +976,11 @@ class EndpointMethods:
 
         messages = []
         for msg_data in doc.get("messages", []):
+            # Ensure message has an ID (for backward compatibility)
+            message_id = msg_data.get("id", str(uuid.uuid4()))
+
             messages.append(Message(
+                id=message_id,
                 role=msg_data["role"],
                 content=msg_data["content"],
                 timestamp=msg_data["timestamp"],
@@ -818,22 +997,212 @@ class EndpointMethods:
             message_count=len(messages)
         )
 
+    async def _ensure_unique_title(self, base_title: str, user_id: str) -> str:
+        """Ensure conversation title is unique for the user."""
+        try:
+            conversations = self.db.ai_chatbot_conversations
+
+            # Check if base title already exists
+            existing = conversations.find_one({
+                "user_id": user_id,
+                "title": base_title
+            })
+
+            if not existing:
+                return base_title
+
+            # Generate unique title by appending number
+            counter = 1
+            while True:
+                new_title = f"{base_title} ({counter})"
+                existing = conversations.find_one({
+                    "user_id": user_id,
+                    "title": new_title
+                })
+
+                if not existing:
+                    return new_title
+
+                counter += 1
+
+                # Safety check to prevent infinite loop
+                if counter > 1000:
+                    import time
+                    return f"{base_title} ({int(time.time())})"
+
+        except Exception as e:
+            logger.error(f"Error ensuring unique title: {e}")
+            # Fallback to timestamp-based title
+            import time
+            return f"{base_title} ({int(time.time())})"
+
+    async def _add_assistant_message_to_conversation(
+        self,
+        conversation_id: str,
+        assistant_message: str,
+        sources: Optional[List[str]],
+        token_usage: Optional[Dict[str, int]]
+    ) -> None:
+        """Add only an assistant message to a conversation."""
+        try:
+            from bson import ObjectId
+
+            # Validate conversation_id
+            if not conversation_id or not conversation_id.strip():
+                logger.error("Invalid conversation_id provided")
+                return
+
+            conversations = self.db.ai_chatbot_conversations
+
+            # Verify conversation exists
+            conversation_exists = conversations.find_one(
+                {"_id": ObjectId(conversation_id)})
+            if not conversation_exists:
+                logger.error(f"Conversation {conversation_id} not found")
+                return
+
+            # Generate unique ID for assistant message
+            assistant_message_id = str(uuid.uuid4())
+
+            message_to_add = {
+                "id": assistant_message_id,
+                "role": "assistant",
+                "content": assistant_message,
+                "timestamp": datetime.utcnow(),
+                "sources": sources or [],
+                "token_usage": token_usage
+            }
+
+            # Update conversation with new message
+            result = conversations.update_one(
+                {"_id": ObjectId(conversation_id)},
+                {
+                    "$push": {"messages": message_to_add},
+                    "$set": {"update_date": datetime.utcnow()}
+                }
+            )
+
+            if result.modified_count == 0:
+                logger.error(
+                    "Failed to add assistant message to conversation"
+                    f" {conversation_id}")
+            else:
+                logger.info(
+                    "Added assistant message to conversation"
+                    f" {conversation_id}")
+
+        except Exception as e:
+            logger.error(
+                f"Failed to add assistant message to conversation: {e}")
+
+    async def _get_conversation_context(self, conversation_id: str
+                                        ) -> Optional['AgentContext']:
+        """
+        Get conversation context for the agent including message history.
+
+        Args:
+            conversation_id: ID of the conversation to get context for
+
+        Returns:
+            AgentContext: Context object with conversation history, or None
+            if not found
+        """
+        try:
+            from bson import ObjectId
+            from genericsuite_codegen.agent.types import AgentContext
+
+            # Validate conversation_id
+            if not conversation_id or not conversation_id.strip():
+                logger.warning("Invalid conversation_id provided for context")
+                return None
+
+            conversations = self.db.ai_chatbot_conversations
+
+            # Get conversation with messages
+            conversation_doc = conversations.find_one(
+                {"_id": ObjectId(conversation_id)}
+            )
+
+            if not conversation_doc:
+                logger.warning(
+                    f"Conversation {conversation_id} not found for context")
+                return None
+
+            # Convert messages to agent context format
+            conversation_history = []
+            messages = conversation_doc.get("messages", [])
+
+            # Include recent messages (last 10 to maintain context whil
+            # avoiding token limits)
+            recent_messages = messages[-10:] if len(
+                messages) > 10 else messages
+
+            for msg in recent_messages:
+                if msg.get("role") in ["user", "assistant"]:
+                    conversation_history.append({
+                        "role": msg["role"],
+                        "content": msg["content"],
+                        "timestamp": msg.get("timestamp"),
+                        "sources": msg.get("sources", [])
+                        if msg["role"] == "assistant" else None
+                    })
+
+            # Create agent context
+            agent_context = AgentContext(
+                user_id=conversation_doc.get("user_id"),
+                session_id=conversation_id,
+                conversation_history=conversation_history,
+                preferences={}
+            )
+
+            logger.info(
+                f"Retrieved context for conversation {conversation_id} "
+                f"with {len(conversation_history)} messages")
+            return agent_context
+
+        except Exception as e:
+            logger.error(
+                "Failed to get conversation context for"
+                f" {conversation_id}: {e}")
+            return None
+
     async def _add_message_to_conversation(
         self,
         conversation_id: str,
         user_message: str,
         assistant_message: str,
-        sources: List[str],
+        sources: Optional[List[str]],
         token_usage: Optional[Dict[str, int]]
     ) -> None:
-        """Add messages to a conversation."""
+        """
+        Add messages to a conversation with proper validation and ID
+        generation.
+        """
         try:
             from bson import ObjectId
+            import uuid
+
+            # Validate conversation_id
+            if not conversation_id or not conversation_id.strip():
+                logger.error("Invalid conversation_id provided")
+                return
 
             conversations = self.db.ai_chatbot_conversations
 
+            # Verify conversation exists
+            conversation_exists = conversations.find_one(
+                {"_id": ObjectId(conversation_id)})
+            if not conversation_exists:
+                logger.error(f"Conversation {conversation_id} not found")
+                return
+
+            # Generate unique IDs for messages
+            user_message_id = str(uuid.uuid4())
+            assistant_message_id = str(uuid.uuid4())
+
             messages_to_add = [
                 {
+                    "id": user_message_id,
                     "role": "user",
                     "content": user_message,
                     "timestamp": datetime.utcnow(),
@@ -841,21 +1210,31 @@ class EndpointMethods:
                     "token_usage": None
                 },
                 {
+                    "id": assistant_message_id,
                     "role": "assistant",
                     "content": assistant_message,
                     "timestamp": datetime.utcnow(),
-                    "sources": sources,
+                    "sources": sources or [],
                     "token_usage": token_usage
                 }
             ]
 
-            conversations.update_one(
+            # Update conversation with new messages
+            result = conversations.update_one(
                 {"_id": ObjectId(conversation_id)},
                 {
                     "$push": {"messages": {"$each": messages_to_add}},
                     "$set": {"update_date": datetime.utcnow()}
                 }
             )
+
+            if result.modified_count == 0:
+                logger.error(
+                    "Failed to add messages to conversation"
+                    f" {conversation_id}")
+            else:
+                logger.info(
+                    f"Added 2 messages to conversation {conversation_id}")
 
         except Exception as e:
             logger.error(f"Failed to add messages to conversation: {e}")
@@ -948,7 +1327,7 @@ class EndpointMethods:
         try:
             # Get database stats
             # db = get_database_connection()
-            db = get_database_connection()
+            db = initialize_database()
             db_stats = {}
 
             try:

@@ -38,6 +38,14 @@ create_docker_images() {
     cd ..
 }
 
+cleanup_when_specific_container_is_specified() {
+    if [ "${CONTAINER_TO_RUN}" != "" ]; then
+        echo "Running only ${CONTAINER_TO_RUN}"
+        docker compose --project-name deploy down
+        docker compose --project-name ${APP_NAME_LOWERCASE} down
+    fi
+}
+
 load_envs
 
 APP_NAME_LOWERCASE=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]')
@@ -56,7 +64,7 @@ fi
 
 if [ "$ACTION" = "restart" ]; then
     echo "Restarting services..."
-    docker compose --project-name ${APP_NAME_LOWERCASE} restart
+    docker compose --project-name ${APP_NAME_LOWERCASE} restart ${CONTAINER_TO_RUN}
     exit 0
 elif [ "$ACTION" = "run" ]; then
     start_up_function
@@ -65,11 +73,14 @@ elif [ "$ACTION" = "run" ]; then
     if ! docker network create my_shared_network 2>/dev/null; then
         echo "my_shared_network already exists"
     fi
-    docker compose --project-name ${APP_NAME_LOWERCASE} up -d
+    cleanup_when_specific_container_is_specified
+    docker compose --project-name ${APP_NAME_LOWERCASE} up -d ${CONTAINER_TO_RUN}
     exit 0
 elif [ "$ACTION" = "down" ]; then
     echo "Stopping services..."
-    if ! docker compose --project-name ${APP_NAME_LOWERCASE} down; then
+    cleanup_when_specific_container_is_specified
+    if ! docker compose --project-name ${APP_NAME_LOWERCASE} down
+    then
         echo "Error stopping services... skipping clean up function"
     fi
     clean_up_function

@@ -188,6 +188,7 @@ class QueryResponse(BaseResponse):
 
 class Message(BaseModel):
     """Individual message in a conversation."""
+    id: str = Field(description="Unique message identifier")
     role: str = Field(description="Message role (user/assistant)")
     content: str = Field(description="Message content")
     timestamp: datetime = Field(

@@ -18,7 +18,7 @@ install:
 
 # Run development server
 dev:
-	poetry run uvicorn genericsuite_codegen.api.main:app --reload --host 0.0.0.0 --port 8000
+	bash ./run-server.sh run
 
 run: dev
 
@@ -27,12 +27,11 @@ build:
 	poetry build
 
 # Start production server
-start:
-	poetry run uvicorn genericsuite_codegen.api.main:app --host 0.0.0.0 --port 8000
+start: dev
 
 # Start production server from root
 start-from_root:
-	cd server && poetry run uvicorn genericsuite_codegen.api.main:app --host 0.0.0.0 --port 8000
+	cd server && bash ./run-server.sh run
 
 # Run tests
 test:
