@@ -439,9 +439,16 @@ class DatabaseManager:
 
             # Try vector search first (if available)
             try:
-                return self._vector_search(
+                results = self._vector_search(
                     collection, query_embedding, limit, file_type_filter
                 )
+                if results:  # If vector search returns results, use them
+                    return results
+                else:
+                    logger.info("Vector search returned no results, falling back to cosine similarity")
+                    return self._cosine_similarity_search(
+                        collection, query_embedding, limit, file_type_filter
+                    )
             except Exception as e:
                 logger.warning("Vector search failed, falling back to"
                                f" cosine similarity: {e}")
