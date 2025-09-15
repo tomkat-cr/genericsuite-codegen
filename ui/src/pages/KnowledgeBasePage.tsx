@@ -144,9 +144,9 @@ export function KnowledgeBasePage() {
     } catch (error) {
       setStats(prev => ({ ...prev, status: 'error' }))
       addAlert('error', 'Failed to update knowledge base. Please try again.')
-    } finally {
-      setIsUpdating(false)
-      setUpdateProgress(null)
+    // } finally {
+    //   setIsUpdating(false)
+    //   setUpdateProgress(null)
     }
   }
 

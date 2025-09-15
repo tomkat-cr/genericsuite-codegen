@@ -25,6 +25,8 @@ Check the [Kiro-Usage.md](./Kiro-Usage.md) file for more details.
   - [Development Commands](#development-commands)
   - [Production Deployment](#production-deployment)
   - [MCP Server](#mcp-server)
+- [Screenshots](#screenshots)
+- [System Architecture](#system-architecture)
 - [Project Structure](#project-structure)
 - [License](#license)
 - [Contributing](#contributing)
@@ -221,6 +223,31 @@ cd mcp-server && make check-env
 **MCP server endpoints**:
 - HTTP: `http://localhost:8070`
 - WebSocket: Available for real-time communication
+
+## Screenshots
+
+### Main Page
+
+![Main Page](./assets/screenshots/genericsuite.codegen.ui.main.010.png)
+
+### Knowledge Base Page
+
+![Knowledge Base Page](./assets/screenshots/genericsuite.codegen.ui.kb.010.png)
+
+### Conversation Page
+
+![Conversation Page](./assets/screenshots/genericsuite.codegen.ui.chat.010.png)
+![Conversation Page](./assets/screenshots/genericsuite.codegen.ui.chat.020.png)
+
+### Code Generation Page
+
+![Code Generation Page](./assets/screenshots/genericsuite.codegen.ui.code.generation.010.png)
+![Code Generation Page](./assets/screenshots/genericsuite.codegen.ui.code.generation.020.png)
+![Code Generation Page](./assets/screenshots/genericsuite.codegen.ui.code.generation.030.png)
+![Code Generation Page](./assets/screenshots/genericsuite.codegen.ui.code.generation.040.png)
+![Code Generation Page](./assets/screenshots/genericsuite.codegen.ui.code.generation.050.png)
+![Code Generation Page](./assets/screenshots/genericsuite.codegen.ui.code.generation.060.png)
+![Code Generation Page](./assets/screenshots/genericsuite.codegen.ui.code.generation.070.png)
 
 ## System Architecture
 

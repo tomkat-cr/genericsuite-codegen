@@ -67,7 +67,7 @@ from genericsuite_codegen.database.setup import (
     test_database_connection,
 )
 
-DEBUG = False
+DEBUG = True
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -628,7 +628,6 @@ class EndpointMethods:
     async def update_knowledge_base(
         self,
         request: KnowledgeBaseUpdate,
-        background_tasks: Optional[any] = None
     ) -> Dict[str, str]:
         """
         Trigger knowledge base update.
@@ -642,27 +641,9 @@ class EndpointMethods:
         """
         try:
             # Start background update task
-            logger.error(">> Starting knowledge base update")
             operation_id = f"kb_update_{get_utcnow_fmt()}"
-
-            if background_tasks:
-                background_tasks.add_task(
-                    self._update_knowledge_base_background,
-                    operation_id,
-                    request
-                )
-                return std_response(
-                    result=IngestionResult(
-                        success=True,
-                        status="Knowledge base update started",
-                        statistics=IngestionStatistics(
-                            total_documents=0,
-                            total_chunks=0,
-                            total_embeddings=0,
-                            duration_seconds=0,
-                        )
-                    )
-                )
+            logger.info(f"Knowledge base update started [{operation_id}]"
+                        " in BACKGROUND...")
             return std_response(
                 result=await self._update_knowledge_base_background(
                     operation_id,

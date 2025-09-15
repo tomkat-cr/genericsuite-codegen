@@ -45,7 +45,12 @@ from .types import (
     StandardGsErrorResponse,
     GenerationRequest,
 )
-from genericsuite_codegen.document_processing.types import IngestionProgress
+from genericsuite_codegen.document_processing.types import (
+    IngestionProgress,
+    IngestionResult,
+    IngestionStatistics,
+    IngestionStatus,
+)
 
 from .utilities import (
     setup_logging,
@@ -532,6 +537,7 @@ def setup_routes(app: FastAPI) -> None:
     async def update_knowledge_base(
         background_tasks: BackgroundTasks,
         request: Optional[KnowledgeBaseUpdate] = Body(default=None),
+        response_model=IngestionResult,
     ):
         """
         Trigger knowledge base update.
@@ -548,10 +554,28 @@ def setup_routes(app: FastAPI) -> None:
             request = KnowledgeBaseUpdate()
 
         logger.info(f"Received update request: {request}")
-        result = result_wrapper(
-            await methods.update_knowledge_base(request, background_tasks)
+
+        background_tasks.add_task(
+            methods.update_knowledge_base,
+            request,
         )
-        return result.result
+
+        return IngestionResult(
+            success=True,
+            status="Knowledge base update started",
+            statistics=IngestionStatistics(
+                total_documents=0,
+                total_chunks=0,
+                total_embeddings=0,
+                duration_seconds=0,
+            ),
+            progress=IngestionProgress(
+                status=IngestionStatus.CLONING,
+                current_step="Knowledge base update started",
+                total_steps=1,
+                completed_steps=0,
+            )
+        )
 
     @app.get(
         EP_PREFIX + "/knowledge-base/status",
