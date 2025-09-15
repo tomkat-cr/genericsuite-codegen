@@ -62,6 +62,16 @@ if [ -z "$ACTION" ]; then
     exit 1
 fi
 
+# Specific container environment variables
+export MONGODB_HOST_NAME=gscodegen-mongo
+export MONGODB_HOST_PORT=27017
+export MONGODB_USER=root
+export MONGODB_PASSWORD=example
+# export MONGODB_URI=mongodb://$MONGODB_USER:$MONGODB_PASSWORD@$MONGODB_HOST_NAME:$MONGODB_HOST_PORT
+export MONGODB_URI=mongodb://$MONGODB_HOST_NAME:$MONGODB_HOST_PORT/?directConnection=true
+
+export LOCAL_REPO_DIR=/var/local_repo_files
+
 if [ "$ACTION" = "restart" ]; then
     echo "Restarting services..."
     docker compose --project-name ${APP_NAME_LOWERCASE} restart ${CONTAINER_TO_RUN}

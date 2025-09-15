@@ -26,13 +26,13 @@ fi
 
 if [ "$ACTION" = "run" ]; then
     echo "Starting client in development mode..."
-    npm run dev
+    npx vite dev
 elif [ "$ACTION" == "build" ]; then
     echo "Building client..."
-    npm run build
+    npx tsc && npx vite build
 elif [ "$ACTION" == "preview" ]; then
     echo "Previewing production build..."
-    npm run preview
+    npx vite preview
 else
     echo "Error: Invalid action specified: $ACTION"
     exit 1

@@ -54,7 +54,7 @@ export interface QueryRequest {
   include_sources?: boolean
 }
 
-// export const baseUrl = process.env.UI_API_BASE_URL
+export const debug = process.env.VITE_DEBUG === '1'
 export const baseUrl = process.env.VITE_API_BASE_URL
 
 class ApiService {
@@ -80,7 +80,7 @@ class ApiService {
   }
 
   async getConversations(page = 1, pageSize = 20): Promise<ApiResponse<ConversationList>> {
-    console.log('getConversations | baseUrl: ', baseUrl)
+    if (debug) console.log('getConversations | baseUrl: ', baseUrl)
     const response = await fetch(`${baseUrl}/conversations?page=${page}&page_size=${pageSize}`)
     return this.handleResponse<ConversationList>(response)
   }

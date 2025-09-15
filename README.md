@@ -4,10 +4,14 @@
 
 [![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/tomkat-cr/genericsuite-codegen)
 [![Python](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/downloads/)
-[![Node.js](https://img.shields.io/badge/node.js-18.0%2B-green.svg)](https://nodejs.org/)
+[![Node.js](https://img.shields.io/badge/node.js-20%2B-green.svg)](https://nodejs.org/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 GenericSuite CodeGen is an AI-powered RAG (Retrieval-Augmented Generation) system that generates JSON configuration files, Python tools, and application code following GenericSuite patterns. It combines a FastAPI backend with a React frontend and includes MCP (Model Context Protocol) server capabilities for seamless integration with AI development workflows.
+
+## Kiro-Driven Development Approach
+
+Check the [Kiro-Usage.md](./Kiro-Usage.md) file for more details.
 
 ## Table of Contents
 
@@ -30,7 +34,7 @@ GenericSuite CodeGen is an AI-powered RAG (Retrieval-Augmented Generation) syste
 
 GenericSuite CodeGen leverages AI and knowledge base search to assist developers in creating GenericSuite-compatible code and configurations. The system includes:
 
-- **AI Agent**: Powered by Pydantic AI with support for OpenAI and LiteLLM providers
+- **AI Agent**: Powered by Pydantic AI with support for OpenAI provider (and any other supported by Pydantic AI)
 - **Knowledge Base**: Vector search using MongoDB and sentence transformers
 - **Code Generation**: Automated generation of JSON configs, Python tools, and application code
 - **MCP Integration**: Model Context Protocol server for AI development tools
@@ -54,7 +58,7 @@ GenericSuite CodeGen leverages AI and knowledge base search to assist developers
 - **Pydantic AI**: AI agent framework with tool integration
 - **MongoDB**: Document database with vector search capabilities
 - **Sentence Transformers**: Text embeddings for semantic search
-- **OpenAI/LiteLLM**: LLM provider support
+- **OpenAI**: LLM provider support
 
 ### Frontend
 - **React 18**: Modern React with TypeScript
@@ -62,6 +66,9 @@ GenericSuite CodeGen leverages AI and knowledge base search to assist developers
 - **Tailwind CSS**: Utility-first CSS framework
 - **Shadcn/ui**: Modern UI component library
 - **Lucide React**: Beautiful icon library
+
+### MCP Server
+- **FastMCP**: MCP server implementation for tool integration
 
 ### Infrastructure
 - **Docker**: Containerization and deployment
@@ -92,6 +99,8 @@ cd genericsuite-codegen
 make init-app-environment
 ```
 
+> This will copy the [.env.example](./.env.example) file to the `.env` file, and other example files to final/modficable files.
+
 3. **Configure environment variables**:
    Edit the `.env` file with your API keys and configuration:
 ```bash
@@ -99,18 +108,12 @@ make init-app-environment
 OPENAI_API_KEY=your_openai_api_key_here
 
 # Optional: Customize other settings
-MONGODB_PASSWORD=your_secure_password
-APP_DOMAIN_NAME=your_domain.com
+HF_TOKEN=your_huggingface_token_here
 ```
 
 4. **Install dependencies**:
 ```bash
 make install
-```
-
-5. **Build the application**:
-```bash
-make build
 ```
 
 ## Usage
@@ -125,14 +128,17 @@ This starts all services in development mode with hot reloading.
 
 **Start individual services**:
 ```bash
+# Start the local MongoDB container
+make run-db-only
+
 # Backend only
-cd server && make dev
+cd server && make run
 
 # Frontend only  
-cd ui && make dev
+cd ui && make run
 
 # MCP server only
-cd mcp-server && make dev
+cd mcp-server && make run
 ```
 
 **Run tests**:
@@ -160,7 +166,7 @@ cd mcp-server && make format && make lint
 
 **Start production services**:
 ```bash
-make up
+make run
 ```
 
 **View service status**:
@@ -190,6 +196,12 @@ make clean-docker
 **Restart services**:
 ```bash
 make restart
+```
+
+**Hard restart services**:
+```bash
+make hard-restart
+# (down and up everything, useful when `.env` file is modified)
 ```
 
 ### MCP Server
@@ -235,7 +247,7 @@ graph TB
     end
 
     subgraph AI["🤖 AI/ML Services"]
-        LLM[OpenAI/LiteLLM<br/>Language Models]
+        LLM[OpenAI<br/>Language Models]
         EMBED[Sentence Transformers<br/>Text Embeddings]
     end
 
@@ -306,7 +318,7 @@ graph TB
 - **MCP Server**: Model Context Protocol server for AI development tool integration
 - **MongoDB**: Document database with vector search capabilities for knowledge base
 - **Nginx**: Reverse proxy and static file server for production deployment
-- **OpenAI/LiteLLM**: Language model providers for AI-powered code generation
+- **OpenAI**: Language model providers for AI-powered code generation
 - **Sentence Transformers**: Text embedding models for semantic search
 
 ### Data Flow

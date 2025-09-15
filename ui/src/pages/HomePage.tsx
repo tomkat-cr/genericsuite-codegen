@@ -3,6 +3,9 @@ import { Button } from '@/components/ui/button'
 import { Link } from 'react-router-dom'
 import { Database, MessageSquare, Code, ArrowRight } from 'lucide-react'
 
+const gsDocumentationUrl: string = "https://genericsuite.carlosjramirez.com"
+const pydanticAiDocumentationUrl: string = "https://ai.pydantic.dev/"
+
 export function HomePage() {
   return (
     <div className="space-y-8">
@@ -101,15 +104,43 @@ export function HomePage() {
           </div>
         </div>
         <div className="text-center p-6 bg-muted rounded-lg">
-          <div className="text-2xl font-bold text-primary">AI</div>
+          <div className="text-2xl font-bold text-primary">
+            <a
+              href={pydanticAiDocumentationUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              AI
+            </a>
+          </div>
           <div className="text-sm text-muted-foreground">
-            Powered by Pydantic AI
+            <a
+              href={pydanticAiDocumentationUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Powered by Pydantic AI
+            </a>
           </div>
         </div>
         <div className="text-center p-6 bg-muted rounded-lg">
-          <div className="text-2xl font-bold text-primary">GenericSuite</div>
+          <div className="text-2xl font-bold text-primary">
+            <a
+                href={gsDocumentationUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+            >
+              GenericSuite
+            </a>
+          </div>
           <div className="text-sm text-muted-foreground">
-            Documentation & Examples
+            <a
+              href={gsDocumentationUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Documentation & Examples
+            </a>
           </div>
         </div>
       </div>

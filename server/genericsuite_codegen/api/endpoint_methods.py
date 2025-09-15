@@ -7,6 +7,7 @@ separated from the route definitions for better organization and testing.
 
 import os
 import logging
+# import re
 import uuid
 from typing import Dict, Any, List, Optional
 from datetime import datetime
@@ -83,8 +84,8 @@ class EndpointMethods:
 
     def __init__(self):
         """Initialize endpoint methods."""
-        self.db = get_database_connection().database
-        # self.db = initialize_database().database
+        self.db = get_database_connection()
+        # self.db = initialize_database()
         self.agent = get_agent()
 
     # Agent Query Methods
@@ -273,7 +274,7 @@ class EndpointMethods:
                     detail="User ID is required"
                 )
 
-            conversations = self.db.ai_chatbot_conversations
+            conversations = self.db.database.ai_chatbot_conversations
 
             # Generate unique title based on initial message or timestamp
             if request.initial_message and request.initial_message.strip():
@@ -367,7 +368,7 @@ class EndpointMethods:
                     detail="Page size must be between 1 and 100"
                 )
 
-            conversations = self.db.ai_chatbot_conversations
+            conversations = self.db.database.ai_chatbot_conversations
 
             # Calculate skip value
             skip = (page - 1) * page_size
@@ -432,7 +433,7 @@ class EndpointMethods:
                     detail="User ID is required"
                 )
 
-            conversations = self.db.ai_chatbot_conversations
+            conversations = self.db.database.ai_chatbot_conversations
 
             conversation_doc = conversations.find_one({
                 "_id": ObjectId(conversation_id),
@@ -488,7 +489,7 @@ class EndpointMethods:
                     detail="User ID is required"
                 )
 
-            conversations = self.db.ai_chatbot_conversations
+            conversations = self.db.database.ai_chatbot_conversations
 
             update_data = {"update_date": datetime.utcnow()}
 
@@ -585,7 +586,7 @@ class EndpointMethods:
                     detail="User ID is required"
                 )
 
-            conversations = self.db.ai_chatbot_conversations
+            conversations = self.db.database.ai_chatbot_conversations
 
             # Verify conversation exists and belongs to user before deletion
             existing_conversation = conversations.find_one({
@@ -675,6 +676,25 @@ class EndpointMethods:
                 detail=f"Failed to start update: {str(e)}"
             )
 
+    async def get_operation_progress(
+        self,
+    ) -> Dict[str, Any]:
+        """Get operation progress."""
+        from genericsuite_codegen.document_processing.ingestion import \
+            get_ingestion_progress
+        # working_data = self._get_working_data(None)
+        # if working_data.error:
+        #     return working_data
+        # repo_url = working_data.result["repository_url"]
+        # local_dir = working_data.result["local_dir"]
+        # result = get_ingestion_progress(
+        #     repo_url=repo_url,
+        #     local_dir=local_dir,
+        #     database_manager=self.db,
+        # )
+        result = get_ingestion_progress()
+        return std_response(result=result)
+
     async def get_knowledge_base_status(self) -> KnowledgeBaseStatus:
         """
         Get knowledge base status.
@@ -683,7 +703,7 @@ class EndpointMethods:
             KnowledgeBaseStatus: Current status.
         """
         try:
-            knowledge_base = self.db.knowledge_base
+            knowledge_base = self.db.database.knowledge_base
 
             # Get document and chunk counts
             document_count = knowledge_base.count_documents({})
@@ -932,8 +952,8 @@ class EndpointMethods:
         """
         try:
             # Get knowledge base stats
-            knowledge_base = self.db.knowledge_base
-            conversations = self.db.ai_chatbot_conversations
+            knowledge_base = self.db.database.knowledge_base
+            conversations = self.db.database.ai_chatbot_conversations
 
             kb_count = knowledge_base.count_documents({})
             conv_count = conversations.count_documents({})
@@ -1021,7 +1041,7 @@ class EndpointMethods:
             user_id: str) -> str:
         """Ensure conversation title is unique for the user."""
         try:
-            conversations = self.db.ai_chatbot_conversations
+            conversations = self.db.database.ai_chatbot_conversations
 
             # Check if base title already exists
             existing = conversations.find_one({
@@ -1073,7 +1093,7 @@ class EndpointMethods:
                 logger.error("Invalid conversation_id provided")
                 return
 
-            conversations = self.db.ai_chatbot_conversations
+            conversations = self.db.database.ai_chatbot_conversations
 
             # Verify conversation exists
             conversation_exists = conversations.find_one(
@@ -1138,7 +1158,7 @@ class EndpointMethods:
                 logger.warning("Invalid conversation_id provided for context")
                 return None
 
-            conversations = self.db.ai_chatbot_conversations
+            conversations = self.db.database.ai_chatbot_conversations
 
             # Get conversation with messages
             conversation_doc = conversations.find_one(
@@ -1209,7 +1229,7 @@ class EndpointMethods:
                 logger.error("Invalid conversation_id provided")
                 return
 
-            conversations = self.db.ai_chatbot_conversations
+            conversations = self.db.database.ai_chatbot_conversations
 
             # Verify conversation exists
             conversation_exists = conversations.find_one(
@@ -1263,6 +1283,20 @@ class EndpointMethods:
             # Don't raise exception here as it's not critical to the
             # main operation
 
+    def _get_working_data(self, repository_url: str = None) -> str:
+        """Get working data."""
+        repo_url = repository_url or os.getenv("REMOTE_REPO_URL")
+        local_dir = os.getenv("LOCAL_REPO_DIR")
+        if repo_url and local_dir:
+            return std_response(result={
+                "repository_url": repo_url,
+                "local_dir": local_dir
+            })
+        return std_error_response(
+            status_code=400,
+            detail="No repository URL or local directory provided"
+        )
+
     async def _update_knowledge_base_background(
         self,
         operation_id: str,
@@ -1276,15 +1310,17 @@ class EndpointMethods:
                 run_ingestion
 
             # Process repository
-            repo_url = request.repository_url or os.getenv("REMOTE_REPO_URL")
-            local_dir = os.getenv("LOCAL_REPO_DIR")
-            if repo_url:
-                result = run_ingestion(
-                    repo_url=repo_url,
-                    local_dir=local_dir,
-                    force_refresh=request.force_refresh or True,
-                    database_manager=self.db,
-                )
+            working_data = self._get_working_data(request.repository_url)
+            if working_data.error:
+                return working_data
+            repo_url = working_data.result["repository_url"]
+            local_dir = working_data.result["local_dir"]
+            result = run_ingestion(
+                repo_url=repo_url,
+                local_dir=local_dir,
+                force_refresh=request.force_refresh or True,
+                database_manager=self.db,
+            )
 
             logger.info(f"Knowledge base update completed [{operation_id}]")
             return std_response(result=result)

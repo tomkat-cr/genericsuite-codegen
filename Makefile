@@ -64,7 +64,7 @@ build:
 start:
 	npm run start
 
-dev:
+dev: run-db-only
 	npm run dev
 
 clean:

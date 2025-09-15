@@ -25,6 +25,7 @@ export default defineConfig({
         UI_APP_DOMAIN_NAME: (process.env.UI_APP_DOMAIN_NAME || ''),
         VITE_API_BASE_URL: (process.env.UI_API_BASE_URL || ''),
         VITE_DEBUG: (process.env.UI_DEBUG || ''),
+        VITE_REMOTE_REPO_URL: (process.env.REMOTE_REPO_URL || ''),
     },
   },
   build: {

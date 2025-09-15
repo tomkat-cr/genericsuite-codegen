@@ -6,11 +6,13 @@ workflow from repository cloning to vector storage, with progress tracking
 and error handling.
 """
 
-import shutil
-from pathlib import Path
 from typing import List, Dict, Any, Optional, Callable
+import os
+from pathlib import Path
 from datetime import datetime
 import logging
+import json
+import shutil
 
 try:
     import git
@@ -29,7 +31,13 @@ from .types import (
     IngestionRepositoryInfoLastCommit,
 )
 
+DEBUG = False
+
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO if DEBUG else logging.WARNING)
+
+TEMP_DIR = os.getenv("SERVER_TEMP_DIR", "/tmp")
+PROGRESS_FILE = TEMP_DIR + "/ingestion_progress.json"
 
 
 class RepositoryCloner:
@@ -103,19 +111,6 @@ class RepositoryCloner:
         try:
             repo = git.Repo(self.local_dir)
 
-            # return {
-            #     'path': str(self.local_dir),
-            #     'remote_url': repo.remotes.origin.url,
-            #     'current_branch': repo.active_branch.name,
-            #     'last_commit': {
-            #         'hash': repo.head.commit.hexsha,
-            #         'message': repo.head.commit.message.strip(),
-            #         'author': str(repo.head.commit.author),
-            #         'date': datetime.fromtimestamp(
-            #             repo.head.commit.committed_date)
-            #     },
-            #     'is_dirty': repo.is_dirty()
-            # }
             return IngestionRepositoryInfo(
                 path=str(self.local_dir),
                 remote_url=repo.remotes.origin.url,
@@ -180,6 +175,23 @@ class DocumentIngestionOrchestrator:
             completed_steps=0
         )
 
+        self._save_progress()
+
+    def _remove_progress_file(self):
+        """Remove progress file."""
+        try:
+            os.remove(PROGRESS_FILE)
+        except Exception as e:
+            logger.error(f"Error removing progress file: {e}")
+
+    def _save_progress(self):
+        """Save progress to file."""
+        try:
+            with open(PROGRESS_FILE, "w") as f:
+                json.dump(self.progress.to_dict(), f)
+        except Exception as e:
+            logger.error(f"Error saving progress to file: {e}")
+
     def _update_progress(self,
                          status: Optional[IngestionStatus] = None,
                          current_step: Optional[str] = None,
@@ -206,6 +218,8 @@ class DocumentIngestionOrchestrator:
                 self.progress_callback(self.progress)
             except Exception as e:
                 logger.warning(f"Error in progress callback: {e}")
+
+        self._save_progress()
 
     def cleanup_existing_vectors(self) -> bool:
         """Clean up existing vectors to prevent duplicates."""
@@ -449,6 +463,8 @@ class DocumentIngestionOrchestrator:
                 increment_completed=True
             )
 
+            self._save_progress()
+
             # Return success result
             return self._get_success_result(documents, chunks, embedded_chunks)
 
@@ -472,20 +488,6 @@ class DocumentIngestionOrchestrator:
             duration = (self.progress.completed_at -
                         self.progress.started_at).total_seconds()
 
-        # return {
-        #     'success': True,
-        #     'status': self.progress.status.value,
-        #     'statistics': {
-        #         'total_documents': len(documents),
-        #         'total_chunks': len(chunks),
-        #         'total_embeddings': len(embedded_chunks),
-        #         'duration_seconds': duration,
-        #         'embedding_model': self.embedding_generator.get_model_info()
-        #         if self.embedding_generator else None,
-        #         'repository_info': self.cloner.get_repository_info()
-        #     },
-        #     'progress': self.progress
-        # }
         return IngestionResult(
             success=True,
             status=self.progress.status.value,
@@ -508,15 +510,6 @@ class DocumentIngestionOrchestrator:
             duration = (self.progress.completed_at -
                         self.progress.started_at).total_seconds()
 
-        # return {
-        #     'success': False,
-        #     'status': self.progress.status.value,
-        #     'error': error_message,
-        #     'statistics': {
-        #         'duration_seconds': duration
-        #     },
-        #     'progress': self.progress
-        # }
         return IngestionResult(
             success=False,
             status=self.progress.status.value,
@@ -529,7 +522,26 @@ class DocumentIngestionOrchestrator:
 
     def get_progress(self) -> IngestionProgress:
         """Get current progress."""
-        return self.progress
+        # return self.progress
+        return load_progress_from_file()
+
+
+def load_progress_from_file():
+    """Load progress from file."""
+    try:
+        if os.path.exists(PROGRESS_FILE):
+            with open(PROGRESS_FILE, "r") as f:
+                return IngestionProgress(**json.load(f))
+        else:
+            return IngestionProgress(
+                status=IngestionStatus.NOT_STARTED,
+                current_step="Idle",
+                total_steps=0,  # idle
+                completed_steps=0
+            )
+    except Exception as e:
+        logger.error(f"Error loading progress from file: {e}")
+        return None
 
 
 # Convenience functions
@@ -560,3 +572,8 @@ def run_ingestion(repo_url: str,
     )
 
     return orchestrator.run_full_ingestion(force_refresh=force_refresh)
+
+
+def get_ingestion_progress() -> IngestionProgress:
+    """Get ingestion progress."""
+    return load_progress_from_file()

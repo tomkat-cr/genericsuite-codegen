@@ -56,8 +56,8 @@ class IngestionProgress:
             'total_chunks': self.total_chunks,
             'processed_chunks': self.processed_chunks,
             'error_message': self.error_message,
-            'started_at': self.started_at,
-            'completed_at': self.completed_at
+            'started_at': str(self.started_at),
+            'completed_at': str(self.completed_at)
         }
 
 

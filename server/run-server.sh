@@ -26,7 +26,7 @@ fi
 
 if [ "$ACTION" = "run" ]; then
     echo "Starting client in development mode..."
-	MONGODB_URI="mongodb://127.0.0.1:27017/?directConnection=true" poetry run uvicorn \
+	poetry run uvicorn \
         genericsuite_codegen.api.main:app \
         --reload \
         --host 0.0.0.0 \

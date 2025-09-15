@@ -4,10 +4,10 @@
   "description": "GenericSuite CodeGen React UI",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
+    "dev": "bash ./run-client.sh run",
+    "build": "bash ./run-client.sh build",
     "build:from_root": "npm run build",
-    "preview": "vite preview",
+    "preview": "bash ./run-client.sh preview",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "lint:fix": "eslint . --ext ts,tsx --fix",
     "format": "prettier --write \"src/**/*.{ts,tsx,js,jsx,json,css,md}\"",

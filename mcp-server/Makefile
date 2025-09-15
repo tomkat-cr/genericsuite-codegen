@@ -19,31 +19,43 @@ install:
 	poetry install
 
 # Check environment configuration
-check-env:
+show-env-vars:
 	@echo "Checking environment configuration..."
-	@echo "MCP_SERVER_HOST: $${MCP_SERVER_HOST:-0.0.0.0}"
-	@echo "MCP_SERVER_PORT: $${MCP_SERVER_PORT:-8070}"
+	@echo "MCP_SERVER_HOST: $${MCP_SERVER_HOST}"
+	@echo "MCP_SERVER_PORT: $${MCP_SERVER_PORT}"
 	@echo "MCP_API_KEY: $${MCP_API_KEY:+Set}"
-	@echo "MCP_DEBUG: $${MCP_DEBUG:-0}"
+	@echo "MCP_INSPECTOR: $${MCP_INSPECTOR}"
 	@echo "OPENAI_API_KEY: $${OPENAI_API_KEY:+Set}"
+
+check-env:
+	@if [ -f ../.env ]; then \
+		echo "Loading environment from ../.env"; \
+		set -o allexport; \
+		source ../.env; \
+		set +o allexport; \
+		make show-env-vars; \
+	else \
+		echo "No .env file found at ../.env"; \
+		make show-env-vars; \
+	fi
 
 # Run development server
 dev: check-env
-	poetry run python start_mcp_server.py
+	bash ./run_mcp_server.sh
 
 run: dev
 
 # Start production server
 start: check-env
-	poetry run python start_mcp_server.py
+	bash ./run_mcp_server.sh
 
 # Start server in async mode
 start-async: check-env
-	poetry run python start_mcp_server.py --async
+	ADDITIONAL_ARGS="--async" bash ./run_mcp_server.sh
 
-# Alternative way to run using module
-start-module:
-	poetry run python -m genericsuite_codegen
+# Start server with MCP Inspector
+start-inspector:
+	MCP_INSPECTOR=1 bash ./run_mcp_server.sh
 
 # Build the application
 build:

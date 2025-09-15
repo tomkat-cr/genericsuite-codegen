@@ -8,7 +8,6 @@ and all API endpoints for the GenericSuite CodeGen RAG system.
 import os
 import logging
 from contextlib import asynccontextmanager
-from datetime import datetime
 from typing import Dict, Any, List, Optional, Union
 
 from fastapi import FastAPI, HTTPException, Request, \
@@ -34,7 +33,7 @@ from .types import (
     KnowledgeBaseUpdate,
     KnowledgeBaseStatus,
     DocumentInfo,
-    ProgressUpdate,
+    # ProgressUpdate,
     Statistics,
     SearchQuery,
     SearchResponse,
@@ -46,6 +45,8 @@ from .types import (
     StandardGsErrorResponse,
     GenerationRequest,
 )
+from genericsuite_codegen.document_processing.types import IngestionProgress
+
 from .utilities import (
     setup_logging,
     get_app_info,
@@ -549,7 +550,6 @@ def setup_routes(app: FastAPI) -> None:
         logger.info(f"Received update request: {request}")
         result = result_wrapper(
             await methods.update_knowledge_base(request, background_tasks)
-            # await methods.update_knowledge_base(request)
         )
         return result.result
 
@@ -589,11 +589,12 @@ def setup_routes(app: FastAPI) -> None:
         return result.result
 
     @app.get(
-        EP_PREFIX + "/knowledge-base/progress/{operation_id}",
-        response_model=ProgressUpdate,
+        EP_PREFIX + "/knowledge-base/progress",
+        # response_model=ProgressUpdate,
+        response_model=IngestionProgress,
         tags=["Knowledge Base"],
     )
-    async def get_operation_progress(operation_id: str):
+    async def get_operation_progress():
         """
         Get progress of a long-running operation.
 
@@ -601,17 +602,23 @@ def setup_routes(app: FastAPI) -> None:
             operation_id: Operation identifier.
 
         Returns:
-            ProgressUpdate: Operation progress information.
+            # ProgressUpdate: Operation progress information.
+            IngestionProgress: Operation progress information.
         """
+        result = result_wrapper(
+            await methods.get_operation_progress())
+        return result.result
+
+        # TODO:
         # This would be implemented with a proper progress tracking system
         # For now, return a placeholder response
-        return ProgressUpdate(
-            operation_id=operation_id,
-            status="completed",
-            progress=1.0,
-            message="Operation completed",
-            started_at=datetime.utcnow(),
-        )
+        # return ProgressUpdate(
+        #     operation_id=operation_id,
+        #     status="completed",
+        #     progress=1.0,
+        #     message="Operation completed",
+        #     started_at=datetime.utcnow(),
+        # )
 
     @app.get(
         EP_PREFIX + "/knowledge-base/statistics",

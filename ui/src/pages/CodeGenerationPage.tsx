@@ -25,7 +25,7 @@ import {
   Loader2
 } from 'lucide-react'
 
-import { baseUrl } from '@/lib/api'
+import { baseUrl, debug } from '@/lib/api'
 
 interface GeneratedFile {
   filename: string
@@ -112,6 +112,8 @@ export function CodeGenerationPage() {
       }
 
       const result = await response.json()
+      if (debug) console.log('generateCode | result', result)
+      
       const files: GeneratedFile[] = result.files || []
       
       setGeneratedFiles(files)

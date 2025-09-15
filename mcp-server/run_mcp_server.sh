@@ -93,5 +93,5 @@ if [ "$MCP_INSPECTOR" = "1" ]; then
         run \
         MCP_TRANSPORT=stdio $PYTHON_CMD start_mcp_server.py
 else
-    poetry run $PYTHON_CMD start_mcp_server.py
+    poetry run $PYTHON_CMD start_mcp_server.py $ADDITIONAL_ARGS
 fi

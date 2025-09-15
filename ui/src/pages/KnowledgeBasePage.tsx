@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
@@ -7,7 +7,10 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { RefreshCw, Upload, Database, FileText, AlertCircle, CheckCircle, Info } from 'lucide-react'
 
-import { baseUrl } from '@/lib/api'
+import { baseUrl, debug } from '@/lib/api'
+
+const remoteRepoUrl: string = process.env.VITE_REMOTE_REPO_URL || ''
+const alertTimeout: number = 10000
 
 interface KnowledgeBaseStats {
   documentCount: number
@@ -22,11 +25,22 @@ interface UpdateProgress {
   message: string
 }
 
+const IngestionStatus = {
+    not_started: "Not started",
+    cloning: "Cloning",
+    processing_files: "Processing files",
+    chunking: "Chunking",
+    generating_embeddings: "Generating embeddings",
+    storing_vectors: "Storing vectors",
+    completed: "Completed",
+    failed: "Failed",
+}
+
 export function KnowledgeBasePage() {
   const [stats, setStats] = useState<KnowledgeBaseStats>({
     documentCount: 0,
     lastUpdated: 'Never',
-    repositoryUrl: 'https://github.com/tomkat-cr/genericsuite-basecamp.git',
+    repositoryUrl: remoteRepoUrl,
     status: 'healthy'
   })
   
@@ -41,8 +55,44 @@ export function KnowledgeBasePage() {
     setAlerts(prev => [...prev, { id, type, message }])
     setTimeout(() => {
       setAlerts(prev => prev.filter(alert => alert.id !== id))
-    }, 5000)
+    }, alertTimeout)
   }
+
+  const getProgress = async () => {
+    // if (!isUpdating) return
+    const response = await fetch(`${baseUrl}/knowledge-base/progress`)
+    const resultData = await response.json()
+    if (debug) console.log('getProgress | result', resultData)
+    setUpdateProgress({
+      stage: IngestionStatus[resultData.status as keyof typeof IngestionStatus],
+      progress: resultData.total_steps > 0 ? resultData.completed_steps / resultData.total_steps * 100 : 0,
+      message: resultData.current_step
+    })
+    setStats(prev => ({
+      ...prev,
+      documentCount: resultData.total_files ?? prev.documentCount,
+      lastUpdated: new Date().toLocaleString(),
+      status: resultData.status.includes('completed') ? 'healthy' : resultData.status.includes('failed') ? 'error' : 'updating'
+    }))
+    if (resultData.status.includes('completed')) {
+      setIsUpdating(false)
+      setUpdateProgress(null)
+      // addAlert('success', 'Knowledge base updated successfully!')
+    }
+    if (resultData.status.includes('failed')) {
+      setIsUpdating(false)
+      setUpdateProgress(null)
+      // addAlert('error', 'Failed to update knowledge base. Please try again.')
+    }
+  }
+
+  useEffect(() => {
+    getProgress()
+  }, [])
+
+  useEffect(() => {
+    getProgress()
+  }, [isUpdating, updateProgress])
 
   const handleUpdateKnowledgeBase = async () => {
     setIsUpdating(true)
@@ -50,22 +100,22 @@ export function KnowledgeBasePage() {
     
     try {
       // Simulate progress updates
-      const stages = [
-        { stage: 'Cloning repository', progress: 20, message: 'Downloading latest documentation...' },
-        { stage: 'Processing documents', progress: 50, message: 'Extracting text from files...' },
-        { stage: 'Generating embeddings', progress: 80, message: 'Creating vector embeddings...' },
-        { stage: 'Updating database', progress: 100, message: 'Storing in knowledge base...' }
-      ]
+      // const stages = [
+      //   { stage: 'Cloning repository', progress: 20, message: 'Downloading latest documentation...' },
+      //   { stage: 'Processing documents', progress: 50, message: 'Extracting text from files...' },
+      //   { stage: 'Generating embeddings', progress: 80, message: 'Creating vector embeddings...' },
+      //   { stage: 'Updating database', progress: 100, message: 'Storing in knowledge base...' }
+      // ]
 
-      for (const stage of stages) {
-        setUpdateProgress(stage)
-        await new Promise(resolve => setTimeout(resolve, 1500))
-      }
+      // for (const stage of stages) {
+      //   setUpdateProgress(stage)
+      //   await new Promise(resolve => setTimeout(resolve, 1500))
+      // }
 
       const forceRefresh = false
 
       // Make actual API call
-      const response = await fetch(`${baseUrl}/api/update-knowledge-base`, {
+      const response = await fetch(`${baseUrl}/update-knowledge-base`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -74,21 +124,20 @@ export function KnowledgeBasePage() {
       })
 
       if (response.ok) {
-        const result = await response.json()
-        const resultData = result.result
-        if (!resultData.statistics.success) {
+        const resultData = await response.json()
+        if (debug) console.log('update-knowledge-base | resultData', resultData)
+        if (!resultData.success) {
           setStats(prev => ({ ...prev, status: 'error' }))
-          addAlert('error', resultData.statistics.error ?? 'Failed to update knowledge base')
+          addAlert('error', resultData.error ?? 'Failed to update knowledge base [1]')
           return
         }
         setStats(prev => ({
           ...prev,
-          // documentCount: result.documentCount || prev.documentCount + 150,
           documentCount: resultData.statistics.total_documents ?? prev.documentCount,
           lastUpdated: new Date().toLocaleString(),
           status: 'healthy'
         }))
-        addAlert('success', 'Knowledge base updated successfully!')
+        addAlert('success', resultData.status ?? 'Knowledge base updated successfully! [2]')
       } else {
         throw new Error('Failed to update knowledge base')
       }
@@ -111,7 +160,7 @@ export function KnowledgeBasePage() {
         formData.append('files', file)
       })
 
-      const response = await fetch(`${baseUrl}/api/upload-document`, {
+      const response = await fetch(`${baseUrl}/upload-document`, {
         method: 'POST',
         body: formData
       })
@@ -120,7 +169,7 @@ export function KnowledgeBasePage() {
         const result = await response.json()
         setStats(prev => ({
           ...prev,
-          documentCount: prev.documentCount + result.addedDocuments
+          documentCount: prev.documentCount + result.statistics.total_documents
         }))
         addAlert('success', `Successfully uploaded ${uploadFiles.length} document(s)`)
         setUploadFiles(null)
