@@ -1,0 +1,17 @@
+{
+  "name": "genericsuite-codegen-server",
+  "version": "1.0.0",
+  "description": "GenericSuite CodeGen Server",
+  "scripts": {
+    "dev": "make dev",
+    "build": "make build",
+    "start": "make start",
+    "start:from_root": "make start-from_root",
+    "test": "make test",
+    "clean": "make clean",
+    "api:install": "make install"
+  },
+  "keywords": ["fastapi", "python", "ai", "rag"],
+  "author": "Carlos J. Ramirez",
+  "license": "MIT"
+}

@@ -1,0 +1,17 @@
+# deploy/docker_images/Dockerfile-MongoDb-Atlas
+
+FROM mongodb/mongodb-atlas-local
+
+ARG MONGOT_LOG_FILE=/dev/null
+ARG RUNNER_LOG_FILE=/dev/null
+
+ENV MONGOT_LOG_FILE=${MONGOT_LOG_FILE}
+ENV RUNNER_LOG_FILE=${RUNNER_LOG_FILE}
+
+USER root
+
+RUN sed -i 's/path\: \/var\/log\/mongodb\/mongod.log/path\: \/var\/log\/mongodb\/mongod.log\n  quiet: true\n  verbosity: 0/' /etc/mongod.conf
+
+EXPOSE 27017
+
+# CMD ["mongod", "-f", "/etc/mongod.conf"]

@@ -1,0 +1,123 @@
+# deploy/docker-compose.yml
+
+services:
+  gscodegen-server:
+    container_name: gscodegen-server
+    image: gscodegen_python
+    command: sh -c "bash /var/scripts/server-entrypoint.sh"
+    volumes:
+      - ../server:/code/server
+      - ../mcp-server:/code/mcp-server
+      - ./server-entrypoint.sh:/var/scripts/server-entrypoint.sh
+      - ../.env:/var/scripts/.env
+      - ../local_repo_files:/var/local_repo_files
+    environment:
+      # Server environment variables
+      - SERVER_PORT=${SERVER_PORT:-8000}
+      - CORS_ORIGIN=${CORS_ORIGIN}
+      - APP_DOMAIN_NAME=${APP_DOMAIN_NAME}
+      - APP_NAME=${APP_NAME}
+      - SERVER_DEBUG=${SERVER_DEBUG}
+      - MONGODB_URI=${MONGODB_URI}
+      - REMOTE_REPO_URL=${REMOTE_REPO_URL}
+      - LOCAL_REPO_DIR=${LOCAL_REPO_DIR}
+      - HF_TOKEN=${HF_TOKEN}
+      - LLM_API=${LLM_API}
+      - LLM_PROVIDER=${LLM_PROVIDER}
+      - LLM_MODEL=${LLM_MODEL}
+      - LLM_API_KEY=${LLM_API_KEY}
+      - LLM_BASE_URL=${LLM_BASE_URL}
+      - LLM_TEMPERATURE=${LLM_TEMPERATURE}
+      - LLM_MAX_TOKENS=${LLM_MAX_TOKENS}
+      - LLM_TOP_P=${LLM_TOP_P}
+      - LLM_TOP_K=${LLM_TOP_K}
+      - EMBEDDINGS_PROVIDER=${EMBEDDINGS_PROVIDER}
+      - EMBEDDINGS_MODEL=${EMBEDDINGS_MODEL}
+      # MCP Server environment variables
+      - MCP_API_KEY=${MCP_API_KEY}
+      - MCP_SERVER_PORT=${MCP_SERVER_PORT:-8070}
+      - MCP_SERVER_HOST=${MCP_SERVER_HOST:-0.0.0.0}
+      # Common environment variables
+      - LOCAL_REPO_DIR=${LOCAL_REPO_DIR:-/var/local_repo_files}
+    ports: ["8000:8000", "8070:8070"]
+    # depends_on: [gscodegen-ollama]
+    networks:
+      - my_shared_network
+    restart: unless-stopped
+
+  gscodegen-client:
+    container_name: gscodegen-client
+    image: nginx:alpine
+    volumes:
+      - ../ui/dist:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    environment:
+      - UI_PORT=${UI_PORT:-3000}
+      - UI_SECURE_PORT=${UI_SECURE_PORT:-3001}
+      - UI_APP_DOMAIN_NAME=${APP_DOMAIN_NAME}
+      - UI_API_BASE_URL=${UI_API_BASE_URL_FOR_DOCKER:-http://localhost:3000/api}
+      - UI_APP_SUBDIR=${UI_APP_SUBDIR}
+      - UI_DEBUG=${UI_DEBUG}
+    ports: ["3000:80", "3001:443"]
+    depends_on: [gscodegen-server]
+    networks:
+      - my_shared_network
+    restart: unless-stopped
+
+  gscodegen-mongo:
+    container_name: gscodegen-mongo-db
+    # https://hub.docker.com/r/mongodb/mongodb-atlas-local
+    # image: mongodb/mongodb-atlas-local
+    image: gscodegen_mongo_db_atlas
+    hostname: gscodegen-mongo
+    restart: unless-stopped
+    environment:
+      # MONGODB_INITDB_ROOT_USERNAME: root
+      # MONGODB_INITDB_ROOT_PASSWORD: example
+      MONGOT_LOG_FILE: /dev/null
+      RUNNER_LOG_FILE: /dev/null
+    volumes:
+      - ../local_mongodb_data/data:/data/db
+      - ../local_mongodb_data/config:/data/configdb
+    ports:
+      - 27017:27017
+    expose:
+      - 27017
+    networks:
+      - my_shared_network
+
+  gscodegen-mongo-express:
+    container_name: gscodegen-mongo-express
+    image: mongo-express
+    restart: unless-stopped
+    ports:
+      - 8081:8081
+    environment:
+      # ME_CONFIG_MONGODB_ADMINUSERNAME: root
+      # ME_CONFIG_MONGODB_ADMINPASSWORD: example
+      # ME_CONFIG_MONGODB_URL: mongodb://root:example@gscodegen-mongo:27017/
+      #
+      ME_CONFIG_MONGODB_URL: mongodb://gscodegen-mongo:27017/?directConnection=true
+      # 
+      # To access the MongoDB Express UI: http://localhost:8081
+      # User: admin
+      # Password: pass
+      #
+    depends_on: [gscodegen-mongo]
+    networks:
+      - my_shared_network
+
+  # gscodegen-ollama:
+  #   container_name: gscodegen-ollama
+  #   image: gscodegen_ollama
+  #   environment:
+  #     - OLLAMA_HOST=0.0.0.0
+  #   restart: unless-stopped
+  #   ports:
+  #     - 11434:11434
+  #   networks:
+  #     - my_shared_network
+
+networks:
+  my_shared_network:
+    external: true
