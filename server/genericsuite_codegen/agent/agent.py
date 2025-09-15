@@ -70,14 +70,14 @@ class GenericSuiteAgent:
         """
         self.config = config or self._create_default_config()
         self.prompt_manager = get_prompt_manager()
-        self.kb_tool = KnowledgeBaseTool()
 
         # Initialize LLM model
         self.inference_args = {}
         self.model = self._initialize_model()
 
-        # Create Pydantic AI agent
-        self.agent = self._create_agent()
+        # Create Pydantic AI agent and knowledge base tool when needed
+        self.kb_tool = None
+        self.agent = None
 
         logger.info(
             "Initialized GenericSuite agent with "
@@ -172,7 +172,7 @@ class GenericSuiteAgent:
             Agent: Configured Pydantic AI agent.
         """
         # Get all agent tools (knowledge base + JSON generation)
-        tools = get_all_agent_tools()
+        tools = get_all_agent_tools(self.kb_tool)
 
         # Create agent with system prompt
         system_prompt = self.prompt_manager.get_system_prompt("general")
@@ -241,6 +241,8 @@ class GenericSuiteAgent:
             logger.info(f">> Running agent with User prompt: {request.query}")
             logger.info(f">> Run context: {run_context}")
 
+            self.set_kb_tool_and_agent()
+
             result = await self.agent.run(
                 request.query,
                 message_history=run_context.get("history", [])
@@ -266,6 +268,13 @@ class GenericSuiteAgent:
                 f"Query processing failed for query: {request.query}: {e}")
             raise RuntimeError(f"Failed to process query: {e}")
 
+    def set_kb_tool_and_agent(self) -> KnowledgeBaseTool:
+        """Get the knowledge base tool."""
+        if self.kb_tool is None:
+            self.kb_tool = KnowledgeBaseTool()
+        if self.agent is None:
+            self.agent = self._create_agent()
+
     async def _get_query_context(self, request: QueryRequest
                                  ) -> Tuple[str, List[str]]:
         """
@@ -280,6 +289,8 @@ class GenericSuiteAgent:
         try:
             # Determine file type filter based on task type
             file_type_filter = self._get_file_type_filter(request.task_type)
+
+            self.set_kb_tool_and_agent()
 
             # Get context from knowledge base
             context, sources = self.kb_tool.get_context_for_generation(
@@ -424,20 +435,25 @@ class GenericSuiteAgent:
         )
 
     async def generate_json_config(
-        self, requirements: str, config_type: str = "table"
+        self,
+        requirements: str,
+        table_name: str,
+        config_type: str = "table",
     ) -> AgentResponse:
         """
         Generate JSON configuration for GenericSuite.
 
         Args:
             requirements: Requirements for the configuration.
+            table_name: Name of the table.
             config_type: Type of configuration (table, form, menu).
 
         Returns:
             AgentResponse: Generated JSON configuration.
         """
         request = QueryRequest(
-            query=f"Generate a {config_type} configuration: {requirements}",
+            query=f"Generate a {config_type} configuration for table"
+            f" '{table_name}': {requirements}",
             task_type="json",
             include_sources=True,
         )
@@ -445,7 +461,11 @@ class GenericSuiteAgent:
         return await self.query(request)
 
     async def generate_python_code(
-        self, requirements: str, code_type: str = "tool"
+        self,
+        requirements: str,
+        tool_name: str,
+        description: str,
+        code_type: str = "tool",
     ) -> AgentResponse:
         """
         Generate Python code for GenericSuite.
@@ -458,7 +478,9 @@ class GenericSuiteAgent:
             AgentResponse: Generated Python code.
         """
         request = QueryRequest(
-            query=f"Generate {code_type} Python code: {requirements}",
+            query=f"Generate {code_type} Python code for a tool"
+            f" named '{tool_name}' for '{description}' and completing the"
+            f" following requirements: {requirements}",
             task_type="python",
             include_sources=True,
         )

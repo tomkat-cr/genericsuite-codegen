@@ -25,19 +25,23 @@ import {
   Loader2
 } from 'lucide-react'
 
+import { baseUrl } from '@/lib/api'
+
 interface GeneratedFile {
-  name: string
+  filename: string
   content: string
-  type: 'json' | 'python' | 'javascript' | 'typescript' | 'jsx' | 'tsx'
+  file_type: 'json' | 'python' | 'javascript' | 'typescript' | 'jsx' | 'tsx'
   size: number
+  description?: string
 }
 
 interface GenerationRequest {
   type: 'json-config' | 'langchain-tool' | 'mcp-tool' | 'frontend' | 'backend'
   requirements: string
+  config_type?: 'table'
   framework?: string
-  tableName?: string
-  toolName?: string
+  table_name?: string
+  tool_name?: string
   description?: string
 }
 
@@ -68,14 +72,36 @@ export function CodeGenerationPage() {
     const request: GenerationRequest = {
       type: activeTab as GenerationRequest['type'],
       requirements: requirements.trim(),
+      config_type: activeTab === 'json-config' ? 'table' : undefined,
       framework: activeTab === 'backend' ? framework : undefined,
-      tableName: activeTab === 'json-config' ? tableName : undefined,
-      toolName: ['langchain-tool', 'mcp-tool'].includes(activeTab) ? toolName : undefined,
+      table_name: activeTab === 'json-config' ? tableName : undefined,
+      tool_name: ['langchain-tool', 'mcp-tool'].includes(activeTab) ? toolName : undefined,
       description: description.trim() || undefined
     }
 
+    let endpoint = null
+    switch (activeTab) {
+      case 'json-config':
+        endpoint = '/generate/json-config'
+        break
+      case 'langchain-tool':
+        endpoint = '/generate/python-code'
+        break
+      case 'mcp-tool':
+        endpoint = '/generate/python-code'
+        break
+      case 'frontend':
+        endpoint = '/generate/frontend-code'
+        break
+      case 'backend':
+        endpoint = '/generate/backend-code'
+        break
+      default:
+        setError('Invalid tab selected')
+    }
+
     try {
-      const response = await fetch('/api/generate-code', {
+      const response = await fetch(`${baseUrl}${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(request)
@@ -105,7 +131,7 @@ export function CodeGenerationPage() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = file.name
+    a.download = file.filename
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
@@ -194,7 +220,7 @@ export function CodeGenerationPage() {
           </CardHeader>
           <CardContent className="space-y-6">
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="grid w-full grid-cols-2 lg:grid-cols-3">
+              <TabsList className="grid w-full grid-cols-2 lg:grid-cols-3 mb-5">
                 <TabsTrigger value="json-config" className="text-xs">
                   <Database className="h-3 w-3 mr-1" />
                   JSON Config
@@ -207,15 +233,17 @@ export function CodeGenerationPage() {
                   <Settings className="h-3 w-3 mr-1" />
                   MCP Tool
                 </TabsTrigger>
-                <TabsTrigger value="frontend" className="text-xs">
+                <TabsTrigger value="frontend" className="mt-3 text-xs">
                   <Globe className="h-3 w-3 mr-1" />
                   Frontend
                 </TabsTrigger>
-                <TabsTrigger value="backend" className="text-xs">
+                <TabsTrigger value="backend" className="mt-3 text-xs">
                   <Server className="h-3 w-3 mr-1" />
                   Backend
                 </TabsTrigger>
               </TabsList>
+
+              <div className="mb-1">&nbsp;</div>
 
               <TabsContent value="json-config" className="space-y-4">
                 <div className="space-y-2">
@@ -409,7 +437,7 @@ export function CodeGenerationPage() {
                       <div
                         key={index}
                         className={`p-3 rounded-lg border cursor-pointer transition-colors ${
-                          selectedFile?.name === file.name
+                          selectedFile?.filename === file.filename
                             ? 'border-primary bg-primary/5'
                             : 'border-border hover:bg-muted'
                         }`}
@@ -417,10 +445,10 @@ export function CodeGenerationPage() {
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            {getFileIcon(file.type)}
-                            <span className="font-medium text-sm">{file.name}</span>
+                            {getFileIcon(file.file_type)}
+                            <span className="font-medium text-sm">{file.filename}</span>
                             <Badge variant="outline" className="text-xs">
-                              {file.type.toUpperCase()}
+                              {file.file_type.toUpperCase()}
                             </Badge>
                           </div>
                           <div className="flex items-center gap-2">
@@ -448,10 +476,10 @@ export function CodeGenerationPage() {
                 {/* Code Preview */}
                 {selectedFile && (
                   <div className="space-y-2">
-                    <Label>Code Preview - {selectedFile.name}</Label>
+                    <Label>Code Preview - {selectedFile.filename}</Label>
                     <ScrollArea className="h-[400px] w-full rounded-md border">
                       <pre className="p-4 text-sm">
-                        <code className={`language-${getLanguageForHighlighting(selectedFile.type)}`}>
+                        <code className={`language-${getLanguageForHighlighting(selectedFile.file_type)}`}>
                           {selectedFile.content}
                         </code>
                       </pre>

@@ -26,6 +26,7 @@ from .types import (
     DocumentInfo,
     FileGenerationRequest,
     GeneratedFile,
+    GeneratedFilesResponse,
     FilePackage,
     SearchQuery,
     SearchResponse,
@@ -60,8 +61,8 @@ from genericsuite_codegen.agent.agent import (
     QueryRequest as AgentQueryRequest
 )
 from genericsuite_codegen.database.setup import (
-    # get_database_connection,
-    initialize_database,
+    get_database_connection,
+    # initialize_database,
     test_database_connection,
 )
 
@@ -82,8 +83,8 @@ class EndpointMethods:
 
     def __init__(self):
         """Initialize endpoint methods."""
-        # self.db = get_database_connection()
-        self.db = initialize_database().database
+        self.db = get_database_connection().database
+        # self.db = initialize_database().database
         self.agent = get_agent()
 
     # Agent Query Methods
@@ -205,7 +206,9 @@ class EndpointMethods:
             )
 
     async def stream_agent_query(
-        self, request: QueryRequest, correlation_id: str
+        self,
+        request: QueryRequest,
+        correlation_id: str
     ):
         """
         Stream agent query response for long-running queries.
@@ -248,7 +251,9 @@ class EndpointMethods:
     # Conversation Management Methods
 
     async def create_conversation(
-        self, request: ConversationCreate, user_id: str
+        self,
+        request: ConversationCreate,
+        user_id: str
     ) -> Conversation:
         """
         Create a new conversation.
@@ -396,8 +401,11 @@ class EndpointMethods:
                 detail=f"Failed to get conversations: {str(e)}"
             )
 
-    async def get_conversation(self, conversation_id: str, user_id: str
-                               ) -> Conversation:
+    async def get_conversation(
+        self,
+        conversation_id: str,
+        user_id: str
+    ) -> Conversation:
         """
         Get a specific conversation.
 
@@ -546,8 +554,11 @@ class EndpointMethods:
                 detail=f"Failed to update conversation: {str(e)}"
             )
 
-    async def delete_conversation(self, conversation_id: str, user_id: str
-                                  ) -> Dict[str, str]:
+    async def delete_conversation(
+        self,
+        conversation_id: str,
+        user_id: str
+    ) -> Dict[str, str]:
         """
         Delete a conversation.
 
@@ -756,8 +767,10 @@ class EndpointMethods:
 
     # File Generation Methods
 
-    async def generate_file(self, request: FileGenerationRequest
-                            ) -> GeneratedFile:
+    async def generate_file(
+        self,
+        request: FileGenerationRequest
+    ) -> GeneratedFile:
         """
         Generate a file from content.
 
@@ -796,8 +809,10 @@ class EndpointMethods:
                 detail=f"Failed to generate file: {str(e)}"
             )
 
-    async def create_file_package(self, files: List[GeneratedFile]
-                                  ) -> FilePackage:
+    async def create_file_package(
+        self,
+        files: List[GeneratedFile]
+    ) -> FilePackage:
         """
         Create a package from multiple files.
 
@@ -829,7 +844,8 @@ class EndpointMethods:
     # Search Methods
 
     async def search_knowledge_base(
-        self, query: SearchQuery
+        self,
+        query: SearchQuery
     ) -> SearchResponse:
         """
         Search the knowledge base.
@@ -969,8 +985,10 @@ class EndpointMethods:
 
     # Helper Methods
 
-    def _convert_conversation_document(self, doc: Dict[str, Any]
-                                       ) -> Conversation:
+    def _convert_conversation_document(
+        self,
+        doc: Dict[str, Any]
+    ) -> Conversation:
         """Convert MongoDB document to Conversation model."""
         from .types import Message
 
@@ -997,7 +1015,10 @@ class EndpointMethods:
             message_count=len(messages)
         )
 
-    async def _ensure_unique_title(self, base_title: str, user_id: str) -> str:
+    async def _ensure_unique_title(
+            self,
+            base_title: str,
+            user_id: str) -> str:
         """Ensure conversation title is unique for the user."""
         try:
             conversations = self.db.ai_chatbot_conversations
@@ -1095,8 +1116,9 @@ class EndpointMethods:
             logger.error(
                 f"Failed to add assistant message to conversation: {e}")
 
-    async def _get_conversation_context(self, conversation_id: str
-                                        ) -> Optional['AgentContext']:
+    async def _get_conversation_context(
+        self, conversation_id: str
+    ) -> Optional['AgentContext']:
         """
         Get conversation context for the agent including message history.
 
@@ -1274,7 +1296,7 @@ class EndpointMethods:
                 detail=f"Failed to update knowledge base: {str(e)}"
             )
 
-    async def health_check_endpoint(self):
+    async def health_check_endpoint(self) -> dict:
         """
         Health check endpoint.
 
@@ -1283,8 +1305,8 @@ class EndpointMethods:
         """
         try:
             # Check database connection
-            # db = get_database_connection()
-            db = initialize_database()
+            db = get_database_connection()
+            # db = initialize_database()
             db_healthy = await test_database_connection(db)
 
             # Check agent health
@@ -1317,7 +1339,7 @@ class EndpointMethods:
                 components={"error": str(e)},
             )
 
-    async def status_endpoint(self):
+    async def status_endpoint(self) -> dict:
         """
         Detailed status endpoint.
 
@@ -1326,8 +1348,8 @@ class EndpointMethods:
         """
         try:
             # Get database stats
-            # db = get_database_connection()
-            db = initialize_database()
+            db = get_database_connection()
+            # db = initialize_database()
             db_stats = {}
 
             try:
@@ -1364,7 +1386,10 @@ class EndpointMethods:
             return std_error_response(
                 status_code=500, detail=f"Status check failed: {e}")
 
-    async def get_filename_data(self, filename: str):
+    async def get_filename_data(
+        self,
+        filename: str
+    ) -> dict:
         """
         Download a generated file.
 
@@ -1388,7 +1413,10 @@ class EndpointMethods:
             }
         )
 
-    async def download_package_endpoint(package_name: str) -> dict:
+    async def download_package_endpoint(
+        self,
+        package_name: str
+    ) -> dict:
         """
         Download a file package as ZIP.
 
@@ -1434,8 +1462,11 @@ class EndpointMethods:
         )
 
     async def generate_json_config_endpoint(
-        requirements: str, config_type: str = "table"
-    ):
+        self,
+        requirements: str,
+        table_name: str,
+        config_type: str = "table",
+    ) -> dict:
         """
         Generate JSON configuration for GenericSuite.
 
@@ -1450,7 +1481,10 @@ class EndpointMethods:
             # Use agent to generate JSON config
             agent = get_agent()
             response = await agent.generate_json_config(
-                requirements, config_type)
+                requirements=requirements,
+                config_type=config_type,
+                table_name=table_name,
+            )
 
             # Extract JSON from response content
             from .utilities import extract_code_blocks
@@ -1468,12 +1502,18 @@ class EndpointMethods:
                 f"{get_utcnow_fmt()}.json"
 
             result = std_response(
-                result=GeneratedFile(
-                    filename=filename,
-                    content=json_content,
-                    file_type="json",
-                    size=len(json_content.encode("utf-8")),
-                    description=f"Generated {config_type} configuration",
+                result=GeneratedFilesResponse(
+                    files=[
+                        GeneratedFile(
+                            filename=filename,
+                            content=json_content,
+                            file_type="json",
+                            size=len(json_content.encode("utf-8")),
+                            description=f"Generated {config_type}"
+                            " configuration for"
+                            f" table '{table_name}'",
+                        )
+                    ]
                 )
             )
             return result
@@ -1486,8 +1526,12 @@ class EndpointMethods:
             )
 
     async def generate_python_code_endpoint(
-        requirements: str, code_type: str = "tool"
-    ):
+        self,
+        requirements: str,
+        tool_name: str,
+        description: str,
+        code_type: str = "tool",
+    ) -> dict:
         """
         Generate Python code for GenericSuite.
 
@@ -1502,7 +1546,11 @@ class EndpointMethods:
             # Use agent to generate Python code
             agent = get_agent()
             response = await agent.generate_python_code(
-                requirements, code_type)
+                requirements=requirements,
+                tool_name=tool_name,
+                description=description,
+                code_type=code_type,
+            )
 
             # Extract Python code from response content
             code_blocks = extract_code_blocks(response.content, "python")
@@ -1518,12 +1566,16 @@ class EndpointMethods:
                 f"{code_type}_{get_utcnow_fmt()}.py"
 
             return std_response(
-                result=GeneratedFile(
-                    filename=filename,
-                    content=python_content,
-                    file_type="python",
-                    size=len(python_content.encode("utf-8")),
-                    description=f"Generated {code_type} Python code",
+                result=GeneratedFilesResponse(
+                    files=[
+                        GeneratedFile(
+                            filename=filename,
+                            content=python_content,
+                            file_type="python",
+                            size=len(python_content.encode("utf-8")),
+                            description=f"Generated {code_type} Python code",
+                        )
+                    ]
                 )
             )
 
@@ -1534,7 +1586,10 @@ class EndpointMethods:
                 detail=f"Failed to generate Python code: {str(e)}"
             )
 
-    async def generate_frontend_code_endpoint(requirements: str):
+    async def generate_frontend_code_endpoint(
+        self,
+        requirements: str
+    ) -> dict:
         """
         Generate ReactJS frontend code.
 
@@ -1587,7 +1642,8 @@ class EndpointMethods:
                     )
                 )
 
-            return std_response(result=generated_files)
+            return std_response(result=GeneratedFilesResponse(
+                files=generated_files))
 
         except Exception as e:
             logger.error(f"Frontend code generation failed: {e}")
@@ -1597,8 +1653,10 @@ class EndpointMethods:
             )
 
     async def generate_backend_code_endpoint(
-        requirements: str, framework: str = "fastapi"
-    ):
+        self,
+        requirements: str,
+        framework: str = "fastapi"
+    ) -> dict:
         """
         Generate backend code for specified framework.
 
@@ -1649,7 +1707,8 @@ class EndpointMethods:
                     )
                 )
 
-            return std_response(result=generated_files)
+            return std_response(result=GeneratedFilesResponse(
+                files=generated_files))
 
         except Exception as e:
             logger.error(f"Backend code generation failed: {e}")

@@ -54,10 +54,9 @@ export interface QueryRequest {
   include_sources?: boolean
 }
 
+export const baseUrl = process.env.UI_API_BASE_URL
+
 class ApiService {
-  // private baseUrl = '/api'
-  // private baseUrl = process.env.UI_API_BASE_URL || 'http://localhost:8000'
-  private baseUrl = process.env.UI_API_BASE_URL
 
   private async handleResponse<T>(response: Response): Promise<ApiResponse<T>> {
     try {
@@ -80,18 +79,18 @@ class ApiService {
   }
 
   async getConversations(page = 1, pageSize = 20): Promise<ApiResponse<ConversationList>> {
-    console.log('getConversations | baseUrl: ', this.baseUrl)
-    const response = await fetch(`${this.baseUrl}/conversations?page=${page}&page_size=${pageSize}`)
+    console.log('getConversations | baseUrl: ', baseUrl)
+    const response = await fetch(`${baseUrl}/conversations?page=${page}&page_size=${pageSize}`)
     return this.handleResponse<ConversationList>(response)
   }
 
   async getConversation(conversationId: string): Promise<ApiResponse<Conversation>> {
-    const response = await fetch(`${this.baseUrl}/conversations/${conversationId}`)
+    const response = await fetch(`${baseUrl}/conversations/${conversationId}`)
     return this.handleResponse<Conversation>(response)
   }
 
   async createConversation(request: ConversationCreateRequest): Promise<ApiResponse<Conversation>> {
-    const response = await fetch(`${this.baseUrl}/conversations`, {
+    const response = await fetch(`${baseUrl}/conversations`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(request)
@@ -100,7 +99,7 @@ class ApiService {
   }
 
   async updateConversation(conversationId: string, request: ConversationUpdateRequest) {
-    const response = await fetch(`${this.baseUrl}/conversations/${conversationId}`, {
+    const response = await fetch(`${baseUrl}/conversations/${conversationId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(request)
@@ -109,14 +108,14 @@ class ApiService {
   }
 
   async deleteConversation(conversationId: string) {
-    const response = await fetch(`${this.baseUrl}/conversations/${conversationId}`, {
+    const response = await fetch(`${baseUrl}/conversations/${conversationId}`, {
       method: 'DELETE'
     })
     return this.handleResponse(response)
   }
 
   async queryAgent(request: QueryRequest) {
-    const response = await fetch(`${this.baseUrl}/query`, {
+    const response = await fetch(`${baseUrl}/query`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(request)

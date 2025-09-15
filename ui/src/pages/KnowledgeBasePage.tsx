@@ -7,6 +7,8 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { RefreshCw, Upload, Database, FileText, AlertCircle, CheckCircle, Info } from 'lucide-react'
 
+import { baseUrl } from '@/lib/api'
+
 interface KnowledgeBaseStats {
   documentCount: number
   lastUpdated: string
@@ -63,7 +65,7 @@ export function KnowledgeBasePage() {
       const forceRefresh = false
 
       // Make actual API call
-      const response = await fetch('/api/update-knowledge-base', {
+      const response = await fetch(`${baseUrl}/api/update-knowledge-base`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -73,7 +75,6 @@ export function KnowledgeBasePage() {
 
       if (response.ok) {
         const result = await response.json()
-console.log('handleUpdateKnowledgeBase | result', result)
         const resultData = result.result
         if (!resultData.statistics.success) {
           setStats(prev => ({ ...prev, status: 'error' }))
@@ -110,7 +111,7 @@ console.log('handleUpdateKnowledgeBase | result', result)
         formData.append('files', file)
       })
 
-      const response = await fetch('/api/upload-document', {
+      const response = await fetch(`${baseUrl}/api/upload-document`, {
         method: 'POST',
         body: formData
       })

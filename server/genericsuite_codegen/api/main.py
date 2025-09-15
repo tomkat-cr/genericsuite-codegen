@@ -40,9 +40,11 @@ from .types import (
     SearchResponse,
     FileGenerationRequest,
     GeneratedFile,
+    GeneratedFilesResponse,
     FilePackage,
     StandardGsResponse,
     StandardGsErrorResponse,
+    GenerationRequest,
 )
 from .utilities import (
     setup_logging,
@@ -348,7 +350,6 @@ def setup_routes(app: FastAPI) -> None:
     @app.post(
         EP_PREFIX + "/query",
         response_model=QueryResponse,
-        # response_model=Dict[str, Any],
         tags=["Agent"])
     async def query_agent(
         req: Request,
@@ -627,8 +628,11 @@ def setup_routes(app: FastAPI) -> None:
         result = result_wrapper(await methods.get_statistics())
         return result.result
 
-    @app.post(EP_PREFIX + "/search", response_model=SearchResponse,
-              tags=["Knowledge Base"])
+    @app.post(
+        EP_PREFIX + "/search",
+        response_model=SearchResponse,
+        tags=["Knowledge Base"]
+    )
     async def search_knowledge_base(query: SearchQuery):
         """
         Search the knowledge base.
@@ -656,7 +660,8 @@ def setup_routes(app: FastAPI) -> None:
     # File Generation and Download Endpoints
 
     @app.post(
-        EP_PREFIX + "/generate-file", response_model=GeneratedFile,
+        EP_PREFIX + "/generate-file",
+        response_model=GeneratedFile,
         tags=["File Generation"]
     )
     async def generate_file(
@@ -675,7 +680,8 @@ def setup_routes(app: FastAPI) -> None:
         return result.result
 
     @app.post(
-        EP_PREFIX + "/generate-package", response_model=FilePackage,
+        EP_PREFIX + "/generate-package",
+        response_model=FilePackage,
         tags=["File Generation"]
     )
     async def create_file_package(files: List[GeneratedFile]):
@@ -691,7 +697,10 @@ def setup_routes(app: FastAPI) -> None:
         result = result_wrapper(await methods.create_file_package(files))
         return await result.result
 
-    @app.get(EP_PREFIX + "/download/file/{filename}", tags=["File Generation"])
+    @app.get(
+        EP_PREFIX + "/download/file/{filename}",
+        tags=["File Generation"]
+    )
     async def download_file(filename: str, content: str):
         """
         Download a generated file.
@@ -713,8 +722,10 @@ def setup_routes(app: FastAPI) -> None:
             },
         )
 
-    @app.get(EP_PREFIX + "/download/package/{package_name}",
-             tags=["File Generation"])
+    @app.get(
+        EP_PREFIX + "/download/package/{package_name}",
+        tags=["File Generation"]
+    )
     async def download_package(package_name: str):
         """
         Download a file package as ZIP.
@@ -740,11 +751,12 @@ def setup_routes(app: FastAPI) -> None:
 
     @app.post(
         EP_PREFIX + "/generate/json-config",
-        response_model=GeneratedFile,
+        response_model=GeneratedFilesResponse,
         tags=["Code Generation"],
     )
-    async def generate_json_config(requirements: str,
-                                   config_type: str = "table"):
+    async def generate_json_config(
+        request: Optional[GenerationRequest] = Body(default=None),
+    ):
         """
         Generate JSON configuration for GenericSuite.
 
@@ -755,17 +767,26 @@ def setup_routes(app: FastAPI) -> None:
         Returns:
             GeneratedFile: Generated JSON configuration file.
         """
-        result = result_wrapper(
-            methods.generate_json_config_endpoint(requirements, config_type)
+        logger.info(
+            f"ENDPOINT >> generate_json_config | Received request: {request}")
+        result = await methods.generate_json_config_endpoint(
+            request.requirements,
+            request.table_name,
+            request.config_type,
         )
+        logger.info(
+            f"ENDPOINT >> generate_json_config | Result: {result}")
+        result = result_wrapper(result)
         return result.result
 
     @app.post(
         EP_PREFIX + "/generate/python-code",
-        response_model=GeneratedFile,
+        response_model=GeneratedFilesResponse,
         tags=["Code Generation"],
     )
-    async def generate_python_code(requirements: str, code_type: str = "tool"):
+    async def generate_python_code(
+        request: Optional[GenerationRequest] = Body(default=None),
+    ):
         """
         Generate Python code for GenericSuite.
 
@@ -777,16 +798,23 @@ def setup_routes(app: FastAPI) -> None:
             GeneratedFile: Generated Python code file.
         """
         result = result_wrapper(
-            methods.generate_python_code_endpoint(requirements, code_type)
+            await methods.generate_python_code_endpoint(
+                request.requirements,
+                request.tool_name,
+                request.description,
+                request.type,
+            )
         )
         return result.result
 
     @app.post(
         EP_PREFIX + "/generate/frontend-code",
-        response_model=List[GeneratedFile],
+        response_model=GeneratedFilesResponse,
         tags=["Code Generation"],
     )
-    async def generate_frontend_code(requirements: str):
+    async def generate_frontend_code(
+        request: Optional[GenerationRequest] = Body(default=None),
+    ):
         """
         Generate ReactJS frontend code.
 
@@ -797,16 +825,18 @@ def setup_routes(app: FastAPI) -> None:
             List[GeneratedFile]: Generated frontend code files.
         """
         result = result_wrapper(
-            methods.generate_frontend_code_endpoint(requirements))
+            await methods.generate_frontend_code_endpoint(request.requirements)
+        )
         return result.result
 
     @app.post(
         EP_PREFIX + "/generate/backend-code",
-        response_model=List[GeneratedFile],
+        response_model=GeneratedFilesResponse,
         tags=["Code Generation"],
     )
-    async def generate_backend_code(requirements: str,
-                                    framework: str = "fastapi"):
+    async def generate_backend_code(
+        request: Optional[GenerationRequest] = Body(default=None),
+    ):
         """
         Generate backend code for specified framework.
 
@@ -818,7 +848,10 @@ def setup_routes(app: FastAPI) -> None:
             List[GeneratedFile]: Generated backend code files.
         """
         result = result_wrapper(
-            methods.generate_backend_code_endpoint(requirements, framework)
+            await methods.generate_backend_code_endpoint(
+                request.requirements,
+                request.framework
+            )
         )
         return result.result
 

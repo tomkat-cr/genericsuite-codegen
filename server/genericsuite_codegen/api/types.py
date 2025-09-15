@@ -332,12 +332,44 @@ class GeneratedFile(BaseModel):
         default=None, description="File description")
 
 
+class GeneratedFilesResponse(BaseModel):
+    """Generated files response model."""
+    files: List[GeneratedFile] = Field(description="Generated files")
+
+
 class FilePackage(BaseModel):
     """File package model for multi-file downloads."""
     package_name: str = Field(description="Package name")
     files: List[GeneratedFile] = Field(description="Files in the package")
     format: str = Field(description="Package format (zip, tar.gz)")
     total_size: int = Field(description="Total package size in bytes")
+
+
+# Code generation
+
+class GenerationRequest(BaseModel):
+    type: str = Field(
+        default=None,
+        description='Type of the code generation: "json-config", '
+        '"langchain-tool" | "mcp-tool" | "frontend" | "backend"')
+    requirements: str = Field(
+        default=None,
+        description='Requirements for the code generation')
+    config_type: Optional[str] = Field(
+        default=None,
+        description='Configuration type. "table" for json generation')
+    framework: Optional[str] = Field(
+        default=None,
+        description='Framework for the code generation')
+    table_name: Optional[str] = Field(
+        default=None,
+        description='Name of the table')
+    tool_name: Optional[str] = Field(
+        default=None,
+        description='Name of the tool')
+    description: Optional[str] = Field(
+        default=None,
+        description='Description for the code generation')
 
 
 # Configuration Models
