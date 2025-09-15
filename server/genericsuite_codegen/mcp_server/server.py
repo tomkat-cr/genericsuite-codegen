@@ -514,12 +514,25 @@ class GenericSuiteMCPServer:
             # Return empty results on error
             return []
 
+    def get_mcp_run_args(self):
+        """Get the MCP server run arguments."""
+        mcp_run_args = {
+            "host": self.config.host,
+            "port": self.config.port,
+        }
+        logger.info(f">>>> MCP server run arguments: {mcp_run_args}")
+        return mcp_run_args
+
     def run(self):
         """Run the MCP server synchronously."""
         try:
             logger.info("Starting MCP server on stdio")
             # FastMCP typically runs on stdio for MCP protocol
-            asyncio.run(self.mcp.run_stdio_async())
+            mcp_run_args = self.get_mcp_run_args()
+            if self.config.transport == "http":
+                asyncio.run(self.mcp.run_http_async(**mcp_run_args))
+            else:
+                asyncio.run(self.mcp.run_stdio_async())
         except Exception as e:
             logger.error(f"MCP server failed to start: {e}")
             raise
@@ -529,7 +542,11 @@ class GenericSuiteMCPServer:
         try:
             logger.info("Starting MCP server (async) on stdio")
             # FastMCP typically runs on stdio for MCP protocol
-            await self.mcp.run_stdio_async()
+            mcp_run_args = self.get_mcp_run_args()
+            if self.config.transport == "http":
+                await self.mcp.run_http_async(**mcp_run_args)
+            else:
+                await self.mcp.run_stdio_async()
         except Exception as e:
             logger.error(f"MCP server failed to start: {e}")
             raise

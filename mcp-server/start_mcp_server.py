@@ -64,7 +64,8 @@ def validate_environment():
         "MCP_SERVER_HOST": "0.0.0.0",
         "MCP_SERVER_PORT": "8070",
         "MCP_API_KEY": None,
-        "MCP_DEBUG": "0"
+        "MCP_DEBUG": "0",
+        "MCP_TRANSPORT": "http"
     }
 
     missing_vars = []
@@ -106,6 +107,7 @@ def report_mcp_config(config: MCPConfig):
     logger.info(f"  Port: {config.port}")
     logger.info(f"  Debug: {config.debug}")
     logger.info(f"  API Key: {'Set' if config.api_key else 'Not set'}")
+    logger.info(f"  Transport: {config.transport}")
 
 
 def main():
@@ -178,4 +180,5 @@ if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "--async":
         asyncio.run(main_async())
     else:
+        print("Running MCP server in normal mode !!!")
         main()

@@ -7,6 +7,7 @@ help:
 	@echo "  dev         - Run development server"
 	@echo "  start       - Start production server"
 	@echo "  start-async - Start server in async mode"
+	@echo "  start-inspector  - Start production server with MCP Inspector"
 	@echo "  build       - Build the application"
 	@echo "  test        - Run tests"
 	@echo "  lint        - Run code linting"
