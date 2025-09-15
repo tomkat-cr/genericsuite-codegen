@@ -54,7 +54,8 @@ export interface QueryRequest {
   include_sources?: boolean
 }
 
-export const baseUrl = process.env.UI_API_BASE_URL
+// export const baseUrl = process.env.UI_API_BASE_URL
+export const baseUrl = process.env.VITE_API_BASE_URL
 
 class ApiService {
 

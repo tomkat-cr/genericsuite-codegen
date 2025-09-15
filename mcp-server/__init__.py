@@ -1,6 +1,6 @@
 """
-GenericSuite CodeGen - RAG AI system for GenericSuite documentation and code
-generation.
+GenericSuite CodeGen MCP Server - RAG AI system for GenericSuite documentation
+and code generation.
 """
 
 __version__ = "1.0.0"

@@ -229,3 +229,4 @@ deploy/docker-compose.yml
 deploy/nginx.conf
 deploy/docker_images/Dockerfile-Python.backup_*
 deploy/docker_images/Dockerfile-Ollama.backup_*
+mcp-server/genericsuite_codegen

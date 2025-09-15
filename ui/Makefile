@@ -23,15 +23,15 @@ run: dev
 
 # Build for production
 build:
-	npm run build
+	bash ./run-client.sh build
 
 # Build from root directory
 build_from_root:
-	cd ui && npm run build
+	cd ui && bash ./run-client.sh build
 
 # Preview production build
 preview:
-	npm run preview
+	bash ./run-client.sh preview
 
 # Clean up
 clean:

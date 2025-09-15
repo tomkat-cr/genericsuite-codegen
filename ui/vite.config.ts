@@ -23,8 +23,8 @@ export default defineConfig({
         UI_PORT: (process.env.UI_PORT || ''),
         UI_SECURE_PORT: (process.env.UI_SECURE_PORT || ''),
         UI_APP_DOMAIN_NAME: (process.env.UI_APP_DOMAIN_NAME || ''),
-        UI_API_BASE_URL: (process.env.UI_API_BASE_URL || ''),
-        UI_DEBUG: (process.env.UI_DEBUG || ''),
+        VITE_API_BASE_URL: (process.env.UI_API_BASE_URL || ''),
+        VITE_DEBUG: (process.env.UI_DEBUG || ''),
     },
   },
   build: {

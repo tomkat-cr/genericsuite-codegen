@@ -33,7 +33,7 @@ MCP_API_KEY=your_api_key_here
 MCP_DEBUG=0
 
 # AI Agent Configuration
-OPENAI_API_KEY=your_openai_key
+LLM_API_KEY=your_openai_key
 LLM_PROVIDER=openai
 LLM_MODEL=gpt-4
 

@@ -36,7 +36,7 @@ from .tools import (
 from .prompts import get_prompt_manager
 
 
-DEBUG = True
+DEBUG = False
 DEBUG_DETAILED = False
 
 # Configure logging

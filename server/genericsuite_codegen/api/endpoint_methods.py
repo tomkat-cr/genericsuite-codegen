@@ -66,7 +66,7 @@ from genericsuite_codegen.database.setup import (
     test_database_connection,
 )
 
-DEBUG = True
+DEBUG = False
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -1667,6 +1667,16 @@ class EndpointMethods:
         Returns:
             List[GeneratedFile]: Generated backend code files.
         """
+
+        # Validate framework
+        valid_frameworks = ["fastapi", "flask", "chalice"]
+        if framework.lower() not in valid_frameworks:
+            return std_error_response(
+                status_code=400,
+                detail="Invalid framework. Must be one of:"
+                f" {valid_frameworks}"
+            )
+
         try:
             # Use agent to generate backend code
             agent = get_agent()

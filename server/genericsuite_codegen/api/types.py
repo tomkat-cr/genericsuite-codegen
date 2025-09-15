@@ -350,8 +350,8 @@ class FilePackage(BaseModel):
 class GenerationRequest(BaseModel):
     type: str = Field(
         default=None,
-        description='Type of the code generation: "json-config", '
-        '"langchain-tool" | "mcp-tool" | "frontend" | "backend"')
+        description='Type of the code generation: "json_config", '
+        '"langchain_tool" | "mcp_tool" | "frontend" | "backend"')
     requirements: str = Field(
         default=None,
         description='Requirements for the code generation')

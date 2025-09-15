@@ -20,8 +20,14 @@ except ImportError:
 
 from ..agent.agent import GenericSuiteAgent
 from ..database.setup import DatabaseManager
+from ..api.endpoint_methods import get_endpoint_methods
+from ..agent.tools import KnowledgeBaseTool
+
+
+DEBUG = False
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO if DEBUG else logging.WARNING)
 
 
 @dataclass
@@ -34,6 +40,7 @@ class MCPConfig:
     host: str = "0.0.0.0"
     port: int = 8070
     debug: bool = False
+    transport: str = "http"  # or "stdio"
 
 
 class GenericSuiteMCPServer:
@@ -44,6 +51,9 @@ class GenericSuiteMCPServer:
         self.mcp = FastMCP(config.server_name)
         self.agent: Optional[GenericSuiteAgent] = None
         self.vector_db: Optional[DatabaseManager] = None
+        self.kb_tool = None
+
+        self.methods = get_endpoint_methods()
 
         # Initialize components
         self._setup_components()
@@ -59,6 +69,9 @@ class GenericSuiteMCPServer:
 
             # Initialize AI agent
             self.agent = GenericSuiteAgent()
+
+            # Initialize knowledge base tool
+            self.kb_tool = KnowledgeBaseTool()
 
             logger.info("MCP server components initialized successfully")
 
@@ -86,6 +99,7 @@ class GenericSuiteMCPServer:
         try:
             # If API key is configured, validate it
             if self.config.api_key:
+                # TODO:
                 # In a real implementation, you would check the request headers
                 # For now, we'll implement basic validation
                 return True
@@ -151,7 +165,11 @@ class GenericSuiteMCPServer:
                 return self._handle_error(e, "search_knowledge_base")
 
         @self.mcp.tool()
-        async def generate_json_config(requirements: str) -> Dict[str, Any]:
+        async def generate_json_config(
+            requirements: str,
+            table_name: str,
+            config_type: str = "table",
+        ) -> Dict[str, Any]:
             """
             Generate GenericSuite JSON configuration based on requirements.
 
@@ -169,7 +187,8 @@ class GenericSuiteMCPServer:
                     )
 
                 # Generate JSON configuration using the agent
-                config = await self._generate_json_config_async(requirements)
+                config = await self.methods.generate_json_config_endpoint(
+                    requirements, table_name, config_type)
 
                 return {
                     "success": True,
@@ -181,12 +200,18 @@ class GenericSuiteMCPServer:
                 return self._handle_error(e, "generate_json_config")
 
         @self.mcp.tool()
-        async def generate_langchain_tool(specification: str) -> Dict[str, Any]:
+        async def generate_langchain_tool(
+            requirements: str,
+            tool_name: str,
+            description: str,
+        ) -> Dict[str, Any]:
             """
             Generate a Langchain Tool based on specification.
 
             Args:
-                specification: Description of the tool requirements
+                requirements: Description of the tool requirements
+                tool_name: Name of the tool
+                description: Description of the tool
 
             Returns:
                 Dictionary containing the generated Python code
@@ -194,15 +219,24 @@ class GenericSuiteMCPServer:
             try:
                 if not self.agent:
                     return self._handle_error(
-                        Exception("AI agent not initialized"), "generate_langchain_tool"
+                        Exception(
+                            "AI agent not initialized"),
+                        "generate_langchain_tool"
                     )
 
                 # Generate Langchain tool using the agent
-                code = await self._generate_langchain_tool_async(specification)
+                code = await self.methods.generate_python_code_endpoint(
+                    requirements,
+                    tool_name,
+                    description,
+                    "langchain_tool",
+                )
 
                 return {
                     "success": True,
-                    "specification": specification,
+                    "requirements": requirements,
+                    "tool_name": tool_name,
+                    "description": description,
                     "code": code,
                     "type": "langchain_tool",
                 }
@@ -211,12 +245,18 @@ class GenericSuiteMCPServer:
                 return self._handle_error(e, "generate_langchain_tool")
 
         @self.mcp.tool()
-        async def generate_mcp_tool(specification: str) -> Dict[str, Any]:
+        async def generate_mcp_tool(
+            requirements: str,
+            tool_name: str,
+            description: str,
+        ) -> Dict[str, Any]:
             """
             Generate an MCP Tool based on specification.
 
             Args:
-                specification: Description of the tool requirements
+                requirements: Description of the tool requirements
+                tool_name: Name of the tool
+                description: Description of the tool
 
             Returns:
                 Dictionary containing the generated Python code
@@ -224,15 +264,23 @@ class GenericSuiteMCPServer:
             try:
                 if not self.agent:
                     return self._handle_error(
-                        Exception("AI agent not initialized"), "generate_mcp_tool"
+                        Exception(
+                            "AI agent not initialized"), "generate_mcp_tool"
                     )
 
                 # Generate MCP tool using the agent
-                code = await self._generate_mcp_tool_async(specification)
+                code = await self.methods.generate_python_code_endpoint(
+                    requirements,
+                    tool_name,
+                    description,
+                    "mcp_tool",
+                )
 
                 return {
                     "success": True,
-                    "specification": specification,
+                    "requirements": requirements,
+                    "tool_name": tool_name,
+                    "description": description,
                     "code": code,
                     "type": "mcp_tool",
                 }
@@ -254,11 +302,14 @@ class GenericSuiteMCPServer:
             try:
                 if not self.agent:
                     return self._handle_error(
-                        Exception("AI agent not initialized"), "generate_frontend_code"
+                        Exception(
+                            "AI agent not initialized"),
+                        "generate_frontend_code"
                     )
 
                 # Generate frontend code using the agent
-                code_files = await self._generate_frontend_code_async(requirements)
+                code_files = await self.methods \
+                    .generate_frontend_code_endpoint(requirements)
 
                 return {
                     "success": True,
@@ -275,7 +326,8 @@ class GenericSuiteMCPServer:
             framework: str, requirements: str
         ) -> Dict[str, Any]:
             """
-            Generate backend code for specified framework following GenericSuite patterns.
+            Generate backend code for specified framework following
+            GenericSuite patterns.
 
             Args:
                 framework: Backend framework (fastapi, flask, or chalice)
@@ -287,23 +339,14 @@ class GenericSuiteMCPServer:
             try:
                 if not self.agent:
                     return self._handle_error(
-                        Exception("AI agent not initialized"), "generate_backend_code"
-                    )
-
-                # Validate framework
-                valid_frameworks = ["fastapi", "flask", "chalice"]
-                if framework.lower() not in valid_frameworks:
-                    return self._handle_error(
-                        ValueError(
-                            f"Invalid framework. Must be one of: {valid_frameworks}"
-                        ),
-                        "generate_backend_code",
+                        Exception(
+                            "AI agent not initialized"),
+                        "generate_backend_code"
                     )
 
                 # Generate backend code using the agent
-                code_files = await self._generate_backend_code_async(
-                    framework, requirements
-                )
+                code_files = await self.methods.generate_backend_code_endpoint(
+                    framework, requirements)
 
                 return {
                     "success": True,
@@ -320,7 +363,8 @@ class GenericSuiteMCPServer:
         """Register MCP resources for agent capabilities."""
 
         @self.mcp.resource(
-            uri="genericsuite://knowledge_base_stats", name="Knowledge Base Statistics"
+            uri="genericsuite://knowledge_base_stats",
+            name="Knowledge Base Statistics"
         )
         async def get_knowledge_base_stats() -> Dict[str, Any]:
             """Get statistics about the knowledge base."""
@@ -335,7 +379,8 @@ class GenericSuiteMCPServer:
                 stats = self.vector_db.get_knowledge_base_stats()
                 stats["status"] = "healthy"
                 stats["last_updated"] = (
-                    "2025-09-08T11:42:00Z"  # TODO: Would be dynamic in real implementation
+                    "2025-09-08T11:42:00Z"
+                    # TODO: Would be dynamic in real implementation
                 )
 
                 return {"success": True, "data": stats}
@@ -343,7 +388,8 @@ class GenericSuiteMCPServer:
             except Exception as e:
                 return self._handle_error(e, "get_knowledge_base_stats")
 
-        @self.mcp.resource(uri="genericsuite://server_info", name="Server Information")
+        @self.mcp.resource(uri="genericsuite://server_info",
+                           name="Server Information")
         async def get_server_info() -> Dict[str, Any]:
             """Get information about the MCP server."""
             try:
@@ -364,7 +410,8 @@ class GenericSuiteMCPServer:
                             "frontend_code_generation",
                             "backend_code_generation",
                         ],
-                        "supported_frameworks": ["fastapi", "flask", "chalice"],
+                        "supported_frameworks": [
+                            "fastapi", "flask", "chalice"],
                         "embedding_models": ["openai", "huggingface"],
                     },
                 }
@@ -379,7 +426,9 @@ class GenericSuiteMCPServer:
             try:
                 if not self.agent:
                     return self._handle_error(
-                        Exception("AI agent not initialized"), "get_agent_capabilities"
+                        Exception(
+                            "AI agent not initialized"),
+                        "get_agent_capabilities"
                     )
 
                 return {
@@ -388,17 +437,20 @@ class GenericSuiteMCPServer:
                         "tools": [
                             {
                                 "name": "search_knowledge_base",
-                                "description": "Search GenericSuite documentation and knowledge base",
+                                "description": "Search GenericSuite"
+                                " documentation and knowledge base",
                                 "parameters": ["query", "limit"],
                             },
                             {
                                 "name": "generate_json_config",
-                                "description": "Generate GenericSuite table configuration JSON",
+                                "description": "Generate GenericSuite table"
+                                " configuration JSON",
                                 "parameters": ["requirements"],
                             },
                             {
                                 "name": "generate_langchain_tool",
-                                "description": "Generate Langchain Tool Python code",
+                                "description": "Generate Langchain Tool"
+                                " Python code",
                                 "parameters": ["specification"],
                             },
                             {
@@ -408,12 +460,14 @@ class GenericSuiteMCPServer:
                             },
                             {
                                 "name": "generate_frontend_code",
-                                "description": "Generate ReactJS frontend code",
+                                "description": "Generate ReactJS frontend"
+                                " code",
                                 "parameters": ["requirements"],
                             },
                             {
                                 "name": "generate_backend_code",
-                                "description": "Generate backend code for specified framework",
+                                "description": "Generate backend code for"
+                                " specified framework",
                                 "parameters": ["framework", "requirements"],
                             },
                         ],
@@ -436,14 +490,9 @@ class GenericSuiteMCPServer:
             if not self.agent:
                 raise Exception("AI agent not initialized")
 
-            # Use the agent's knowledge base search tool
-            from ..agent.tools import KnowledgeBaseTool
-
-            # Create knowledge base tool instance
-            kb_tool = KnowledgeBaseTool()
-
             # Perform search
-            search_results = await kb_tool.search_async(query, limit)
+            search_results = await self.kb_tool.get_context_for_generation(
+                query, max_context_length=limit)
 
             # Format results for MCP response
             formatted_results = []
@@ -452,7 +501,8 @@ class GenericSuiteMCPServer:
                     {
                         "content": result.get("content", ""),
                         "source": result.get("source", "unknown"),
-                        "similarity_score": result.get("similarity_score", 0.0),
+                        "similarity_score": result.get(
+                            "similarity_score", 0.0),
                         "metadata": result.get("metadata", {}),
                     }
                 )
@@ -464,349 +514,10 @@ class GenericSuiteMCPServer:
             # Return empty results on error
             return []
 
-    async def _generate_json_config_async(self, requirements: str) -> Dict[str, Any]:
-        """Async wrapper for JSON config generation."""
-        try:
-            if not self.agent:
-                raise Exception("AI agent not initialized")
-
-            # Use the agent to generate JSON configuration
-            prompt = f"""Generate a GenericSuite table configuration JSON based on these requirements:
-            
-{requirements}
-
-Please provide a complete JSON configuration following GenericSuite patterns."""
-
-            # Run the agent to generate configuration
-            result = await self.agent.run_async(prompt)
-
-            # Parse the result to extract JSON configuration
-            # For now, return a structured example based on requirements
-            return {
-                "table_name": "generated_table",
-                "description": f"Table generated based on: {requirements}",
-                "fields": [
-                    {
-                        "name": "id",
-                        "type": "string",
-                        "required": True,
-                        "primary_key": True,
-                    },
-                    {"name": "created_at", "type": "datetime", "required": True},
-                    {"name": "updated_at", "type": "datetime", "required": True},
-                ],
-                "generated_from": requirements,
-            }
-
-        except Exception as e:
-            logger.error(f"JSON config generation failed: {e}")
-            # Return basic structure on error
-            return {
-                "error": "Failed to generate configuration",
-                "requirements": requirements,
-            }
-
-    async def _generate_langchain_tool_async(self, specification: str) -> str:
-        """Async wrapper for Langchain tool generation."""
-        try:
-            if not self.agent:
-                raise Exception("AI agent not initialized")
-
-            # Use the agent to generate Langchain tool code
-            prompt = f"""Generate a complete Langchain Tool implementation based on this specification:
-
-{specification}
-
-Please provide a complete Python class that follows Langchain Tool patterns and includes:
-1. Proper imports
-2. Input schema with Pydantic BaseModel
-3. Tool class with name, description, and args_schema
-4. Both sync (_run) and async (_arun) methods
-5. Proper error handling
-
-Make sure the code is production-ready and follows best practices."""
-
-            # Run the agent to generate code
-            result = await self.agent.run_async(prompt)
-
-            # Extract code from result
-            # TODO: (would need proper parsing in real implementation)
-            return result.data if hasattr(result, "data") else str(result)
-
-        except Exception as e:
-            logger.error(f"Langchain tool generation failed: {e}")
-            # Return template on error
-            return f"""
-# Error generating tool: {e}
-# Specification: {specification}
-
-from langchain.tools import BaseTool
-from typing import Type
-from pydantic import BaseModel, Field
-
-class GeneratedToolInput(BaseModel):
-    query: str = Field(description="Input for the generated tool")
-
-class GeneratedTool(BaseTool):
-    name = "generated_tool"
-    description = "Tool generated from specification: {specification}"
-    args_schema: Type[BaseModel] = GeneratedToolInput
-
-    def _run(self, query: str) -> str:
-        # TODO: Implement based on specification
-        return f"Processing: {{query}}"
-
-    async def _arun(self, query: str) -> str:
-        return self._run(query)
-"""
-
-    async def _generate_mcp_tool_async(self, specification: str) -> str:
-        """Async wrapper for MCP tool generation."""
-        try:
-            if not self.agent:
-                raise Exception("AI agent not initialized")
-
-            # Use the agent to generate MCP tool code
-            prompt = f"""Generate a complete FastMCP Tool implementation based on this specification:
-
-{specification}
-
-Please provide a complete Python implementation that includes:
-1. Proper imports for FastMCP
-2. Tool function with @mcp.tool() decorator
-3. Proper type hints and documentation
-4. Error handling
-5. Return structured data as Dict[str, Any]
-
-Make sure the code is production-ready and follows FastMCP best practices."""
-
-            # Run the agent to generate code
-            result = await self.agent.run_async(prompt)
-
-            # Extract code from result
-            # TODO: (would need proper parsing in real implementation)
-            return result.data if hasattr(result, "data") else str(result)
-
-        except Exception as e:
-            logger.error(f"MCP tool generation failed: {e}")
-            # Return template on error
-            return f"""
-# Error generating MCP tool: {e}
-# Specification: {specification}
-
-from fastmcp import FastMCP
-from typing import Dict, Any
-
-mcp = FastMCP("generated_tool")
-
-@mcp.tool()
-async def generated_tool(query: str) -> Dict[str, Any]:
-    \"\"\"
-    Tool generated from specification: {specification}
-    \"\"\"
-    try:
-        # TODO: Implement based on specification
-        return {{
-            "success": True,
-            "result": f"Processing: {{query}}",
-            "specification": "{specification}"
-        }}
-    except Exception as e:
-        return {{
-            "success": False,
-            "error": str(e)
-        }}
-"""
-
-    async def _generate_frontend_code_async(self, requirements: str) -> Dict[str, str]:
-        """Async wrapper for frontend code generation."""
-        try:
-            if not self.agent:
-                raise Exception("AI agent not initialized")
-
-            # Use the agent to generate frontend code
-            prompt = f"""Generate a complete ReactJS frontend application based on these requirements:
-
-{requirements}
-
-Please provide a complete React application following GenericSuite patterns that includes:
-1. Main App.tsx component
-2. package.json with dependencies
-3. Any additional components needed
-4. TypeScript types if applicable
-5. Proper styling and structure
-
-Make sure the code follows React best practices and GenericSuite patterns."""
-
-            # Run the agent to generate code
-            result = await self.agent.run_async(prompt)
-
-            # Parse result to extract files 
-            # TODO: (would need proper parsing in real implementation)
-            return {
-                "App.tsx": f"""// Generated React App based on: {requirements}
-import React from 'react';
-import './App.css';
-
-function App() {{
-  return (
-    <div className="App">
-      <header className="App-header">
-        <h1>Generated Application</h1>
-        <p>Requirements: {requirements}</p>
-      </header>
-    </div>
-  );
-}}
-
-export default App;""",
-                "package.json": """{
-  "name": "generated-frontend",
-  "version": "1.0.0",
-  "private": true,
-  "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "typescript": "^4.9.5"
-  },
-  "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject"
-  }
-}""",
-                "App.css": """.App {
-  text-align: center;
-}
-
-.App-header {
-  background-color: #282c34;
-  padding: 20px;
-  color: white;
-}""",
-            }
-
-        except Exception as e:
-            logger.error(f"Frontend code generation failed: {e}")
-            # Return basic template on error
-            return {
-                "App.tsx": f"// Error generating frontend: {e}\n// Requirements: {requirements}\nexport default function App() {{ return <div>Error generating app</div>; }}",
-                "package.json": '{"name": "error-app", "version": "1.0.0"}',
-            }
-
-    async def _generate_backend_code_async(
-        self, framework: str, requirements: str
-    ) -> Dict[str, str]:
-        """Async wrapper for backend code generation."""
-        try:
-            if not self.agent:
-                raise Exception("AI agent not initialized")
-
-            # Use the agent to generate backend code
-            prompt = f"""Generate a complete {framework} backend application based on these requirements:
-
-{requirements}
-
-Please provide a complete {framework} application following GenericSuite patterns that includes:
-1. Main application file
-2. Requirements/dependencies file
-3. API endpoints as needed
-4. Database models if applicable
-5. Proper error handling and structure
-
-Make sure the code follows {framework} best practices and GenericSuite patterns."""
-
-            # Run the agent to generate code
-            result = await self.agent.run_async(prompt)
-
-            # Generate framework-specific code structure
-            if framework.lower() == "fastapi":
-                return {
-                    "main.py": f"""# Generated FastAPI backend based on: {requirements}
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-import uvicorn
-
-app = FastAPI(title="Generated API", version="1.0.0")
-
-class HealthResponse(BaseModel):
-    status: str
-    message: str
-
-@app.get("/health", response_model=HealthResponse)
-async def health_check():
-    return HealthResponse(status="healthy", message="API is running")
-
-@app.get("/")
-async def root():
-    return {{"message": "Generated API based on: {requirements}"}}
-
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)""",
-                    "requirements.txt": "fastapi>=0.100.0\nuvicorn[standard]>=0.20.0\npydantic>=2.0.0",
-                    "README.md": f"# Generated FastAPI Application\n\nRequirements: {requirements}\n\n## Run\n```bash\npip install -r requirements.txt\npython main.py\n```",
-                }
-            elif framework.lower() == "flask":
-                return {
-                    "app.py": f"""# Generated Flask backend based on: {requirements}
-from flask import Flask, jsonify
-import os
-
-app = Flask(__name__)
-
-@app.route('/health')
-def health_check():
-    return jsonify({{"status": "healthy", "message": "API is running"}})
-
-@app.route('/')
-def root():
-    return jsonify({{"message": "Generated API based on: {requirements}"}})
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=True)""",
-                    "requirements.txt": "Flask>=2.3.0\nWerkzeug>=2.3.0",
-                    "README.md": f"# Generated Flask Application\n\nRequirements: {requirements}\n\n## Run\n```bash\npip install -r requirements.txt\npython app.py\n```",
-                }
-            else:  # chalice
-                return {
-                    "app.py": f"""# Generated Chalice backend based on: {requirements}
-from chalice import Chalice
-
-app = Chalice(app_name='generated-chalice-app')
-
-@app.route('/health')
-def health_check():
-    return {{"status": "healthy", "message": "API is running"}}
-
-@app.route('/')
-def index():
-    return {{"message": "Generated API based on: {requirements}"}}""",
-                    "requirements.txt": "chalice>=1.28.0",
-                    ".chalice/config.json": """{
-  "version": "2.0",
-  "app_name": "generated-chalice-app",
-  "stages": {
-    "dev": {
-      "api_gateway_stage": "api"
-    }
-  }
-}""",
-                    "README.md": f"# Generated Chalice Application\n\nRequirements: {requirements}\n\n## Deploy\n```bash\npip install -r requirements.txt\nchalice deploy\n```",
-                }
-
-        except Exception as e:
-            logger.error(f"Backend code generation failed: {e}")
-            # Return basic template on error
-            return {
-                "main.py": f"# Error generating {framework} backend: {e}\n# Requirements: {requirements}",
-                "requirements.txt": f"# Error generating requirements for {framework}",
-            }
-
     def run(self):
         """Run the MCP server synchronously."""
         try:
-            logger.info(f"Starting MCP server on stdio")
+            logger.info("Starting MCP server on stdio")
             # FastMCP typically runs on stdio for MCP protocol
             asyncio.run(self.mcp.run_stdio_async())
         except Exception as e:
@@ -816,7 +527,7 @@ def index():
     async def run_async(self):
         """Run the MCP server asynchronously."""
         try:
-            logger.info(f"Starting MCP server (async) on stdio")
+            logger.info("Starting MCP server (async) on stdio")
             # FastMCP typically runs on stdio for MCP protocol
             await self.mcp.run_stdio_async()
         except Exception as e:

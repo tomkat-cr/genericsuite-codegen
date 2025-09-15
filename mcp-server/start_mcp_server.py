@@ -12,6 +12,8 @@ import logging
 import asyncio
 from pathlib import Path
 
+from genericsuite_codegen.mcp_server import create_mcp_server, MCPConfig
+
 # Add the current directory to Python path
 current_dir = Path(__file__).parent
 sys.path.insert(0, str(current_dir))
@@ -19,8 +21,6 @@ sys.path.insert(0, str(current_dir))
 # Add the server directory to Python path for imports
 server_dir = current_dir.parent / "server"
 sys.path.insert(0, str(server_dir))
-
-from genericsuite_codegen.mcp_server import create_mcp_server, MCPConfig
 
 # Configure logging
 logging.basicConfig(
@@ -39,20 +39,22 @@ def load_environment():
     """Load environment variables from .env file."""
     try:
         from dotenv import load_dotenv
-        
+
         # Look for .env file in current directory or parent directories
         env_file = current_dir / ".env"
         if not env_file.exists():
             env_file = current_dir.parent / ".env"
-        
+
         if env_file.exists():
             load_dotenv(env_file)
             logger.info(f"Loaded environment from {env_file}")
         else:
-            logger.warning("No .env file found, using system environment variables")
-            
+            logger.warning(
+                "No .env file found, using system environment variables")
+
     except ImportError:
-        logger.warning("python-dotenv not available, using system environment variables")
+        logger.warning(
+            "python-dotenv not available, using system environment variables")
 
 
 def validate_environment():
@@ -64,21 +66,21 @@ def validate_environment():
         "MCP_API_KEY": None,
         "MCP_DEBUG": "0"
     }
-    
+
     missing_vars = []
     for var in required_vars:
         if not os.getenv(var):
             missing_vars.append(var)
-    
+
     if missing_vars:
         logger.error(f"Missing required environment variables: {missing_vars}")
         return False
-    
+
     # Log optional variables
     for var, default in optional_vars.items():
         value = os.getenv(var, default)
         logger.info(f"{var}: {value}")
-    
+
     return True
 
 
@@ -90,13 +92,14 @@ def get_mcp_config():
         api_key=os.getenv("MCP_API_KEY"),
         host=os.getenv("MCP_SERVER_HOST", "0.0.0.0"),
         port=int(os.getenv("MCP_SERVER_PORT", "8070")),
-        debug=os.getenv("MCP_DEBUG", "0") == "1"
+        debug=os.getenv("MCP_DEBUG", "0") == "1",
+        transport=os.getenv("MCP_TRANSPORT", "http")
     )
 
 
 def report_mcp_config(config: MCPConfig):
     """Report MCP server configuration."""
-    logger.info(f"Server configuration:")
+    logger.info("Server configuration:")
     logger.info(f"  Name: {config.server_name}")
     logger.info(f"  Version: {config.server_version}")
     logger.info(f"  Host: {config.host}")
@@ -111,25 +114,25 @@ def main():
         logger.info("=" * 60)
         logger.info("GenericSuite CodeGen MCP Server Startup")
         logger.info("=" * 60)
-        
+
         # Load environment
         load_environment()
-        
+
         # Validate environment
         if not validate_environment():
             sys.exit(1)
-        
+
         # Create MCP server configuration
         config = get_mcp_config()
         report_mcp_config(config)
-        
+
         # Create and start MCP server
         logger.info("Creating MCP server...")
         mcp_server = create_mcp_server(config)
-        
+
         logger.info("Starting MCP server...")
         mcp_server.run()
-        
+
     except KeyboardInterrupt:
         logger.info("\nMCP server stopped by user (Ctrl+C)")
         sys.exit(0)
@@ -144,25 +147,25 @@ async def main_async():
         logger.info("=" * 60)
         logger.info("GenericSuite CodeGen MCP Server Startup (Async)")
         logger.info("=" * 60)
-        
+
         # Load environment
         load_environment()
-        
+
         # Validate environment
         if not validate_environment():
             sys.exit(1)
-        
+
         # Create MCP server configuration
         config = get_mcp_config()
         report_mcp_config(config)
-        
+
         # Create and start MCP server
         logger.info("Creating MCP server...")
         mcp_server = create_mcp_server(config)
-        
+
         logger.info("Starting MCP server (async)...")
         await mcp_server.run_async()
-        
+
     except KeyboardInterrupt:
         logger.info("\nMCP server stopped by user (Ctrl+C)")
     except Exception as e:

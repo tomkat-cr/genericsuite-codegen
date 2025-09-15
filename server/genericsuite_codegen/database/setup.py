@@ -25,7 +25,7 @@ from pymongo.errors import (
 
 from genericsuite_codegen.document_processing.types import EmbeddedChunk
 
-DEBUG = True
+DEBUG = False
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -445,7 +445,8 @@ class DatabaseManager:
                 if results:  # If vector search returns results, use them
                     return results
                 else:
-                    logger.info("Vector search returned no results, falling back to cosine similarity")
+                    logger.info(
+                        "Vector search returned no results, falling back to cosine similarity")
                     return self._cosine_similarity_search(
                         collection, query_embedding, limit, file_type_filter
                     )

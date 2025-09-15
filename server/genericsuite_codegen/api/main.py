@@ -58,7 +58,7 @@ from genericsuite_codegen.database.setup import (
     test_database_connection,
 )
 
-DEBUG = True
+DEBUG = False
 
 # Configure logging
 logger = logging.getLogger(__name__)

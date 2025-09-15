@@ -36,7 +36,7 @@ interface GeneratedFile {
 }
 
 interface GenerationRequest {
-  type: 'json-config' | 'langchain-tool' | 'mcp-tool' | 'frontend' | 'backend'
+  type: 'json_config' | 'langchain_tool' | 'mcp_tool' | 'frontend' | 'backend'
   requirements: string
   config_type?: 'table'
   framework?: string
@@ -46,7 +46,7 @@ interface GenerationRequest {
 }
 
 export function CodeGenerationPage() {
-  const [activeTab, setActiveTab] = useState('json-config')
+  const [activeTab, setActiveTab] = useState('json_config')
   const [requirements, setRequirements] = useState('')
   const [tableName, setTableName] = useState('')
   const [toolName, setToolName] = useState('')
@@ -72,22 +72,22 @@ export function CodeGenerationPage() {
     const request: GenerationRequest = {
       type: activeTab as GenerationRequest['type'],
       requirements: requirements.trim(),
-      config_type: activeTab === 'json-config' ? 'table' : undefined,
+      config_type: activeTab === 'json_config' ? 'table' : undefined,
       framework: activeTab === 'backend' ? framework : undefined,
-      table_name: activeTab === 'json-config' ? tableName : undefined,
-      tool_name: ['langchain-tool', 'mcp-tool'].includes(activeTab) ? toolName : undefined,
+      table_name: activeTab === 'json_config' ? tableName : undefined,
+      tool_name: ['langchain_tool', 'mcp_tool'].includes(activeTab) ? toolName : undefined,
       description: description.trim() || undefined
     }
 
     let endpoint = null
     switch (activeTab) {
-      case 'json-config':
+      case 'json_config':
         endpoint = '/generate/json-config'
         break
-      case 'langchain-tool':
+      case 'langchain_tool':
         endpoint = '/generate/python-code'
         break
-      case 'mcp-tool':
+      case 'mcp_tool':
         endpoint = '/generate/python-code'
         break
       case 'frontend':
@@ -221,15 +221,15 @@ export function CodeGenerationPage() {
           <CardContent className="space-y-6">
             <Tabs value={activeTab} onValueChange={setActiveTab}>
               <TabsList className="grid w-full grid-cols-2 lg:grid-cols-3 mb-5">
-                <TabsTrigger value="json-config" className="text-xs">
+                <TabsTrigger value="json_config" className="text-xs">
                   <Database className="h-3 w-3 mr-1" />
                   JSON Config
                 </TabsTrigger>
-                <TabsTrigger value="langchain-tool" className="text-xs">
+                <TabsTrigger value="langchain_tool" className="text-xs">
                   <Wrench className="h-3 w-3 mr-1" />
                   Langchain
                 </TabsTrigger>
-                <TabsTrigger value="mcp-tool" className="text-xs">
+                <TabsTrigger value="mcp_tool" className="text-xs">
                   <Settings className="h-3 w-3 mr-1" />
                   MCP Tool
                 </TabsTrigger>
@@ -245,7 +245,7 @@ export function CodeGenerationPage() {
 
               <div className="mb-1">&nbsp;</div>
 
-              <TabsContent value="json-config" className="space-y-4">
+              <TabsContent value="json_config" className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="table-name">Table Name</Label>
                   <Input
@@ -267,11 +267,11 @@ export function CodeGenerationPage() {
                 </div>
               </TabsContent>
 
-              <TabsContent value="langchain-tool" className="space-y-4">
+              <TabsContent value="langchain_tool" className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="langchain-tool-name">Tool Name</Label>
+                  <Label htmlFor="langchain_tool-name">Tool Name</Label>
                   <Input
-                    id="langchain-tool-name"
+                    id="langchain_tool-name"
                     placeholder="e.g., search_documents, process_data"
                     value={toolName}
                     onChange={(e) => setToolName(e.target.value)}
@@ -298,11 +298,11 @@ export function CodeGenerationPage() {
                 </div>
               </TabsContent>
 
-              <TabsContent value="mcp-tool" className="space-y-4">
+              <TabsContent value="mcp_tool" className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="mcp-tool-name">Tool Name</Label>
+                  <Label htmlFor="mcp_tool-name">Tool Name</Label>
                   <Input
-                    id="mcp-tool-name"
+                    id="mcp_tool-name"
                     placeholder="e.g., file_processor, api_client"
                     value={toolName}
                     onChange={(e) => setToolName(e.target.value)}
