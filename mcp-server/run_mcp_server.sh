@@ -88,10 +88,8 @@ fi
 copy_lib
 
 if [ "$MCP_INSPECTOR" = "1" ]; then
-    npx @modelcontextprotocol/inspector \
-        poetry \
-        run \
-        MCP_TRANSPORT=stdio $PYTHON_CMD start_mcp_server.py
+    MCP_TRANSPORT=stdio npx @modelcontextprotocol/inspector \
+        poetry run $PYTHON_CMD start_mcp_server.py $ADDITIONAL_ARGS
 else
     poetry run $PYTHON_CMD start_mcp_server.py $ADDITIONAL_ARGS
 fi

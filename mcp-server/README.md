@@ -26,6 +26,12 @@ pip install -r requirements.txt
 Create a `.env` file or set environment variables:
 
 ```bash
+make init-app-environment
+```
+
+Configure environment variablesL
+
+```bash
 # MCP Server Configuration
 MCP_SERVER_HOST=0.0.0.0
 MCP_SERVER_PORT=8070
@@ -46,17 +52,11 @@ MONGODB_URI=mongodb://localhost:27017/genericsuite_codegen
 ### Start the MCP Server
 
 ```bash
-# Using the startup script (recommended)
-poetry run python start_mcp_server.py
+# Install development dependencies
+make install
 
-# Using the module
-poetry run python -m genericsuite_codegen
-
-# Using Make
-make start
-
-# Async mode
-make start-async
+# Start the server (with Docker Compose)
+make run
 ```
 
 ### Test the Server
@@ -146,19 +146,10 @@ The server provides these MCP resources:
 
 ```bash
 # Install development dependencies
-poetry install
+make install
 
-# Format code
-make format
-
-# Run linting
-make lint
-
-# Check environment
-make check-env
-
-# Clean up
-make clean
+# Start the server
+make dev
 ```
 
 ## Integration
@@ -170,18 +161,17 @@ To use this MCP server with MCP-compatible applications:
 3. Use the exposed tools and resources in your application
 
 Example MCP client configuration:
+
 ```json
 {
-  "mcpServers": {
-    "genericsuite-codegen": {
-      "command": "poetry",
-      "args": ["run", "python", "start_mcp_server.py"],
-      "cwd": "/path/to/mcp-server",
-      "env": {
-        "MCP_SERVER_PORT": "8070"
-      }
+    "mcpServers": {
+        "genericsuite-codegen": {
+            "url": "http://localhost:8070/mcp",
+            "headers": {
+                "MCP_API_KEY": "ag-api-key-..."
+            }
+        }
     }
-  }
 }
 ```
 
