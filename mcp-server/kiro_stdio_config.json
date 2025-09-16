@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "genericsuite-codegen-stdio": {
+      "command": "sh",
+      "args": [
+        "/absolute/path/to/genericsuite-codegen/mcp-server/run_mcp_server.sh"
+      ],
+      "env": {
+        "MCP_API_KEY": "ag-api-key-...",
+        "MCP_TRANSPORT": "stdio"
+      },
+      "disabled": false,
+      "autoApprove": []
+    }
+  }
+}
