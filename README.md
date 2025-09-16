@@ -128,6 +128,14 @@ make dev
 ```
 This starts all services in development mode with hot reloading.
 
+**Start working with the application**:
+
+- Open the browser and go to [http://localhost:3000](http://localhost:3000)
+
+- You should see the dashboard.
+
+![Dashboard](./assets/screenshots/genericsuite.codegen.ui.main.010.png)
+
 **Start individual services**:
 ```bash
 # Start the local MongoDB container
@@ -228,6 +236,10 @@ cd mcp-server && make check-env
 
 ### Main Page
 
+- Open the browser and go to [http://localhost:3000](http://localhost:3000)
+
+- You should see the dashboard.
+
 ![Main Page](./assets/screenshots/genericsuite.codegen.ui.main.010.png)
 
 ### Knowledge Base Page
@@ -236,16 +248,42 @@ cd mcp-server && make check-env
 
 ### Conversation Page
 
+- Click on the "AI Chat" button.
+
 ![Conversation Page](./assets/screenshots/genericsuite.codegen.ui.chat.010.png)
+
+- Ask a question to the AI assistant using the bottom text area.
+
 ![Conversation Page](./assets/screenshots/genericsuite.codegen.ui.chat.020.png)
 
 ### Code Generation Page
 
+- Click on the "Code Generation" button.
+
+- For the "JSON Config" tab, fill the "Table Title" and "Table Requirements" input and text area.
+
 ![Code Generation Page](./assets/screenshots/genericsuite.codegen.ui.code.generation.010.png)
+
+- For the "Langchain Tool" tab, fill the "Tool Name", "Tool Description",` and "Tool Requirements" input and text area.
+
 ![Code Generation Page](./assets/screenshots/genericsuite.codegen.ui.code.generation.020.png)
+
+- For the "MCP Tool" tab, fill the "Tool Name", "Tool Description", and "Tool Requirements" input and text area.
+
 ![Code Generation Page](./assets/screenshots/genericsuite.codegen.ui.code.generation.030.png)
+
+- For the "Frontend" tab, fill the "Frontend Requirements" input and text area.
+
 ![Code Generation Page](./assets/screenshots/genericsuite.codegen.ui.code.generation.040.png)
+
+- For the "Backend" tab, select the "Backend Framework" and fill the "Backend Requirements" input and text area.
+
 ![Code Generation Page](./assets/screenshots/genericsuite.codegen.ui.code.generation.050.png)
+
+- Click on the "Generate Code" button.
+
+- You should see the generated code in the preview area.
+
 ![Code Generation Page](./assets/screenshots/genericsuite.codegen.ui.code.generation.060.png)
 ![Code Generation Page](./assets/screenshots/genericsuite.codegen.ui.code.generation.070.png)
 
