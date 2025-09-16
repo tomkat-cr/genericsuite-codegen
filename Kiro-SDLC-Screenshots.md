@@ -28,7 +28,7 @@
 
 ![Screenshot%202025-09-15%20at%2011.33.00 AM.png](./assets/sdlc_screenshots/Screenshot%202025-09-15%20at%2011.33.00 AM.png)
 
-## Fixing the task execution
+## Fixing issues with code generated in the task execution
 
 ![Screenshot%202025-09-15%20at%2011.33.32 AM.png](./assets/sdlc_screenshots/Screenshot%202025-09-15%20at%2011.33.32 AM.png)
 
@@ -53,3 +53,22 @@
 ![Conversation](./assets/screenshots/genericsuite.codegen.ui.chat.020.png)
 
 ![Screenshot%202025-09-15%20at%2012.15.46 PM.png](./assets/sdlc_screenshots/Screenshot%202025-09-15%20at%2012.15.46 PM.png)
+
+## Generating the steering documents
+
+![Screenshot%202025-09-16%20at%206.03.48 AM.png](./assets/sdlc_screenshots/Screenshot%202025-09-16%20at%206.03.48 AM.png)
+
+![Screenshot%202025-09-16%20at%206.04.26 AM.png](./assets/sdlc_screenshots/Screenshot%202025-09-16%20at%206.04.26 AM.png)
+
+![Screenshot%202025-09-16%20at%206.05.03 AM.png](./assets/sdlc_screenshots/Screenshot%202025-09-16%20at%206.05.03 AM.png)
+
+## Generating an agent hook
+
+![Screenshot%202025-09-16%20at%206.20.52 AM.png](./assets/sdlc_screenshots/Screenshot%202025-09-16%20at%206.20.52 AM.png)
+
+![Screenshot%202025-09-16%20at%206.31.32 AM.png](./assets/sdlc_screenshots/Screenshot%202025-09-16%20at%206.31.32 AM.png)
+
+![Screenshot%202025-09-16%20at%206.33.46 AM.png](./assets/sdlc_screenshots/Screenshot%202025-09-16%20at%206.33.46 AM.png)
+
+![Screenshot%202025-09-16%20at%206.34.08 AM.png](./assets/sdlc_screenshots/Screenshot%202025-09-16%20at%206.34.08 AM.png)
+

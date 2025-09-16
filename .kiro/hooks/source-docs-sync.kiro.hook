@@ -1,0 +1,28 @@
+{
+  "enabled": true,
+  "name": "Source Code Documentation Sync",
+  "description": "Monitors all source files in the repository (TypeScript in ui/, Python in server/ and mcp-server/, and other relevant files) and triggers documentation updates when changes are detected",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "ui/**/*.ts",
+      "ui/**/*.tsx",
+      "ui/**/*.js",
+      "ui/**/*.jsx",
+      "server/**/*.py",
+      "mcp-server/**/*.py",
+      "*.md",
+      "*.json",
+      "package.json",
+      "pyproject.toml",
+      "Makefile",
+      "docker-compose.yml",
+      ".env.example"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Source code files have been modified. Please review the changes and update the relevant documentation including:\n1. Main README.md if core functionality changed\n2. Folder-specific READMEs (ui/README.md, server/README.md, mcp-server/README.md) if changes are specific to those components\n3. Any documentation in the /docs folder if it exists\n4. Agent steering files in .kiro/steering/ folder if architectural or workflow changes occurred\n\nFocus on keeping documentation synchronized with the actual implementation, updating API documentation, usage examples, and architectural descriptions as needed."
+  }
+}
