@@ -11,7 +11,8 @@ GenericSuite CodeGen is an AI-powered RAG (Retrieval-Augmented Generation) syste
 
 ## Kiro-Driven Development Approach
 
-Check the [Kiro-Usage.md](./Kiro-Usage.md) file for more details.
+* How we used Kiro to develop the project: [Kiro-Usage.md](./Kiro-Usage.md)
+* Kiro step-by-step process to develop the project: [Kiro-SDLC-Screenshots.md](./Kiro-SDLC-Screenshots.md).
 
 ## Table of Contents
 

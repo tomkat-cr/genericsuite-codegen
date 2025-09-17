@@ -1,34 +1,66 @@
 # Kiro SDLC Screenshots
 
+This file contains the Kiro SDLC (Software Development Life Cycle) step-by-step process followed to develop the GenericSuite CodeGen project from scratch.
+
+## Table of Contents
+
+- [Starting Kiro chat with the initial prompt](#starting-kiro-chat-with-the-initial-prompt)
+- [Refining the initial prompt and refreshing the requirements.md](#refining-the-initial-prompt-and-refreshing-the-requirementsmd)
+- [Generating design.md and task.md](#generating-designmd-and-taskmd)
+- [Starting task execution](#starting-task-execution)
+- [Fixing issues with code generated in the task execution](#fixing-issues-with-code-generated-in-the-task-execution)
+- [Create the deploy-dependency-sync spec](#create-the-deploy-dependency-sync-spec)
+- [Fix MCP server running issues](#fix-mcp-server-running-issues)
+- [Create the Conversation issue fixes spec](#create-the-conversation-issue-fixes-spec)
+- [Finally the application is working](#finally-the-application-is-working)
+- [Generating the steering documents](#generating-the-steering-documents)
+- [Generating an agent hook](#generating-an-agent-hook)
+
 ## Starting Kiro chat with the initial prompt
 
-Check the initial prompt in the [BuildPrompt.md](./BuildPrompt.md) file.
+- Write a prompt to describe the project. In this case, I used the initial prompt in the [BuildPrompt.md](./BuildPrompt.md) file. The template to generate it can be found [here](https://github.com/coleam00/ottomator-agents/blob/main/foundational-rag-agent/PLANNING.md). It was adapted to the project requirements: use MongoDB Vector Search, monorepo project structure using npm workspaces, deployment scripts and configuration files, use of ReactJS, etc.
 
-![Screenshot%202025-09-15%20at%2011.23.39 AM.png](./assets/sdlc_screenshots/Screenshot%202025-09-15%20at%2011.23.39 AM.png)
+- Open a new "New Session" in the Kiro chat.
+
+- Paste the following prompt:
+
+```prompt
+Start planning using the context on the #BuildPrompt.md file
+```
+
+- Click on the "Up Arrow" button.
+
+- Kiro started generating the [requirements.md](./.kiro/specs/genericsuite-codegen/requirements.md) file. 
 
 ## Refining the initial prompt and refreshing the requirements.md
 
-- Make chanfes to the initial prompt.
+- I reviewed the `requirements.md` file and noticed some missing elements, so the initial prompt was modified 4+ times to fix it.
 
 ![Screenshot%202025-09-15%20at%2011.24.11 AM.png](./assets/sdlc_screenshots/Screenshot%202025-09-15%20at%2011.24.11 AM.png)
 
-- Go to the `requirements.md` file and click on the "Refine" button.
+- Each time the prompt was modified, the `requirements.md` file was regenerated using the `Refine` button.
 
 ![Screenshot%202025-09-15%20at%2011.30.21 AM.png](./assets/sdlc_screenshots/Screenshot%202025-09-15%20at%2011.30.21 AM.png)
 
 ## Generating design.md and task.md
 
-- Kiro asks if you want to go to the next step, click on the "Continue" button.
+- Once the `requirements.md` file was ready, Kiro asks if you want to go to the next step, click on the `Move to the design phase` button.
+
+- Kiro started generating the [design.md](./.kiro/specs/genericsuite-codegen/design.md) file.
 
 ![Screenshot%202025-09-15%20at%2011.28.41 AM.png](./assets/sdlc_screenshots/Screenshot%202025-09-15%20at%2011.28.41 AM.png)
 
+- Once the `design.md` file was reviewed, I clicked on the `Move to the tasks phase` button.
+
 ![Screenshot%202025-09-15%20at%2011.28.58 AM.png](./assets/sdlc_screenshots/Screenshot%202025-09-15%20at%2011.28.58 AM.png)
+
+- Then Kiro generated the [tasks.md](./.kiro/specs/genericsuite-codegen/tasks.md) file.
 
 ![Screenshot%202025-09-15%20at%2011.30.33 AM.png](./assets/sdlc_screenshots/Screenshot%202025-09-15%20at%2011.30.33 AM.png)
 
 ## Starting task execution
 
-- Go the `task.md` file and click on the "Start task" button.
+- Go the `task.md` file and click on the `Start task` button.
 
 ![Screenshot%202025-09-15%20at%2011.31.35 AM.png](./assets/sdlc_screenshots/Screenshot%202025-09-15%20at%2011.31.35 AM.png)
 

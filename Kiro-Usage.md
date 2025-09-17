@@ -1,4 +1,6 @@
-# How Kiro Transformed the Development of GenericSuite CodeGen: A Comprehensive AI-Powered RAG System
+# How Kiro Transformed the Development of GenericSuite CodeGen
+
+![Kiro Specs](./assets/kiro-specs-start.gif)
 
 ## Project Overview
 
@@ -20,14 +22,28 @@
 
 The development process was methodically structured around Kiro's capabilities:
 
-**Foundation Phase**: The development cycle began with the comprehensive [BuildPrompt.md](./BuildPrompt.md) initial prompt file - a 1,981-line specification that served as the project's north star. This document contained:
+**Foundation Phase**: The development cycle began with the comprehensive [BuildPrompt.md](./BuildPrompt.md) initial prompt file - a 1,981-line specification that served as the project's north star.
+
+This document contained:
 - Complete architecture specifications
 - Technology stack requirements
 - Database schemas and API endpoints
 - Code generation rules and patterns
 - Environment configuration templates
 
-This [prompt](./BuildPrompt.md) file was used to generate the entire project, including the code, scripts, and configuration files. With it, the first [specs](https://kiro.dev/docs/specs/) files were generated
+The template to generate the [prompt](./BuildPrompt.md) can be found [here](https://github.com/coleam00/ottomator-agents/blob/main/foundational-rag-agent/PLANNING.md). It was adapted to the project requirements: use MongoDB Vector Search, monorepo project structure using npm workspaces, deployment scripts and configuration files, use of ReactJS, etc.
+
+Once the first version of the [prompt](./BuildPrompt.md) was ready, the SLDC process was started with the following prompt:
+
+```prompt
+Start planning using the context on the #BuildPrompt.md file
+```
+
+Kiro started generating the [requirements.md](./.kiro/specs/genericsuite-codegen/requirements.md) file. It was reviewed and I noticed some missing elements, so the initial prompt was modified 4+ times to fix it. Each time the prompt was modified, the `requirements.md` file was regenerated using the "Refine" button.
+
+Once ready, the `Move to the design phase` button was clicked. Kiro started generating the [design.md](./.kiro/specs/genericsuite-codegen/design.md) file. Once reviewed, click on the `Move to the tasks phase` button. Then Kiro generated the [tasks.md](./.kiro/specs/genericsuite-codegen/tasks.md) file.
+
+Then the first [specs](https://kiro.dev/docs/specs/) files were generated:
 
 * [requirements.md](./.kiro/specs/genericsuite-codegen/requirements.md)
 * [design.md](./.kiro/specs/genericsuite-codegen/design.md)
