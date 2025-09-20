@@ -175,6 +175,14 @@ Example MCP client configuration:
 }
 ```
 
+There are configuration files for different MCP clients in the `mcp-server` directory.
+
+- [claude_desktop_http_config.json](./claude_desktop_http_config.json) for Claude Desktop with HTTP transport
+- [claude_desktop_stdio_config.json](./claude_desktop_stdio_config.json) for Claude Desktop with STDIO transport
+- [vscode_mcp_http_config.json](./vscode_mcp_http_config.json) for VS Code with HTTP transport
+- [vscode_mcp_stdio_config.json](./vscode_mcp_stdio_config.json) for VS Code with STDIO transport
+- [kiro_stdio_config.json](./kiro_stdio_config.json) for Kiro with STDIO transport (Kiro is not supported with HTTP transport)
+
 ## Troubleshooting
 
 ### Common Issues

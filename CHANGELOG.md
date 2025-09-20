@@ -17,7 +17,7 @@ This project adheres to [Semantic Versioning](http://semver.org/) and [Keep a Ch
 ### Security
 
 
-## [1.0.0] - 2025-08-01
+## [1.0.0] - 2025-09-15
 
 ### Added
 - Project ideation, initial prompt development and code generation with Kiro for the [Code with Kiro Hackathon](https://kiro.devpost.com/).

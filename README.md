@@ -11,7 +11,8 @@ GenericSuite CodeGen is an AI-powered RAG (Retrieval-Augmented Generation) syste
 
 ## Kiro-Driven Development Approach
 
-Check the [Kiro-Usage.md](./Kiro-Usage.md) file for more details.
+* How we used Kiro to develop the project: [Kiro-Usage.md](./Kiro-Usage.md)
+* Kiro step-by-step process to develop the project: [Kiro-SDLC-Screenshots.md](./Kiro-SDLC-Screenshots.md).
 
 ## Table of Contents
 
@@ -128,6 +129,14 @@ make dev
 ```
 This starts all services in development mode with hot reloading.
 
+**Start working with the application**:
+
+- Open the browser and go to [http://localhost:3000](http://localhost:3000)
+
+- You should see the dashboard.
+
+![Dashboard](./assets/screenshots/genericsuite.codegen.ui.main.010.png)
+
 **Start individual services**:
 ```bash
 # Start the local MongoDB container
@@ -226,7 +235,7 @@ cd mcp-server && make check-env
 
 ## Screenshots
 
-### Main Page
+### Main Page / Dashboard
 
 ![Main Page](./assets/screenshots/genericsuite.codegen.ui.main.010.png)
 
@@ -234,18 +243,44 @@ cd mcp-server && make check-env
 
 ![Knowledge Base Page](./assets/screenshots/genericsuite.codegen.ui.kb.010.png)
 
-### Conversation Page
+### AI Chat Page
 
-![Conversation Page](./assets/screenshots/genericsuite.codegen.ui.chat.010.png)
+- Click on the "AI Chat" button.
+
+![AI Chat Page](./assets/screenshots/genericsuite.codegen.ui.chat.010.png)
+
+- Ask a question to the AI assistant using the bottom text area.
+
 ![Conversation Page](./assets/screenshots/genericsuite.codegen.ui.chat.020.png)
 
 ### Code Generation Page
 
+- Click on the "Code Generation" button.
+
+- For the "JSON Config" tab, fill the "Table Title" and "Table Requirements" input and text area.
+
 ![Code Generation Page](./assets/screenshots/genericsuite.codegen.ui.code.generation.010.png)
+
+- For the "Langchain Tool" tab, fill the "Tool Name", "Tool Description",` and "Tool Requirements" input and text area.
+
 ![Code Generation Page](./assets/screenshots/genericsuite.codegen.ui.code.generation.020.png)
+
+- For the "MCP Tool" tab, fill the "Tool Name", "Tool Description", and "Tool Requirements" input and text area.
+
 ![Code Generation Page](./assets/screenshots/genericsuite.codegen.ui.code.generation.030.png)
+
+- For the "Frontend" tab, fill the "Frontend Requirements" input and text area.
+
 ![Code Generation Page](./assets/screenshots/genericsuite.codegen.ui.code.generation.040.png)
+
+- For the "Backend" tab, select the "Backend Framework" and fill the "Backend Requirements" input and text area.
+
 ![Code Generation Page](./assets/screenshots/genericsuite.codegen.ui.code.generation.050.png)
+
+- Click on the "Generate Code" button.
+
+- You should see the generated code in the preview area.
+
 ![Code Generation Page](./assets/screenshots/genericsuite.codegen.ui.code.generation.060.png)
 ![Code Generation Page](./assets/screenshots/genericsuite.codegen.ui.code.generation.070.png)
 
