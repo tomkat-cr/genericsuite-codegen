@@ -235,11 +235,7 @@ cd mcp-server && make check-env
 
 ## Screenshots
 
-### Main Page
-
-- Open the browser and go to [http://localhost:3000](http://localhost:3000)
-
-- You should see the dashboard.
+### Main Page / Dashboard
 
 ![Main Page](./assets/screenshots/genericsuite.codegen.ui.main.010.png)
 
@@ -247,11 +243,11 @@ cd mcp-server && make check-env
 
 ![Knowledge Base Page](./assets/screenshots/genericsuite.codegen.ui.kb.010.png)
 
-### Conversation Page
+### AI Chat Page
 
 - Click on the "AI Chat" button.
 
-![Conversation Page](./assets/screenshots/genericsuite.codegen.ui.chat.010.png)
+![AI Chat Page](./assets/screenshots/genericsuite.codegen.ui.chat.010.png)
 
 - Ask a question to the AI assistant using the bottom text area.
 

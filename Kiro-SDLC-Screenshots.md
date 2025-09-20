@@ -86,7 +86,7 @@ gscodegen-server         |     from ..agent.agent import initialize_agent, get_a
 gscodegen-server         | ImportError: attempted relative import beyond top-level package
 gscodegen-server exited with code 0
 
-I want ther python code to avoid use relative imports
+I want the python code to avoid use relative imports
 ```
 
 ![Screenshot%202025-09-15%20at%2011.33.32 AM.png](./assets/sdlc_screenshots/Screenshot%202025-09-15%20at%2011.33.32 AM.png)
@@ -98,7 +98,7 @@ I want ther python code to avoid use relative imports
 - Paste the following prompt:
 
 ```prompt
-I need a (python/bash) code that reads the `[tool.poetry.dependencies]` dependencies list from #pyproject.toml  and #pyproject.toml  files, summarize all unique dependencies/versions and replace the `RUN pip install --upgrade pip && pip install --no-cache-dir \` dependencies list in the #Dockerfile , translating from poetry to pip dependency/version specification, so I can maintain it updated when I change any of thoe two pyproject.toml files
+I need a (python/bash) code that reads the `[tool.poetry.dependencies]` dependencies list from #pyproject.toml  and #pyproject.toml  files, summarize all unique dependencies/versions and replace the `RUN pip install --upgrade pip && pip install --no-cache-dir \` dependencies list in the #Dockerfile , translating from poetry to pip dependency/version specification, so I can maintain it updated when I change any of those two pyproject.toml files
 ```
 
 ![Screenshot%202025-09-15%20at%2011.35.51 AM.png](./assets/sdlc_screenshots/Screenshot%202025-09-15%20at%2011.35.51 AM.png)
@@ -114,7 +114,7 @@ I need a (python/bash) code that reads the `[tool.poetry.dependencies]` dependen
 - Paste the following prompt:
 
 ```prompt
-Running the #start_mcp_server.py this error is heppenning:
+Running the #start_mcp_server.py this error is happening:
 
 Traceback (most recent call last):
   File "/code/mcp-server/start_mcp_server.py", line 23, in <module>
@@ -131,16 +131,16 @@ ModuleNotFoundError: No module named 'genericsuite_codegen.mcp_server'
 - Paste the following prompt:
 
 ```prompt
-I'm having issues with the conversartions in the #ChatPage.tsx:
+I'm having issues with the conversations in the #ChatPage.tsx:
 
-1. The user and assistant messages are not  being stored in the corresponding (current) conversionatio. The conversatios are created but messages are not stored.
-2. I think all conversations are being stored with the same title,. I had 3 different chats and all conversartion titles got the same title as the last one.
+1. The user and assistant messages are not  being stored in the corresponding (current) conversation. The conversations are created but messages are not stored.
+2. I think all conversations are being stored with the same title,. I had 3 different chats and all conversation titles got the same title as the last one.
 
 I want you to fix it in #endpoint_methods.py and #ChatPage.tsx.
 
 Also I need the following:
 
-3. I want yo have a way to let the user delete conversations and rename its title.
+3. I want to have a way to let the user delete conversations and rename its title.
 ```
 
 ![Screenshot%202025-09-15%20at%2011.43.55 AM.png](./assets/sdlc_screenshots/Screenshot%202025-09-15%20at%2011.43.55 AM.png)
