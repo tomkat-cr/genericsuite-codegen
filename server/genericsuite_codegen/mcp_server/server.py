@@ -4,7 +4,9 @@ FastMCP Server implementation for GenericSuite CodeGen.
 This module implements the MCP server that exposes the AI agent capabilities
 as standardized MCP tools and resources for integration with external tools.
 """
-
+import os
+import json
+import sys
 import asyncio
 import logging
 from dataclasses import dataclass
@@ -26,6 +28,18 @@ from ..agent.tools import KnowledgeBaseTool
 
 DEBUG = False
 
+DEFAULT_MCP_TRANSPORT = "http"
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler('mcp_server.log')
+    ]
+)
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO if DEBUG else logging.WARNING)
 
@@ -40,7 +54,7 @@ class MCPConfig:
     host: str = "0.0.0.0"
     port: int = 8070
     debug: bool = False
-    transport: str = "http"  # or "stdio"
+    transport: str = DEFAULT_MCP_TRANSPORT  # "http" or "stdio"
 
 
 class GenericSuiteMCPServer:
@@ -563,3 +577,89 @@ def create_mcp_server(config: MCPConfig) -> GenericSuiteMCPServer:
         Configured MCP server instance
     """
     return GenericSuiteMCPServer(config)
+
+
+def load_environment(current_dir: str):
+    """Load environment variables from .env file."""
+    try:
+        from dotenv import load_dotenv
+
+        # Look for .env file in current directory or parent directories
+        env_file = current_dir / ".env"
+        if not env_file.exists():
+            env_file = current_dir.parent / ".env"
+
+        if env_file.exists():
+            load_dotenv(env_file)
+            logger.info(f"Loaded environment from {env_file}")
+        else:
+            logger.warning(
+                "No .env file found, using system environment variables")
+
+    except ImportError:
+        logger.warning(
+            "python-dotenv not available, using system environment variables")
+
+
+def validate_environment():
+    """Validate required environment variables."""
+    required_vars = []
+    optional_vars = {
+        "MCP_SERVER_HOST": "0.0.0.0",
+        "MCP_SERVER_PORT": "8070",
+        "MCP_API_KEY": None,
+        "MCP_DEBUG": "0",
+        "MCP_TRANSPORT": DEFAULT_MCP_TRANSPORT  # "http" or "stdio"
+    }
+
+    missing_vars = []
+    for var in required_vars:
+        if not os.getenv(var):
+            missing_vars.append(var)
+
+    if missing_vars:
+        logger.error(f"Missing required environment variables: {missing_vars}")
+        return False
+
+    # Log optional variables
+    for var, default in optional_vars.items():
+        value = os.getenv(var, default)
+        logger.info(f"{var}: {value}")
+
+    return True
+
+
+def get_mcp_config():
+    """Get MCP server configuration from environment variables."""
+    return MCPConfig(
+        server_name=os.getenv("MCP_SERVER_NAME", "genericsuite-codegen"),
+        server_version=os.getenv("MCP_SERVER_VERSION", "1.0.0"),
+        api_key=os.getenv("MCP_API_KEY"),
+        host=os.getenv("MCP_SERVER_HOST", "0.0.0.0"),
+        port=int(os.getenv("MCP_SERVER_PORT", "8070")),
+        debug=os.getenv("MCP_DEBUG", "0") == "1",
+        transport=os.getenv("MCP_TRANSPORT", DEFAULT_MCP_TRANSPORT)
+    )
+
+
+def report_mcp_config(config: MCPConfig):
+    """Report MCP server configuration."""
+    logger.info("Server configuration:")
+    logger.info(f"  Name: {config.server_name}")
+    logger.info(f"  Version: {config.server_version}")
+    logger.info(f"  Host: {config.host}")
+    logger.info(f"  Port: {config.port}")
+    logger.info(f"  Debug: {config.debug}")
+    logger.info(f"  API Key: {'Set' if config.api_key else 'Not set'}")
+    logger.info(f"  Transport: {config.transport}")
+
+
+def print_output(message: str):
+    """Print output to the terminal."""
+    mcp_transport = os.getenv("MCP_TRANSPORT", DEFAULT_MCP_TRANSPORT)
+    if mcp_transport == "http":
+        print(message)
+    else:
+        json_message = json.dumps({
+            "message": message})
+        print(json_message)

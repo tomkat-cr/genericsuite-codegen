@@ -6,9 +6,14 @@
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 cd $SCRIPT_DIR
 
+MCP_RUN_USING_POETRY=1
+
 clean_up() {
     echo "🧹 Cleaning up..."
     rm -rf genericsuite_codegen
+    if [ ! "$MCP_RUN_USING_POETRY" = "1" ]; then
+        deactivate
+    fi
 }
 
 # Always execute the function clean_up when the script is terminated
@@ -16,11 +21,9 @@ trap clean_up EXIT
 
 copy_lib() {
     echo "🔗 Linking common assets..."
-    cp -r ../server/genericsuite_codegen .
+    # cp -r ../server/genericsuite_codegen .
+    ln -s ../server/genericsuite_codegen .
 }
-
-# CLI Parameters
-# MCP_INSPECTOR="${2:-0}"
 
 # .env file read
 if [ -f ../.env ]; then
@@ -45,28 +48,37 @@ if ! command -v python3 &> /dev/null; then
 else
     PYTHON_CMD="python3"
 fi
-
 echo "🐍 Using Python: $PYTHON_CMD"
+
+if [ ! "$MCP_RUN_USING_POETRY" = "1" ]; then
+    echo "🐍 Creating virtual environment..."
+    $PYTHON_CMD -m venv .venv
+    source .venv/bin/activate
+fi
 
 # Check if requirements are installed
 echo "📦 Checking dependencies..."
-if ! poetry run python -c "import fastmcp" &> /dev/null; then
+
+if [ "$MCP_RUN_USING_POETRY" = "1" ]; then
+    CHECKING_CMD_PREFIX="poetry run python"
+    INSTALLING_CMD="poetry install"
+else
+    CHECKING_CMD_PREFIX="$PYTHON_CMD"
+    INSTALLING_CMD="$PYTHON_CMD -m pip install --upgrade pip && $PYTHON_CMD -m pip install -r requirements.txt"
+fi
+
+
+if ! $CHECKING_CMD_PREFIX -c "import fastmcp" &> /dev/null; then
     echo "📥 Installing dependencies..."
-    poetry install
+    $INSTALLING_CMD
     if [ $? -ne 0 ]; then
         echo "❌ Failed to install dependencies. Please check requirements.txt"
+        deactivate
         exit 1
     fi
 fi
 
 echo "✅ Dependencies verified"
-echo "🚀 Starting MCP server..."
-echo ""
-
-# Set PYTHONPATH to include the server directory
-# export PYTHONPATH="$SCRIPT_DIR:$PYTHONPATH"
-
-# Start the server
 
 # Default values for environment variables
 
@@ -77,7 +89,7 @@ fi
 
 # MCP server port
 if [ -z "$MCP_SERVER_PORT" ]; then
-    export MCP_SERVER_PORT=8070
+    export MCP_SERVER_PORT=8000
 fi
 
 # MCP server host
@@ -85,11 +97,33 @@ if [ -z "$MCP_SERVER_HOST" ]; then
     export MCP_SERVER_HOST=0.0.0.0
 fi
 
+if [ "$MCP_INSPECTOR" = "1" ]; then
+    export MCP_TRANSPORT="stdio"
+else
+    export MCP_TRANSPORT="http"
+fi
+
+APP_RUN_ARGS="MCP_SERVER_PORT=$MCP_SERVER_PORT MCP_SERVER_HOST=$MCP_SERVER_HOST MCP_TRANSPORT=$MCP_TRANSPORT"
+
+# Copy library
 copy_lib
 
+# Start the server
+echo "🚀 Starting MCP server..."
+echo ""
+
 if [ "$MCP_INSPECTOR" = "1" ]; then
-    MCP_TRANSPORT=stdio npx @modelcontextprotocol/inspector \
-        poetry run $PYTHON_CMD start_mcp_server.py $ADDITIONAL_ARGS
+    if [ "$MCP_RUN_USING_POETRY" = "1" ]; then
+        CLIENT_PORT=6274 SERVER_PORT=6277 npx @modelcontextprotocol/inspector \
+            poetry run env $APP_RUN_ARGS $PYTHON_CMD start_mcp_server.py $ADDITIONAL_ARGS
+    else
+        CLIENT_PORT=6274 SERVER_PORT=6277 npx @modelcontextprotocol/inspector \
+            env $APP_RUN_ARGS $PYTHON_CMD start_mcp_server.py $ADDITIONAL_ARGS
+    fi
 else
-    poetry run $PYTHON_CMD start_mcp_server.py $ADDITIONAL_ARGS
+    if [ "$MCP_RUN_USING_POETRY" = "1" ]; then
+        poetry run env $APP_RUN_ARGS $PYTHON_CMD start_mcp_server.py $ADDITIONAL_ARGS
+    else
+        env $APP_RUN_ARGS $PYTHON_CMD start_mcp_server.py $ADDITIONAL_ARGS
+    fi
 fi
