@@ -31,7 +31,7 @@ from .types import (
     IngestionRepositoryInfoLastCommit,
 )
 
-DEBUG = False
+DEBUG = True
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO if DEBUG else logging.WARNING)
@@ -53,7 +53,7 @@ class RepositoryCloner:
                 "GitPython not installed. Install with: pip install GitPython")
 
     def clone_repository(self, repo_url: str, force_refresh: bool = True
-                         ) -> bool:
+                         ) -> Dict[str, Any]:
         """
         Clone or update a repository.
 
@@ -64,6 +64,11 @@ class RepositoryCloner:
         Returns:
             True if successful, False otherwise
         """
+        response = {
+            'success': True,
+            'error_message': None,
+            'local_dir': str(self.local_dir)
+        }
         try:
             # Create parent directory if it doesn't exist
             self.local_dir.parent.mkdir(parents=True, exist_ok=True)
@@ -73,6 +78,7 @@ class RepositoryCloner:
 
             # Set the local directory to the parent directory + the repo name
             self.local_dir = self.local_dir / repo_name
+            response['local_dir'] = str(self.local_dir)
 
             # Handle existing directory
             if self.local_dir.exists():
@@ -87,7 +93,8 @@ class RepositoryCloner:
                         logger.info(
                             f"Updating existing repository: {self.local_dir}")
                         repo.remotes.origin.pull()
-                        return True
+                        return response
+
                     except Exception as e:
                         logger.warning(
                             f"Could not update existing repository: {e}")
@@ -96,9 +103,16 @@ class RepositoryCloner:
 
             # Clone repository
             logger.info(f"Cloning repository {repo_url} to {self.local_dir}")
-            git.Repo.clone_from(repo_url, self.local_dir)
+            try:
+                git.Repo.clone_from(repo_url, self.local_dir)
+            except Exception as e:
+                logger.error(f"Error cloning repository: {e}")
+                response['success'] = False
+                response['error_message'] = str(e)
+                return response
+
             logger.info("Repository cloned successfully")
-            return True
+            return response
 
         except Exception as e:
             logger.error(f"Error cloning repository: {e}")
@@ -107,12 +121,17 @@ class RepositoryCloner:
     def get_repository_info(self) -> IngestionRepositoryInfo:
         """Get information about the cloned repository."""
         if not self.local_dir.exists():
-            return {}
+            logger.error(f"Local directory: '{self.local_dir}' does not exist")
+            return {'path': str(self.local_dir)}
 
         try:
             repo = git.Repo(self.local_dir)
+        except Exception as e:
+            logger.warning(f"GIT: Could not get repository info: {e}")
+            return {'path': str(self.local_dir)}
 
-            return IngestionRepositoryInfo(
+        try:
+            repo_info = IngestionRepositoryInfo(
                 path=str(self.local_dir),
                 remote_url=repo.remotes.origin.url,
                 current_branch=repo.active_branch.name,
@@ -125,8 +144,12 @@ class RepositoryCloner:
                 ),
                 is_dirty=repo.is_dirty()
             )
+            logger.info(f"get_repository_info | Repository info: {repo_info}")
+            return repo_info
+
         except Exception as e:
-            logger.warning(f"Could not get repository info: {e}")
+            logger.warning(
+                f"IngestionRepositoryInfo: Could not get repository info: {e}")
             return {'path': str(self.local_dir)}
 
 
@@ -240,17 +263,19 @@ class DocumentIngestionOrchestrator:
             current_step="Cloning repository"
         )
 
-        success = self.cloner.clone_repository(self.repo_url, force_refresh)
+        cloner_response = self.cloner.clone_repository(
+            self.repo_url, force_refresh)
 
-        if success:
+        if cloner_response['success']:
             self._update_progress(increment_completed=True)
+            self.local_dir = cloner_response['local_dir']
         else:
             self._update_progress(
                 status=IngestionStatus.FAILED,
                 error_message="Failed to clone repository"
             )
 
-        return success
+        return cloner_response['success']
 
     def process_files(self) -> List[Document]:
         """Process all files in the repository."""
@@ -261,11 +286,15 @@ class DocumentIngestionOrchestrator:
 
         try:
             # Initialize processor manager
+            logger.info(
+                f"process_files | Processing files in {self.local_dir}")
             self.processor_manager = DocumentProcessorManager(self.local_dir)
 
             # Get file statistics
             stats = self.processor_manager.get_file_stats()
-            self._update_progress(total_files=stats['total_files'])
+            self._update_progress(
+                total_files=stats['total_files']
+            )
 
             # Process files
             documents = []
@@ -429,34 +458,46 @@ class DocumentIngestionOrchestrator:
         try:
             # Step 1: Clean up existing vectors if force refresh
             if force_refresh:
+                logger.info(
+                    "run_full_ingestion | Step 1/6: Cleaning up existing"
+                    " vectors...")
                 if not self.cleanup_existing_vectors():
                     return self._get_failure_result(
                         "Failed to clean up existing vectors")
 
             # Step 2: Clone repository
+            logger.info("run_full_ingestion | Step 2/6: Cloning repository...")
             if not self.clone_repository(force_refresh):
                 return self._get_failure_result("Failed to clone repository")
 
             # Step 3: Process files
+            logger.info("run_full_ingestion | Step 3/6: Processing files...")
             documents = self.process_files()
             if not documents:
                 return self._get_failure_result("No documents processed")
 
             # Step 4: Chunk documents
+            logger.info("run_full_ingestion | Step 4/6: Chunking documents...")
             chunks = self.chunk_documents(documents)
             if not chunks:
                 return self._get_failure_result("No chunks created")
 
             # Step 5: Generate embeddings
+            logger.info(
+                "run_full_ingestion | Step 5/6: Generating embeddings...")
             embedded_chunks = self.generate_embeddings(chunks)
             if not embedded_chunks:
                 return self._get_failure_result("No embeddings generated")
 
             # Step 6: Store vectors
+            logger.info("run_full_ingestion | Step 6/6: Storing vectors...")
             if not self.store_vectors(embedded_chunks):
                 return self._get_failure_result("Failed to store vectors")
 
             # Complete
+            logger.info(
+                "run_full_ingestion | Step 7: Ingestion completed "
+                "successfully")
             self.progress.completed_at = datetime.now()
             self._update_progress(
                 status=IngestionStatus.COMPLETED,
@@ -510,6 +551,11 @@ class DocumentIngestionOrchestrator:
         if self.progress.started_at and self.progress.completed_at:
             duration = (self.progress.completed_at -
                         self.progress.started_at).total_seconds()
+
+        self._update_progress(
+            status=IngestionStatus.FAILED,
+            error_message=error_message
+        )
 
         return IngestionResult(
             success=False,
