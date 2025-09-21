@@ -22,15 +22,19 @@ This project adheres to [Semantic Versioning](http://semver.org/) and [Keep a Ch
 ### Added
 - UI: Add path translation for sources in the chat interface, so local paths are displayed as GenericSuite web documentation URLs.
 - Add BASE_LOCAL_PATH and BASE_WEB_URL to .env.example and docker-compose.yml.example to support path translation for sources.
+- API: New endpoint to retrieve local repository information.
 
 ### Changed
 - MCP Server: Enhance server startup (python mcp_server.py) with new configuration methods and output formatting. Those method were moved from mac_server_startup.sh to mcp_server.py.
 - MCP Server: bash script does "ln -s ../server/genericsuite_codegen ." to link the server to the root of the project, instead of copying it.
 - MCP Server: Update Makefile to include requirements export command.
 - MCP Server: Update package.json for improved keyword formatting.
-- API: Refactored API endpoint methods to support path translation for sources.
+- API: Refactored API endpoint methods (/search and /query) to support path translation for sources.
+- API: Update RepositoryCloner to return detailed response on cloning status.
+- API: Enhance error handling and logging in ingestion process.
 - UI: Enhanced knowledge base search with improved result formatting.
 - UI: Updated Makefile to include a new command for rebuilding the UI (make rebuild-ui).
+- UI: Update KnowledgeBasePage to improve error messaging, debugging output and KB update status follow up.
 
 ### Fixed
 - MCP Server: MCP Inspector run fixed, now loads the server appropriately.
