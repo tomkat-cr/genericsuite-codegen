@@ -26,7 +26,7 @@ from ..api.endpoint_methods import get_endpoint_methods
 from ..agent.tools import KnowledgeBaseTool
 
 
-DEBUG = False
+DEBUG = True
 
 DEFAULT_MCP_TRANSPORT = "http"
 
@@ -146,7 +146,8 @@ class GenericSuiteMCPServer:
 
         @self.mcp.tool()
         async def search_knowledge_base(
-            query: str, limit: int = 5
+            query: str,
+            limit: int = 5
         ) -> Dict[str, Any]:
             """
             Search the GenericSuite knowledge base for relevant information.
@@ -168,12 +169,20 @@ class GenericSuiteMCPServer:
                 # Use the agent's knowledge base search capability
                 results = await self._search_knowledge_base_async(query, limit)
 
-                return {
-                    "success": True,
-                    "query": query,
-                    "results": results,
-                    "count": len(results),
+                logger.info(f">>> Search knowledge base results: {results}")
+
+                final_result = {
+                    "success": results["success"],
+                    "query": results["query"],
+                    "results": results["results"],
+                    "count": results["count"],
+                    "error": results["error"],
                 }
+
+                logger.info(
+                    f">>> Search knowledge base final result: {final_result}")
+
+                return final_result
 
             except Exception as e:
                 return self._handle_error(e, "search_knowledge_base")
@@ -497,36 +506,55 @@ class GenericSuiteMCPServer:
 
     # Async wrapper methods for agent operations
     async def _search_knowledge_base_async(
-        self, query: str, limit: int
+        self,
+        query: str,
+        limit: int
     ) -> List[Dict[str, Any]]:
         """Async wrapper for knowledge base search."""
+        final_result = {
+            "success": True,
+            "query": query,
+            "results": [],
+            "count": 0,
+            "error": None,
+        }
         try:
             if not self.agent:
                 raise Exception("AI agent not initialized")
 
-            # Perform search
-            search_results = await self.kb_tool.get_context_for_generation(
-                query, max_context_length=limit)
+            search_results = \
+                self.kb_tool.search(query, limit=limit)
+
+            logger.info(
+                ">>> _search_knowledge_base_async | "
+                f"search_results: {search_results}")
 
             # Format results for MCP response
             formatted_results = []
-            for result in search_results:
+            for result in search_results.results:
                 formatted_results.append(
                     {
-                        "content": result.get("content", ""),
-                        "source": result.get("source", "unknown"),
-                        "similarity_score": result.get(
-                            "similarity_score", 0.0),
-                        "metadata": result.get("metadata", {}),
+                        "content": result.content,
+                        "source": result.document_path,
+                        "similarity_score": result.similarity_score,
+                        "metadata": result.metadata,
                     }
                 )
 
-            return formatted_results
+            final_result["results"] = formatted_results
+            final_result["count"] = search_results.total_results
+            return final_result
 
         except Exception as e:
-            logger.error(f"Knowledge base search failed: {e}")
+            # Get error source and line number if possible
+            logger.error(
+                f"Knowledge base search failed [SKBA-010]: {e}"
+            )
             # Return empty results on error
-            return []
+            final_result["success"] = False
+            final_result["error"] = str(e)
+            raise
+            return final_result
 
     def get_mcp_run_args(self):
         """Get the MCP server run arguments."""
@@ -540,7 +568,7 @@ class GenericSuiteMCPServer:
     def run(self):
         """Run the MCP server synchronously."""
         try:
-            logger.info("Starting MCP server on stdio")
+            logger.info(f"Starting MCP server on {self.config.transport}")
             # FastMCP typically runs on stdio for MCP protocol
             mcp_run_args = self.get_mcp_run_args()
             if self.config.transport == "http":
@@ -554,7 +582,8 @@ class GenericSuiteMCPServer:
     async def run_async(self):
         """Run the MCP server asynchronously."""
         try:
-            logger.info("Starting MCP server (async) on stdio")
+            logger.info(
+                f"Starting MCP server (async) on {self.config.transport}")
             # FastMCP typically runs on stdio for MCP protocol
             mcp_run_args = self.get_mcp_run_args()
             if self.config.transport == "http":

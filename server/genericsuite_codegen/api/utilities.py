@@ -21,6 +21,15 @@ from .types import (
     StandardGsResponse,
 )
 
+DEBUG = True
+
+# Configure logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO if DEBUG else logging.WARNING)
+
+BASE_LOCAL_PATH = os.getenv("BASE_LOCAL_PATH", '')
+BASE_WEB_URL = os.getenv("BASE_WEB_URL", '')
+
 
 def std_response(
     error: bool = False,
@@ -697,3 +706,22 @@ rate_limiter = RateLimiter(
     max_requests=int(os.getenv("RATE_LIMIT_REQUESTS", "100")),
     window_seconds=int(os.getenv("RATE_LIMIT_WINDOW", "60"))
 )
+
+
+def local_path_to_url(source: str, replace_extension: bool = True) -> str:
+    """
+    Convert local path to web URL.
+
+    Args:
+        source: Local path.
+        replace_extension: Whether to replace the extension with .html.
+
+    Returns:
+        str: Web URL.
+    """
+    content = source.replace(BASE_LOCAL_PATH, BASE_WEB_URL)
+    if replace_extension and content.endswith('.md'):
+        content = content.replace('.md', '.html')
+    else:
+        content = content.replace('/index.md', '/index.html')
+    return content

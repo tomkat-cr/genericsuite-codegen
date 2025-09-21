@@ -14,6 +14,7 @@ clean_up() {
     if [ ! "$MCP_RUN_USING_POETRY" = "1" ]; then
         deactivate
     fi
+    echo "🧹 Cleaning up... done"
 }
 
 # Always execute the function clean_up when the script is terminated

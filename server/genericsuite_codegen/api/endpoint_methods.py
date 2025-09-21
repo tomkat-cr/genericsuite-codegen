@@ -43,10 +43,6 @@ from genericsuite_codegen.api.types import (
     ConversationStatistics,
     SystemStatistics,
 )
-from genericsuite_codegen.document_processing.types import (
-    IngestionStatistics,
-    IngestionResult,
-)
 
 from .utilities import (
     std_error_response,
@@ -56,6 +52,7 @@ from .utilities import (
     extract_code_blocks,
     get_app_info,
     get_utcnow_fmt,
+    local_path_to_url,
 )
 from genericsuite_codegen.agent.agent import (
     get_agent,
@@ -93,7 +90,8 @@ class EndpointMethods:
     async def query_agent(
         self,
         request: QueryRequest,
-        correlation_id: str
+        correlation_id: str,
+        translate_path: bool = False
     ) -> Dict[str, Any]:
         """
         Process an agent query request.
@@ -101,7 +99,7 @@ class EndpointMethods:
         Args:
             request: Query request data.
             correlation_id: Request correlation ID.
-
+            translate_path: Whether to translate the path to the local path.
         Returns:
             QueryResponse: Agent response.
 
@@ -153,7 +151,7 @@ class EndpointMethods:
                     request.framework.value if request.framework
                     else None),
                 context_limit=request.context_limit,
-                include_sources=request.include_sources
+                include_sources=request.include_sources,
             )
 
             # Get conversation context if conversation exists
@@ -166,10 +164,18 @@ class EndpointMethods:
             agent_response = await self.agent.query(agent_request,
                                                     context=agent_context)
 
+            sources = agent_response.sources if not translate_path \
+                else [
+                    local_path_to_url(source)
+                    for source in agent_response.sources
+                ]
+            content = agent_response.content if not translate_path \
+                else local_path_to_url(agent_response.content, False)
+
             # Convert agent response to API response
             response = QueryResponse(
-                content=agent_response.content,
-                sources=agent_response.sources,
+                content=content,
+                sources=sources,
                 task_type=request.task_type,
                 model_used=agent_response.model_used,
                 token_usage=agent_response.token_usage,
@@ -182,8 +188,8 @@ class EndpointMethods:
                 await self._add_message_to_conversation(
                     conversation_id,
                     request.query,
-                    agent_response.content,
-                    agent_response.sources,
+                    content,
+                    sources,
                     agent_response.token_usage
                 )
             else:
@@ -191,8 +197,8 @@ class EndpointMethods:
                 # (user message was already added during conversation creation)
                 await self._add_assistant_message_to_conversation(
                     conversation_id,
-                    agent_response.content,
-                    agent_response.sources,
+                    content,
+                    sources,
                     agent_response.token_usage
                 )
 
@@ -846,7 +852,8 @@ class EndpointMethods:
 
     async def search_knowledge_base(
         self,
-        query: SearchQuery
+        query: SearchQuery,
+        translate_path: bool = False,
     ) -> SearchResponse:
         """
         Search the knowledge base.
@@ -870,7 +877,8 @@ class EndpointMethods:
                 query.query,
                 limit=query.limit,
                 file_type_filter=query.file_type_filter,
-                similarity_threshold=query.similarity_threshold
+                similarity_threshold=query.similarity_threshold,
+                translate_path=translate_path
             )
 
             execution_time = time.time() - start_time

@@ -36,8 +36,9 @@ DEBUG = False
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO if DEBUG else logging.WARNING)
 
-TEMP_DIR = os.getenv("SERVER_TEMP_DIR", "/tmp")
-PROGRESS_FILE = TEMP_DIR + "/ingestion_progress.json"
+PROGRESS_FILE_DIR = os.getenv("SERVER_PROGRESS_FILE_DIR",
+                              os.getenv("LOCAL_REPO_DIR", "/tmp"))
+PROGRESS_FILE_PATH = PROGRESS_FILE_DIR + "/ingestion_progress.json"
 
 
 class RepositoryCloner:
@@ -180,14 +181,14 @@ class DocumentIngestionOrchestrator:
     def _remove_progress_file(self):
         """Remove progress file."""
         try:
-            os.remove(PROGRESS_FILE)
+            os.remove(PROGRESS_FILE_PATH)
         except Exception as e:
             logger.error(f"Error removing progress file: {e}")
 
     def _save_progress(self):
         """Save progress to file."""
         try:
-            with open(PROGRESS_FILE, "w") as f:
+            with open(PROGRESS_FILE_PATH, "w") as f:
                 json.dump(self.progress.to_dict(), f)
         except Exception as e:
             logger.error(f"Error saving progress to file: {e}")
@@ -529,8 +530,8 @@ class DocumentIngestionOrchestrator:
 def load_progress_from_file():
     """Load progress from file."""
     try:
-        if os.path.exists(PROGRESS_FILE):
-            with open(PROGRESS_FILE, "r") as f:
+        if os.path.exists(PROGRESS_FILE_PATH):
+            with open(PROGRESS_FILE_PATH, "r") as f:
                 return IngestionProgress(**json.load(f))
         else:
             return IngestionProgress(

@@ -70,7 +70,10 @@ export MONGODB_PASSWORD=example
 # export MONGODB_URI=mongodb://$MONGODB_USER:$MONGODB_PASSWORD@$MONGODB_HOST_NAME:$MONGODB_HOST_PORT
 export MONGODB_URI=mongodb://$MONGODB_HOST_NAME:$MONGODB_HOST_PORT/?directConnection=true
 
+# Override environment variables for Deployment
 export LOCAL_REPO_DIR=/var/local_repo_files
+export BASE_LOCAL_PATH=/var/local_repo_files/genericsuite-basecamp/docs
+
 
 if [ "$ACTION" = "restart" ]; then
     echo "Restarting services..."

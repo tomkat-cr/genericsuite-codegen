@@ -19,6 +19,8 @@ from genericsuite_codegen.database.setup import (
 from genericsuite_codegen.document_processing.embeddings import \
     create_embedding_generator
 
+from genericsuite_codegen.api.utilities import local_path_to_url
+
 from genericsuite_codegen.agent.types import (
     KnowledgeBaseSearchResults,
     KnowledgeBaseQuery,
@@ -37,8 +39,11 @@ from genericsuite_codegen.agent.types import (
     ContextResult,
 )
 
+DEBUG = True
+
 # Configure logging
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO if DEBUG else logging.WARNING)
 
 
 # Knowledge Base Tools
@@ -184,8 +189,8 @@ class KnowledgeBaseTool:
 
         # Generate summary
         summary_parts = [
-            f"Retrieved {len(results)} relevant document chunks for query "
-            f"'{query}'."
+            f"Retrieved {len(results)} relevant document chunks for query"
+            f" '{query}'."
         ]
 
         if len(sources) > 1:
@@ -206,7 +211,8 @@ class KnowledgeBaseTool:
         return " ".join(summary_parts)
 
     def rank_context_by_relevance(
-        self, results: List[SearchResult],
+        self,
+        results: List[SearchResult],
         query: str
     ) -> List[ContextRanking]:
         """
@@ -228,17 +234,24 @@ class KnowledgeBaseTool:
                 result, query_lower
             )
 
+            logger.info(f">>> rank_context_by_relevance | Result: {result}")
+
             context_ranking = ContextRanking(
                 content=result.content,
                 relevance_score=relevance_score,
                 source_path=result.document_path,
-                file_type=result.metadata.get('file_type', 'unknown'),
+                file_type=result.metadata.get('file_type', result.metadata.get(
+                    'original_document_type', 'unknown')),
                 metadata=result.metadata
             )
             ranked_context.append(context_ranking)
 
         # Sort by relevance score (descending)
         ranked_context.sort(key=lambda x: x.relevance_score, reverse=True)
+
+        logger.info(
+            ">>> rank_context_by_relevance | "
+            f"Ranked context: {ranked_context}")
 
         return ranked_context
 
@@ -297,8 +310,11 @@ class KnowledgeBaseTool:
         return max(0.0, min(1.0, final_score))
 
     def get_context_for_generation(
-        self, query: str, max_context_length: int = 4000,
-        file_type_filter: Optional[str] = None
+        self,
+        query: str,
+        max_context_length: int = 4000,
+        file_type_filter: Optional[str] = None,
+        limit: int = 10
     ) -> Tuple[str, List[str]]:
         """
         Get formatted context for code generation with length limits.
@@ -307,7 +323,7 @@ class KnowledgeBaseTool:
             query: Search query for context retrieval.
             max_context_length: Maximum total context length in characters.
             file_type_filter: Optional filter by file type.
-
+            limit: Maximum number of results to return. Default is 10.
         Returns:
             Tuple[str, List[str]]: Formatted context string and list of
             sources.
@@ -316,7 +332,7 @@ class KnowledgeBaseTool:
             # Search for relevant context
             search_results = self.search(
                 query=query,
-                limit=10,  # Get more results for better selection
+                limit=limit,  # Get more results for better selection
                 file_type_filter=file_type_filter
             )
 
@@ -378,6 +394,36 @@ class KnowledgeBaseTool:
         except Exception as e:
             logger.error(f"Failed to get context for generation: {e}")
             return f"Error retrieving context: {e}", []
+
+    def search_similar_documents(
+        self,
+        query: str,
+        limit: int = 10,
+        file_type_filter: Optional[str] = None,
+        similarity_threshold: float = 0.7,
+        translate_path: bool = False
+    ) -> KnowledgeBaseSearchResults:
+        """
+        Search for similar documents in the knowledge base
+        with a similarity threshold.
+        """
+        search_results = self.search(
+            query=query,
+            limit=limit,
+            file_type_filter=file_type_filter,
+        )
+        search_results.results = [
+            SearchResultModel(
+                content=r.content,
+                document_path=r.document_path if not translate_path
+                else local_path_to_url(r.document_path),
+                similarity_score=r.similarity_score,
+                file_type=r.file_type,
+                metadata=r.metadata,
+            ) for r in search_results.results
+            if r.similarity_score >= similarity_threshold
+        ]
+        return search_results
 
 
 # JSON Configuration Generation Tools

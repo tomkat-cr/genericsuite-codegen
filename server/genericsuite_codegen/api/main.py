@@ -64,7 +64,7 @@ from genericsuite_codegen.database.setup import (
     test_database_connection,
 )
 
-DEBUG = False
+DEBUG = True
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -373,7 +373,8 @@ def setup_routes(app: FastAPI) -> None:
         """
         correlation_id = getattr(req.state, "correlation_id", "unknown")
         result = result_wrapper(
-            await methods.query_agent(request, correlation_id))
+            await methods.query_agent(request, correlation_id,
+                                      translate_path=True))
         logger.info(f"/query | query_agent | result.result: {result}")
         logger.info(f"dict(result.result): {dict(result.result)}")
         # return result.result
@@ -674,7 +675,9 @@ def setup_routes(app: FastAPI) -> None:
         Returns:
             SearchResponse: Search results.
         """
-        result = result_wrapper(await methods.search_knowledge_base(query))
+        result = result_wrapper(await methods.search_knowledge_base(
+            query, translate_path=True))
+        logger.info(f"API /search | result: {result}")
         return result.result
 
     @app.post(EP_PREFIX + "/knowledge-base/clean", tags=["Knowledge Base"])
