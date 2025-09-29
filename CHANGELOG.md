@@ -17,6 +17,21 @@ This project adheres to [Semantic Versioning](http://semver.org/) and [Keep a Ch
 ### Security
 
 
+## [1.2.0] - 2025-09-30
+
+### Added
+- Add profiles to docker-compose.yml.example to allow/disable using local MongoDB and MongoDB Express, and USE_LOCAL_MONGODB environment variable to control it.
+- Add MONGODB_DB_NAME to .env.example, docker-compose.yml.example and "server/genericsuite_codegen/database/setup.py" to support the database name for the MongoDB database.
+
+### Changed
+- Deploy: Updated "run-deploy.sh" to conditionally use local MongoDB based on port availability and USE_LOCAL_MONGODB environment variable.
+- Refactored "local_path_to_url" function for improved URL handling.
+
+### Fixed
+- Agent Tools: Fix path translation in search_similar_documents method to properly pass replace_extension parameter for markdown-to-HTML URL conversion.
+- Database: Fix the issue with the vector search index creation.
+
+
 ## [1.1.0] - 2025-09-21
 
 ### Added

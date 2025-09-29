@@ -17,6 +17,7 @@ services:
       - APP_DOMAIN_NAME=${APP_DOMAIN_NAME}
       - APP_NAME=${APP_NAME}
       - MONGODB_URI=${MONGODB_URI}
+      - MONGODB_DB_NAME=${MONGODB_DB_NAME}
       - REMOTE_REPO_URL=${REMOTE_REPO_URL}
       - LOCAL_REPO_DIR=${LOCAL_REPO_DIR}
       - BASE_LOCAL_PATH=${BASE_LOCAL_PATH}
@@ -77,6 +78,7 @@ services:
     environment:
       # MONGODB_INITDB_ROOT_USERNAME: root
       # MONGODB_INITDB_ROOT_PASSWORD: example
+      MONGOD_LOG_FILE: /dev/null
       MONGOT_LOG_FILE: /dev/null
       RUNNER_LOG_FILE: /dev/null
     volumes:
@@ -88,6 +90,8 @@ services:
       - 27017
     networks:
       - my_shared_network
+    profiles:
+      - use_local_mongodb
 
   gscodegen-mongo-express:
     container_name: gscodegen-mongo-express
@@ -109,6 +113,8 @@ services:
     depends_on: [gscodegen-mongo]
     networks:
       - my_shared_network
+    profiles:
+      - use_local_mongodb_express
 
   # gscodegen-ollama:
   #   container_name: gscodegen-ollama

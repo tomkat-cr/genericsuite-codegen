@@ -416,7 +416,7 @@ class KnowledgeBaseTool:
             SearchResultModel(
                 content=r.content,
                 document_path=r.document_path if not translate_path
-                else local_path_to_url(r.document_path),
+                else local_path_to_url(r.document_path, True),
                 similarity_score=r.similarity_score,
                 file_type=r.file_type,
                 metadata=r.metadata,

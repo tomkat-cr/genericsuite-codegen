@@ -708,20 +708,21 @@ rate_limiter = RateLimiter(
 )
 
 
-def local_path_to_url(source: str, replace_extension: bool = True) -> str:
+def local_path_to_url(source: str, is_url: bool = True) -> str:
     """
     Convert local path to web URL.
 
     Args:
         source: Local path.
-        replace_extension: Whether to replace the extension with .html.
+        is_url: True if "source" is an URL.
 
     Returns:
         str: Web URL.
     """
     content = source.replace(BASE_LOCAL_PATH, BASE_WEB_URL)
-    if replace_extension and content.endswith('.md'):
-        content = content.replace('.md', '.html')
+    if is_url:
+        if content.endswith('.md'):
+            content = content.replace('.md', '.html')
     else:
         content = content.replace('/index.md', '/index.html')
     return content

@@ -166,7 +166,7 @@ class EndpointMethods:
 
             sources = agent_response.sources if not translate_path \
                 else [
-                    local_path_to_url(source)
+                    local_path_to_url(source, True)
                     for source in agent_response.sources
                 ]
             content = agent_response.content if not translate_path \
