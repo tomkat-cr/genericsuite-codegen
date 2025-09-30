@@ -48,6 +48,8 @@ logger.setLevel(logging.INFO if DEBUG else logging.WARNING)
 
 # Knowledge Base Tools
 
+DEFAULT_MAX_CONTEXT_LENGTH = 10000
+
 
 class KnowledgeBaseTool:
     """
@@ -312,7 +314,7 @@ class KnowledgeBaseTool:
     def get_context_for_generation(
         self,
         query: str,
-        max_context_length: int = 4000,
+        max_context_length: int = DEFAULT_MAX_CONTEXT_LENGTH,
         file_type_filter: Optional[str] = None,
         limit: int = 10
     ) -> Tuple[str, List[str]]:
@@ -325,8 +327,8 @@ class KnowledgeBaseTool:
             file_type_filter: Optional filter by file type.
             limit: Maximum number of results to return. Default is 10.
         Returns:
-            Tuple[str, List[str]]: Formatted context string and list of
-            sources.
+            Tuple[str, List[str]]: Formatted context string, list of
+            sources (only the document paths), and raw_results.
         """
         try:
             # Search for relevant context
@@ -389,11 +391,11 @@ class KnowledgeBaseTool:
             final_context = header + formatted_context
 
             # Remove duplicate sources
-            return final_context, list(set(sources))
+            return final_context, list(set(sources)), raw_results
 
         except Exception as e:
             logger.error(f"Failed to get context for generation: {e}")
-            return f"Error retrieving context: {e}", []
+            return f"Error retrieving context: {e}", [], []
 
     def search_similar_documents(
         self,
@@ -581,11 +583,12 @@ class JSONConfigGenerator:
         """
         try:
             # Get relevant context for table configurations
-            context, sources = self.kb_tool.get_context_for_generation(
-                query=f"GenericSuite table configuration {requirements}",
-                max_context_length=3000,
-                file_type_filter="json"
-            )
+            context, sources, raw_results = \
+                self.kb_tool.get_context_for_generation(
+                    query=f"GenericSuite table configuration {requirements}",
+                    max_context_length=DEFAULT_MAX_CONTEXT_LENGTH,
+                    file_type_filter="json"
+                )
 
             # Parse requirements to extract fields and specifications
             fields = self._parse_field_requirements(requirements)
@@ -637,11 +640,12 @@ class JSONConfigGenerator:
         """
         try:
             # Get relevant context for form configurations
-            context, sources = self.kb_tool.get_context_for_generation(
-                query=f"GenericSuite form configuration {requirements}",
-                max_context_length=3000,
-                file_type_filter="json"
-            )
+            context, sources, raw_results = \
+                self.kb_tool.get_context_for_generation(
+                    query=f"GenericSuite form configuration {requirements}",
+                    max_context_length=DEFAULT_MAX_CONTEXT_LENGTH,
+                    file_type_filter="json"
+                )
 
             # Parse requirements to extract form fields
             fields = self._parse_field_requirements(requirements)
@@ -1131,7 +1135,7 @@ def create_context_retrieval_tool(kb_tool: KnowledgeBaseTool) -> Tool:
         Returns:
             ContextResult: Formatted context with sources.
         """
-        context, sources = kb_tool.get_context_for_generation(
+        context, sources, raw_results = kb_tool.get_context_for_generation(
             query=query.query,
             max_context_length=query.max_length,
             file_type_filter=query.file_type
@@ -1520,11 +1524,12 @@ def {function_name}({function_parameters}) -> {return_type}:
         """
         try:
             # Get relevant context for Langchain tools
-            context, sources = self.kb_tool.get_context_for_generation(
-                query=f"GenericSuite Langchain tool {requirements}",
-                max_context_length=3000,
-                file_type_filter="py"
-            )
+            context, sources, raw_results = \
+                self.kb_tool.get_context_for_generation(
+                    query=f"GenericSuite Langchain tool {requirements}",
+                    max_context_length=DEFAULT_MAX_CONTEXT_LENGTH,
+                    file_type_filter="py"
+                )
 
             # Parse requirements and generate code components
             tool_class_name = self._to_class_name(tool_name)
@@ -1603,11 +1608,12 @@ def {function_name}({function_parameters}) -> {return_type}:
         """
         try:
             # Get relevant context for MCP tools
-            context, sources = self.kb_tool.get_context_for_generation(
-                query=f"GenericSuite MCP tool FastMCP {requirements}",
-                max_context_length=3000,
-                file_type_filter="py"
-            )
+            context, sources, raw_results = \
+                self.kb_tool.get_context_for_generation(
+                    query=f"GenericSuite MCP tool FastMCP {requirements}",
+                    max_context_length=DEFAULT_MAX_CONTEXT_LENGTH,
+                    file_type_filter="py"
+                )
 
             # Parse requirements and generate code components
             tool_class_name = self._to_class_name(tool_name)
@@ -1688,11 +1694,12 @@ def {function_name}({function_parameters}) -> {return_type}:
         """
         try:
             # Get relevant context
-            context, sources = self.kb_tool.get_context_for_generation(
-                query=f"GenericSuite utility function {requirements}",
-                max_context_length=2000,
-                file_type_filter="py"
-            )
+            context, sources, raw_results = \
+                self.kb_tool.get_context_for_generation(
+                    query=f"GenericSuite utility function {requirements}",
+                    max_context_length=DEFAULT_MAX_CONTEXT_LENGTH,
+                    file_type_filter="py"
+                )
 
             # Generate function components
             function_parameters = self._generate_utility_parameters(
@@ -2243,12 +2250,13 @@ export default {form_name};
         """
         try:
             # Get relevant context for React components
-            context, sources = self.kb_tool.get_context_for_generation(
-                query=f"GenericSuite React component {requirements} "
-                f"{component_type}",
-                max_context_length=3000,
-                file_type_filter="jsx"
-            )
+            context, sources, raw_results = \
+                self.kb_tool.get_context_for_generation(
+                    query=f"GenericSuite React component {requirements} "
+                    f"{component_type}",
+                    max_context_length=DEFAULT_MAX_CONTEXT_LENGTH,
+                    file_type_filter="jsx"
+                )
 
             if component_type == "form":
                 return self._generate_form_component(requirements,
@@ -2806,11 +2814,13 @@ logger = logging.getLogger(__name__)
         """
         try:
             # Get relevant context for backend code
-            context, sources = self.kb_tool.get_context_for_generation(
-                query=f"GenericSuite {framework} {code_type} {requirements}",
-                max_context_length=3000,
-                file_type_filter="py"
-            )
+            context, sources, raw_results = \
+                self.kb_tool.get_context_for_generation(
+                    query=f"GenericSuite {framework} {code_type} "
+                    f"{requirements}",
+                    max_context_length=DEFAULT_MAX_CONTEXT_LENGTH,
+                    file_type_filter="py"
+                )
 
             if framework == "fastapi":
                 return self._generate_fastapi_code(requirements, module_name,
@@ -3591,9 +3601,11 @@ if __name__ == "__main__":
             print(f"Search results: {results}")
 
             # Test context retrieval
-            context, sources = kb_tool.get_context_for_generation(
-                "How to create a GenericSuite table", max_context_length=2000
-            )
+            context, sources, raw_results = \
+                kb_tool.get_context_for_generation(
+                    "How to create a GenericSuite table",
+                    max_context_length=DEFAULT_MAX_CONTEXT_LENGTH
+                )
             print(f"Context length: {len(context)}")
             print(f"Sources: {sources}")
 

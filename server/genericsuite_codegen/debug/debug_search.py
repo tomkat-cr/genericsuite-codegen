@@ -153,13 +153,14 @@ async def test_knowledge_base_tool():
 
         # Test context generation
         print("\nTesting context generation...")
-        context, sources = kb_tool.get_context_for_generation(
+        context, sources, raw_results = kb_tool.get_context_for_generation(
             query=test_query,
             max_context_length=2000
         )
 
         print(f"Generated context length: {len(context)}")
         print(f"Sources: {sources}")
+        print(f"Raw results: {raw_results}")
         print(f"Context preview: {context[:200]}...")
 
         return len(search_results.results) > 0

@@ -22,10 +22,13 @@ This project adheres to [Semantic Versioning](http://semver.org/) and [Keep a Ch
 ### Added
 - Add profiles to docker-compose.yml.example to allow/disable using local MongoDB and MongoDB Express, and USE_LOCAL_MONGODB environment variable to control it.
 - Add MONGODB_DB_NAME to .env.example, docker-compose.yml.example and "server/genericsuite_codegen/database/setup.py" to support the database name for the MongoDB database.
+- Added ALT_BASE_LOCAL_PATH to .env.example for alternative local repository paths to handle both "/var/local_repo_files" and "./local_repo_files".
 
 ### Changed
 - Deploy: Updated "run-deploy.sh" to conditionally use local MongoDB based on port availability and USE_LOCAL_MONGODB environment variable.
-- Refactored "local_path_to_url" function for improved URL handling.
+- Refactored "local_path_to_url" function for improved URL handling and support for ALT_BASE_LOCAL_PATH.
+- Updated MCP Server to return detailed context and sources in KB search results. 
+- Updated KnowledgeBaseTool to use DEFAULT_MAX_CONTEXT_LENGTH for context generation and raise its value from 4000 to 10000. 
 
 ### Fixed
 - Agent Tools: Fix path translation in search_similar_documents method to properly pass replace_extension parameter for markdown-to-HTML URL conversion.

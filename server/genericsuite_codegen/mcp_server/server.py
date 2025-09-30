@@ -22,6 +22,7 @@ except ImportError:
 
 from ..agent.agent import GenericSuiteAgent
 from ..database.setup import DatabaseManager
+from ..api.utilities import local_path_to_url
 from ..api.endpoint_methods import get_endpoint_methods
 from ..agent.tools import KnowledgeBaseTool
 
@@ -145,7 +146,7 @@ class GenericSuiteMCPServer:
         """Register MCP tools for external integration."""
 
         @self.mcp.tool()
-        async def search_knowledge_base(
+        async def mcp_search_knowledge_base(
             query: str,
             limit: int = 5
         ) -> Dict[str, Any]:
@@ -175,6 +176,8 @@ class GenericSuiteMCPServer:
                     "success": results["success"],
                     "query": results["query"],
                     "results": results["results"],
+                    "sources": results["sources"],
+                    "context": results["context"],
                     "count": results["count"],
                     "error": results["error"],
                 }
@@ -188,7 +191,7 @@ class GenericSuiteMCPServer:
                 return self._handle_error(e, "search_knowledge_base")
 
         @self.mcp.tool()
-        async def generate_json_config(
+        async def mcp_generate_json_config(
             requirements: str,
             table_name: str,
             config_type: str = "table",
@@ -223,7 +226,7 @@ class GenericSuiteMCPServer:
                 return self._handle_error(e, "generate_json_config")
 
         @self.mcp.tool()
-        async def generate_langchain_tool(
+        async def mcp_generate_langchain_tool(
             requirements: str,
             tool_name: str,
             description: str,
@@ -268,7 +271,7 @@ class GenericSuiteMCPServer:
                 return self._handle_error(e, "generate_langchain_tool")
 
         @self.mcp.tool()
-        async def generate_mcp_tool(
+        async def mcp_generate_mcp_tool(
             requirements: str,
             tool_name: str,
             description: str,
@@ -312,7 +315,8 @@ class GenericSuiteMCPServer:
                 return self._handle_error(e, "generate_mcp_tool")
 
         @self.mcp.tool()
-        async def generate_frontend_code(requirements: str) -> Dict[str, Any]:
+        async def mcp_generate_frontend_code(requirements: str
+                                             ) -> Dict[str, Any]:
             """
             Generate ReactJS frontend code following GenericSuite patterns.
 
@@ -345,7 +349,7 @@ class GenericSuiteMCPServer:
                 return self._handle_error(e, "generate_frontend_code")
 
         @self.mcp.tool()
-        async def generate_backend_code(
+        async def mcp_generate_backend_code(
             framework: str, requirements: str
         ) -> Dict[str, Any]:
             """
@@ -522,27 +526,34 @@ class GenericSuiteMCPServer:
             if not self.agent:
                 raise Exception("AI agent not initialized")
 
-            search_results = \
-                self.kb_tool.search(query, limit=limit)
+            # search_results = \
+            #     self.kb_tool.search(query, limit=limit)
+            final_context, search_results, raw_results = \
+                self.kb_tool.get_context_for_generation(
+                    query, limit=limit)
 
             logger.info(
-                ">>> _search_knowledge_base_async | "
-                f"search_results: {search_results}")
+                ">>> _search_knowledge_base_async"
+                f"\n | final_context: {final_context}"
+                f"\n | search_results: {search_results}"
+                f"\n | raw_results: {raw_results}"
+            )
 
             # Format results for MCP response
             formatted_results = []
-            for result in search_results.results:
-                formatted_results.append(
-                    {
-                        "content": result.content,
-                        "source": result.document_path,
-                        "similarity_score": result.similarity_score,
-                        "metadata": result.metadata,
-                    }
-                )
+            # for result in search_results.results:
+            for result in raw_results:
+                formatted_results.append({
+                    "content": local_path_to_url(result.content, False),
+                    "source": local_path_to_url(result.document_path, True),
+                    "similarity_score": result.similarity_score,
+                    "metadata": result.metadata,
+                })
 
             final_result["results"] = formatted_results
-            final_result["count"] = search_results.total_results
+            final_result["context"] = final_context
+            final_result["sources"] = search_results
+            final_result["count"] = len(raw_results)
             return final_result
 
         except Exception as e:

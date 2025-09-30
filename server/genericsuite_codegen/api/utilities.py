@@ -12,6 +12,7 @@ import time
 from typing import Dict, Any, Optional
 from datetime import datetime
 import json
+import re
 
 from .types import (
     AppInfo,
@@ -28,6 +29,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO if DEBUG else logging.WARNING)
 
 BASE_LOCAL_PATH = os.getenv("BASE_LOCAL_PATH", '')
+ALT_BASE_LOCAL_PATH = os.getenv("ALT_BASE_LOCAL_PATH", '')
 BASE_WEB_URL = os.getenv("BASE_WEB_URL", '')
 
 
@@ -720,9 +722,13 @@ def local_path_to_url(source: str, is_url: bool = True) -> str:
         str: Web URL.
     """
     content = source.replace(BASE_LOCAL_PATH, BASE_WEB_URL)
+    content = content.replace(ALT_BASE_LOCAL_PATH, BASE_WEB_URL)
     if is_url:
         if content.endswith('.md'):
             content = content.replace('.md', '.html')
     else:
-        content = content.replace('/index.md', '/index.html')
+        # Replace all that starts with BASE_WEB_URL, ends with .md and has
+        # a "/" before the .md
+        content = re.sub(r'^' + re.escape(BASE_WEB_URL) +
+                         r'(/.*?)\.md$', BASE_WEB_URL + r'\1.html', content)
     return content
