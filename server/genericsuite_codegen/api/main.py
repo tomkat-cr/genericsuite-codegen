@@ -50,6 +50,7 @@ from genericsuite_codegen.document_processing.types import (
     IngestionResult,
     IngestionStatistics,
     IngestionStatus,
+    IngestionRepositoryInfo,
 )
 
 from .utilities import (
@@ -58,13 +59,14 @@ from .utilities import (
     create_correlation_id,
     log_request_response,
 )
+from genericsuite_codegen.document_processing.ingestion import RepositoryCloner
 from genericsuite_codegen.database.setup import (
     # get_database_connection,
     initialize_database,
     test_database_connection,
 )
 
-DEBUG = False
+DEBUG = True
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -373,7 +375,8 @@ def setup_routes(app: FastAPI) -> None:
         """
         correlation_id = getattr(req.state, "correlation_id", "unknown")
         result = result_wrapper(
-            await methods.query_agent(request, correlation_id))
+            await methods.query_agent(request, correlation_id,
+                                      translate_path=True))
         logger.info(f"/query | query_agent | result.result: {result}")
         logger.info(f"dict(result.result): {dict(result.result)}")
         # return result.result
@@ -674,7 +677,9 @@ def setup_routes(app: FastAPI) -> None:
         Returns:
             SearchResponse: Search results.
         """
-        result = result_wrapper(await methods.search_knowledge_base(query))
+        result = result_wrapper(await methods.search_knowledge_base(
+            query, translate_path=True))
+        logger.info(f"API /search | result: {result}")
         return result.result
 
     @app.post(EP_PREFIX + "/knowledge-base/clean", tags=["Knowledge Base"])
@@ -859,6 +864,23 @@ def setup_routes(app: FastAPI) -> None:
             await methods.generate_frontend_code_endpoint(request.requirements)
         )
         return result.result
+
+    @app.get(
+        EP_PREFIX + "/get-repo-info",
+        response_model=IngestionRepositoryInfo,
+        tags=["Local Repo"],
+    )
+    async def get_repo_info():
+        """
+        Get information about the local repository.
+        """
+        working_data = methods._get_working_data()
+        local_dir = working_data.result["local_dir"]
+        repo_url = working_data.result["repository_url"]
+        repo_name = repo_url.split("/")[-1].split(".")[0]
+        rc = RepositoryCloner(f"{local_dir}/{repo_name}")
+        result = rc.get_repository_info()
+        return result
 
     @app.post(
         EP_PREFIX + "/generate/backend-code",

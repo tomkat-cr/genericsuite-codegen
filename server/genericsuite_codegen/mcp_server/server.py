@@ -4,7 +4,9 @@ FastMCP Server implementation for GenericSuite CodeGen.
 This module implements the MCP server that exposes the AI agent capabilities
 as standardized MCP tools and resources for integration with external tools.
 """
-
+import os
+import json
+import sys
 import asyncio
 import logging
 from dataclasses import dataclass
@@ -20,11 +22,24 @@ except ImportError:
 
 from ..agent.agent import GenericSuiteAgent
 from ..database.setup import DatabaseManager
+from ..api.utilities import local_path_to_url
 from ..api.endpoint_methods import get_endpoint_methods
 from ..agent.tools import KnowledgeBaseTool
 
 
-DEBUG = False
+DEBUG = True
+
+DEFAULT_MCP_TRANSPORT = "http"
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler('mcp_server.log')
+    ]
+)
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO if DEBUG else logging.WARNING)
@@ -40,7 +55,7 @@ class MCPConfig:
     host: str = "0.0.0.0"
     port: int = 8070
     debug: bool = False
-    transport: str = "http"  # or "stdio"
+    transport: str = DEFAULT_MCP_TRANSPORT  # "http" or "stdio"
 
 
 class GenericSuiteMCPServer:
@@ -131,8 +146,9 @@ class GenericSuiteMCPServer:
         """Register MCP tools for external integration."""
 
         @self.mcp.tool()
-        async def search_knowledge_base(
-            query: str, limit: int = 5
+        async def mcp_search_knowledge_base(
+            query: str,
+            limit: int = 5
         ) -> Dict[str, Any]:
             """
             Search the GenericSuite knowledge base for relevant information.
@@ -154,18 +170,28 @@ class GenericSuiteMCPServer:
                 # Use the agent's knowledge base search capability
                 results = await self._search_knowledge_base_async(query, limit)
 
-                return {
-                    "success": True,
-                    "query": query,
-                    "results": results,
-                    "count": len(results),
+                logger.info(f">>> Search knowledge base results: {results}")
+
+                final_result = {
+                    "success": results["success"],
+                    "query": results["query"],
+                    "results": results["results"],
+                    "sources": results["sources"],
+                    "context": results["context"],
+                    "count": results["count"],
+                    "error": results["error"],
                 }
+
+                logger.info(
+                    f">>> Search knowledge base final result: {final_result}")
+
+                return final_result
 
             except Exception as e:
                 return self._handle_error(e, "search_knowledge_base")
 
         @self.mcp.tool()
-        async def generate_json_config(
+        async def mcp_generate_json_config(
             requirements: str,
             table_name: str,
             config_type: str = "table",
@@ -200,7 +226,7 @@ class GenericSuiteMCPServer:
                 return self._handle_error(e, "generate_json_config")
 
         @self.mcp.tool()
-        async def generate_langchain_tool(
+        async def mcp_generate_langchain_tool(
             requirements: str,
             tool_name: str,
             description: str,
@@ -245,7 +271,7 @@ class GenericSuiteMCPServer:
                 return self._handle_error(e, "generate_langchain_tool")
 
         @self.mcp.tool()
-        async def generate_mcp_tool(
+        async def mcp_generate_mcp_tool(
             requirements: str,
             tool_name: str,
             description: str,
@@ -289,7 +315,8 @@ class GenericSuiteMCPServer:
                 return self._handle_error(e, "generate_mcp_tool")
 
         @self.mcp.tool()
-        async def generate_frontend_code(requirements: str) -> Dict[str, Any]:
+        async def mcp_generate_frontend_code(requirements: str
+                                             ) -> Dict[str, Any]:
             """
             Generate ReactJS frontend code following GenericSuite patterns.
 
@@ -322,7 +349,7 @@ class GenericSuiteMCPServer:
                 return self._handle_error(e, "generate_frontend_code")
 
         @self.mcp.tool()
-        async def generate_backend_code(
+        async def mcp_generate_backend_code(
             framework: str, requirements: str
         ) -> Dict[str, Any]:
             """
@@ -483,36 +510,62 @@ class GenericSuiteMCPServer:
 
     # Async wrapper methods for agent operations
     async def _search_knowledge_base_async(
-        self, query: str, limit: int
+        self,
+        query: str,
+        limit: int
     ) -> List[Dict[str, Any]]:
         """Async wrapper for knowledge base search."""
+        final_result = {
+            "success": True,
+            "query": query,
+            "results": [],
+            "count": 0,
+            "error": None,
+        }
         try:
             if not self.agent:
                 raise Exception("AI agent not initialized")
 
-            # Perform search
-            search_results = await self.kb_tool.get_context_for_generation(
-                query, max_context_length=limit)
+            # search_results = \
+            #     self.kb_tool.search(query, limit=limit)
+            final_context, search_results, raw_results = \
+                self.kb_tool.get_context_for_generation(
+                    query, limit=limit)
+
+            logger.info(
+                ">>> _search_knowledge_base_async"
+                f"\n | final_context: {final_context}"
+                f"\n | search_results: {search_results}"
+                f"\n | raw_results: {raw_results}"
+            )
 
             # Format results for MCP response
             formatted_results = []
-            for result in search_results:
-                formatted_results.append(
-                    {
-                        "content": result.get("content", ""),
-                        "source": result.get("source", "unknown"),
-                        "similarity_score": result.get(
-                            "similarity_score", 0.0),
-                        "metadata": result.get("metadata", {}),
-                    }
-                )
+            # for result in search_results.results:
+            for result in raw_results:
+                formatted_results.append({
+                    "content": local_path_to_url(result.content, False),
+                    "source": local_path_to_url(result.document_path, True),
+                    "similarity_score": result.similarity_score,
+                    "metadata": result.metadata,
+                })
 
-            return formatted_results
+            final_result["results"] = formatted_results
+            final_result["context"] = final_context
+            final_result["sources"] = search_results
+            final_result["count"] = len(raw_results)
+            return final_result
 
         except Exception as e:
-            logger.error(f"Knowledge base search failed: {e}")
+            # Get error source and line number if possible
+            logger.error(
+                f"Knowledge base search failed [SKBA-010]: {e}"
+            )
             # Return empty results on error
-            return []
+            final_result["success"] = False
+            final_result["error"] = str(e)
+            raise
+            return final_result
 
     def get_mcp_run_args(self):
         """Get the MCP server run arguments."""
@@ -526,7 +579,7 @@ class GenericSuiteMCPServer:
     def run(self):
         """Run the MCP server synchronously."""
         try:
-            logger.info("Starting MCP server on stdio")
+            logger.info(f"Starting MCP server on {self.config.transport}")
             # FastMCP typically runs on stdio for MCP protocol
             mcp_run_args = self.get_mcp_run_args()
             if self.config.transport == "http":
@@ -540,7 +593,8 @@ class GenericSuiteMCPServer:
     async def run_async(self):
         """Run the MCP server asynchronously."""
         try:
-            logger.info("Starting MCP server (async) on stdio")
+            logger.info(
+                f"Starting MCP server (async) on {self.config.transport}")
             # FastMCP typically runs on stdio for MCP protocol
             mcp_run_args = self.get_mcp_run_args()
             if self.config.transport == "http":
@@ -563,3 +617,89 @@ def create_mcp_server(config: MCPConfig) -> GenericSuiteMCPServer:
         Configured MCP server instance
     """
     return GenericSuiteMCPServer(config)
+
+
+def load_environment(current_dir: str):
+    """Load environment variables from .env file."""
+    try:
+        from dotenv import load_dotenv
+
+        # Look for .env file in current directory or parent directories
+        env_file = current_dir / ".env"
+        if not env_file.exists():
+            env_file = current_dir.parent / ".env"
+
+        if env_file.exists():
+            load_dotenv(env_file)
+            logger.info(f"Loaded environment from {env_file}")
+        else:
+            logger.warning(
+                "No .env file found, using system environment variables")
+
+    except ImportError:
+        logger.warning(
+            "python-dotenv not available, using system environment variables")
+
+
+def validate_environment():
+    """Validate required environment variables."""
+    required_vars = []
+    optional_vars = {
+        "MCP_SERVER_HOST": "0.0.0.0",
+        "MCP_SERVER_PORT": "8070",
+        "MCP_API_KEY": None,
+        "MCP_DEBUG": "0",
+        "MCP_TRANSPORT": DEFAULT_MCP_TRANSPORT  # "http" or "stdio"
+    }
+
+    missing_vars = []
+    for var in required_vars:
+        if not os.getenv(var):
+            missing_vars.append(var)
+
+    if missing_vars:
+        logger.error(f"Missing required environment variables: {missing_vars}")
+        return False
+
+    # Log optional variables
+    for var, default in optional_vars.items():
+        value = os.getenv(var, default)
+        logger.info(f"{var}: {value}")
+
+    return True
+
+
+def get_mcp_config():
+    """Get MCP server configuration from environment variables."""
+    return MCPConfig(
+        server_name=os.getenv("MCP_SERVER_NAME", "genericsuite-codegen"),
+        server_version=os.getenv("MCP_SERVER_VERSION", "1.0.0"),
+        api_key=os.getenv("MCP_API_KEY"),
+        host=os.getenv("MCP_SERVER_HOST", "0.0.0.0"),
+        port=int(os.getenv("MCP_SERVER_PORT", "8070")),
+        debug=os.getenv("MCP_DEBUG", "0") == "1",
+        transport=os.getenv("MCP_TRANSPORT", DEFAULT_MCP_TRANSPORT)
+    )
+
+
+def report_mcp_config(config: MCPConfig):
+    """Report MCP server configuration."""
+    logger.info("Server configuration:")
+    logger.info(f"  Name: {config.server_name}")
+    logger.info(f"  Version: {config.server_version}")
+    logger.info(f"  Host: {config.host}")
+    logger.info(f"  Port: {config.port}")
+    logger.info(f"  Debug: {config.debug}")
+    logger.info(f"  API Key: {'Set' if config.api_key else 'Not set'}")
+    logger.info(f"  Transport: {config.transport}")
+
+
+def print_output(message: str):
+    """Print output to the terminal."""
+    mcp_transport = os.getenv("MCP_TRANSPORT", DEFAULT_MCP_TRANSPORT)
+    if mcp_transport == "http":
+        print(message)
+    else:
+        json_message = json.dumps({
+            "message": message})
+        print(json_message)

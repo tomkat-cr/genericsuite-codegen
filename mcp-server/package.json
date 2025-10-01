@@ -10,7 +10,12 @@
     "clean": "make clean",
     "api:install": "make install"
   },
-  "keywords": ["mcp", "python", "ai", "tools"],
+  "keywords": [
+    "mcp",
+    "python",
+    "ai",
+    "tools"
+  ],
   "author": "Carlos J. Ramirez",
   "license": "MIT"
 }

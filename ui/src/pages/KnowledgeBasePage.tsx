@@ -7,7 +7,8 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { RefreshCw, Upload, Database, FileText, AlertCircle, CheckCircle, Info } from 'lucide-react'
 
-import { baseUrl, debug } from '@/lib/api'
+import { baseUrl } from '@/lib/api'
+import { debug } from '@/lib/api'
 
 const remoteRepoUrl: string = process.env.VITE_REMOTE_REPO_URL || ''
 const alertTimeout: number = 10000
@@ -72,27 +73,45 @@ export function KnowledgeBasePage() {
       ...prev,
       documentCount: resultData.total_files ?? prev.documentCount,
       lastUpdated: new Date().toLocaleString(),
-      status: resultData.status.includes('completed') ? 'healthy' : resultData.status.includes('failed') ? 'error' : 'updating'
+      status: ['completed', 'not_started'].indexOf(resultData.status) !== -1 ? 'healthy' : resultData.status.includes('failed') ? 'error' : 'updating'
     }))
+    if (stats.status === 'updating' && !isUpdating) {
+      setIsUpdating(true)
+    }
     if (resultData.status.includes('completed')) {
-      setIsUpdating(false)
       setUpdateProgress(null)
-      // addAlert('success', 'Knowledge base updated successfully!')
+      setIsUpdating(false)
+      if (updateProgress !== null) {
+        addAlert('success', 'Knowledge base updated successfully!')
+      }
     }
     if (resultData.status.includes('failed')) {
       setIsUpdating(false)
       setUpdateProgress(null)
-      // addAlert('error', 'Failed to update knowledge base. Please try again.')
+      addAlert('error', 'Failed to update knowledge base. Please try again. Error: ' + resultData.error_message)
     }
   }
 
   useEffect(() => {
+    if (debug) console.log('Component mounted, calling getProgress')
     getProgress()
   }, [])
 
+  // useEffect(() => {
+  //   if (debug) console.log('isUpdating changed [1], calling getProgress')
+  //   getProgress()
+  // }, [isUpdating])
+
+  // If it's updating, refresh every 5 seconds
   useEffect(() => {
-    getProgress()
-  }, [isUpdating, updateProgress])
+    if (debug) console.log('isUpdating changed [2], calling getProgress')
+    if (isUpdating) {
+      const interval = setInterval(() => {
+        getProgress()
+      }, 5000)
+      return () => clearInterval(interval)
+    }
+  }, [isUpdating])
 
   const handleUpdateKnowledgeBase = async () => {
     setIsUpdating(true)

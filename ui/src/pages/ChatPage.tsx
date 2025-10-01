@@ -133,8 +133,6 @@ export function ChatPage() {
     }
   }
 
-
-
   const openDeleteDialog = (conversation: Conversation) => {
     setConversationToDelete(conversation)
     setDeleteDialogOpen(true)
@@ -582,6 +580,7 @@ export function ChatPage() {
                               <div className="space-y-1">
                                 {msg.sources.map((source, index) => (
                                   <div key={index} className="flex items-center gap-2 text-xs">
+                                    {/* 
                                     <Badge variant="outline" className="text-xs">
                                       {(source.similarity * 100).toFixed(0)}% match
                                     </Badge>
@@ -591,6 +590,16 @@ export function ChatPage() {
                                     <Button size="sm" variant="ghost" className="h-4 w-4 p-0">
                                       <ExternalLink className="h-3 w-3" />
                                     </Button>
+                                    */}
+                                    <Badge variant="outline" className="text-xs">
+                                      <a href={source} target="_blank" rel="noopener noreferrer">{source}</a>
+                                    </Badge>
+                                    <Button size="sm" variant="ghost" className="h-4 w-4 p-0">
+                                      <a href={source} target="_blank" rel="noopener noreferrer">
+                                        <ExternalLink className="h-3 w-3" />
+                                      </a>
+                                    </Button>
+
                                   </div>
                                 ))}
                               </div>

@@ -22,6 +22,7 @@ from pymongo.errors import (
     DuplicateKeyError,
     PyMongoError,
 )
+from pymongo.operations import SearchIndexModel
 
 from genericsuite_codegen.document_processing.types import EmbeddedChunk
 
@@ -87,7 +88,7 @@ class DatabaseManager:
         )
         self.client: Optional[MongoClient] = None
         self.database: Optional[Database] = None
-        self.db_name = "genericsuite_codegen"
+        self.db_name = os.getenv("MONGODB_DB_NAME", "genericsuite_codegen")
 
         # Collection names
         self.knowledge_base_collection = "knowledge_base"
@@ -194,7 +195,11 @@ class DatabaseManager:
         if not vector_index_exists:
             logger.info(f"Creating vector search index: {name} for the"
                         f" {collection.name} collection")
-            collection.create_search_index(index_structure)
+
+            # https://www.mongodb.com/docs/atlas/atlas-vector-search/create-embeddings/?embedding-model=voyage&data-source=new&language-no-interface=python#create-the-vector-search-index.
+            search_index_model = SearchIndexModel(**index_structure)
+
+            collection.create_search_index(model=search_index_model)
             logger.info(f"Created vector search index {name} for the"
                         f" {collection.name} collection")
 
@@ -254,8 +259,9 @@ class DatabaseManager:
         # Note: This requires MongoDB Atlas or MongoDB 6.0+ with vector search
         # enabled
         try:
-            vector_index = {
+            index_structure = {
                 "name": "vector_index",
+                "type": "vectorSearch",
                 "definition": {
                     "fields": [
                         {
@@ -270,7 +276,8 @@ class DatabaseManager:
             }
 
             # Check if vector search is available
-            self.create_vector_index(collection, "vector_index", vector_index)
+            self.create_vector_index(
+                collection, "vector_index", index_structure)
 
             logger.info("Created vector search index for knowledge_base"
                         " collection")
@@ -446,7 +453,8 @@ class DatabaseManager:
                     return results
                 else:
                     logger.info(
-                        "Vector search returned no results, falling back to cosine similarity")
+                        "Vector search returned no results, falling back"
+                        " to cosine similarity")
                     return self._cosine_similarity_search(
                         collection, query_embedding, limit, file_type_filter
                     )

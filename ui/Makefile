@@ -10,6 +10,7 @@ help:
 	@echo "  clean       - Clean up build artifacts"
 	@echo "  lint        - Run linting"
 	@echo "  format      - Format code"
+	@echo "  rebuild-ui  - Rebuild UI and restart client container"
 
 # Install dependencies
 install:
@@ -44,3 +45,6 @@ lint:
 # Format code
 format:
 	npm run format
+
+rebuild-ui:
+	make build && cd .. && docker restart gscodegen-client

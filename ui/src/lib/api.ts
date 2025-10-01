@@ -7,11 +7,12 @@ export interface Message {
   role: 'user' | 'assistant'
   content: string
   timestamp: string
-  sources?: Array<{
-    title: string
-    path: string
-    similarity: number
-  }>
+  sources?: Array<string>
+  // sources?: Array<{
+  //   title: string
+  //   path: string
+  //   similarity: number
+  // }>
 }
 
 export interface Conversation {

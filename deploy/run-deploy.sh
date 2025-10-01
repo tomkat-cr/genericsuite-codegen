@@ -46,6 +46,26 @@ cleanup_when_specific_container_is_specified() {
     fi
 }
 
+is_docker_port_in_use() {
+    # Port to check
+    local port="$1"
+    # Container name to check (evaluation container name)
+    local container_name="$2"
+
+    # Check if the port is used by any running Docker container
+    local running_container=$(docker ps --filter "publish=$port" --format "{{.Names}}" | head -n 1)
+
+    if [ -n "$running_container" ]; then
+        if [ "$running_container" = "$container_name" ]; then
+            echo "0" # The port is in use by the same evaluation container
+        else
+            echo "1" # The port is in use by another container
+        fi
+    else
+        echo "0" # The port is not in use
+    fi
+}
+
 load_envs
 
 APP_NAME_LOWERCASE=$(echo "$APP_NAME" | tr '[:upper:]' '[:lower:]')
@@ -62,15 +82,37 @@ if [ -z "$ACTION" ]; then
     exit 1
 fi
 
-# Specific container environment variables
-export MONGODB_HOST_NAME=gscodegen-mongo
-export MONGODB_HOST_PORT=27017
-export MONGODB_USER=root
-export MONGODB_PASSWORD=example
-# export MONGODB_URI=mongodb://$MONGODB_USER:$MONGODB_PASSWORD@$MONGODB_HOST_NAME:$MONGODB_HOST_PORT
-export MONGODB_URI=mongodb://$MONGODB_HOST_NAME:$MONGODB_HOST_PORT/?directConnection=true
+OTHER_DOCKER_COMPOSE_PARAMS=""
+# Check if the port 27017 (MongoDb) is already taken by any running docker container
+# For example by GSAM, GS BE or other services that use MongoDb
+if [ $(is_docker_port_in_use 27017 gscodegen-mongo) = "0" ]; then
+    if [ "$USE_LOCAL_MONGODB" != "0" ]; then
+        OTHER_DOCKER_COMPOSE_PARAMS="${OTHER_DOCKER_COMPOSE_PARAMS} --profile use_local_mongodb"
+    fi
+fi
 
+# Check if the port 8081 (MongoDb Express) is already taken by any running docker container
+# For example by GSAM, GS BE or other services that use MongoDb
+if [ $(is_docker_port_in_use 8081 gscodegen-mongo-express) = "0" ]; then
+    if [ "$USE_LOCAL_MONGODB" != "0" ]; then
+        OTHER_DOCKER_COMPOSE_PARAMS="${OTHER_DOCKER_COMPOSE_PARAMS} --profile use_local_mongodb_express"
+    fi
+fi
+
+# Specific container environment variables
+if [ "$USE_LOCAL_MONGODB" != "0" ]; then
+    export MONGODB_HOST_NAME=gscodegen-mongo
+    export MONGODB_HOST_PORT=27017
+    # export MONGODB_USER=root
+    # export MONGODB_PASSWORD=example
+    # export MONGODB_URI=mongodb://$MONGODB_USER:$MONGODB_PASSWORD@$MONGODB_HOST_NAME:$MONGODB_HOST_PORT
+    export MONGODB_URI=mongodb://$MONGODB_HOST_NAME:$MONGODB_HOST_PORT/?directConnection=true
+fi
+
+# Override environment variables for Deployment
 export LOCAL_REPO_DIR=/var/local_repo_files
+export BASE_LOCAL_PATH=/var/local_repo_files/genericsuite-basecamp/docs
+
 
 if [ "$ACTION" = "restart" ]; then
     echo "Restarting services..."
@@ -84,7 +126,8 @@ elif [ "$ACTION" = "run" ]; then
         echo "my_shared_network already exists"
     fi
     cleanup_when_specific_container_is_specified
-    docker compose --project-name ${APP_NAME_LOWERCASE} up -d ${CONTAINER_TO_RUN}
+    echo "docker compose  ${OTHER_DOCKER_COMPOSE_PARAMS} --project-name ${APP_NAME_LOWERCASE} up -d ${CONTAINER_TO_RUN}"
+    docker compose  ${OTHER_DOCKER_COMPOSE_PARAMS} --project-name ${APP_NAME_LOWERCASE} up -d ${CONTAINER_TO_RUN}
     exit 0
 elif [ "$ACTION" = "down" ]; then
     echo "Stopping services..."
