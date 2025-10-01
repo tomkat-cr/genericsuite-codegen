@@ -164,13 +164,11 @@ class EndpointMethods:
             agent_response = await self.agent.query(agent_request,
                                                     context=agent_context)
 
-            sources = agent_response.sources if not translate_path \
-                else [
-                    local_path_to_url(source, True)
-                    for source in agent_response.sources
-                ]
-            content = agent_response.content if not translate_path \
-                else local_path_to_url(agent_response.content, False)
+            sources = ([local_path_to_url(source)
+                       for source in agent_response.sources]
+                       if translate_path else agent_response.sources)
+            content = (local_path_to_url(agent_response.content, False)
+                       if translate_path else agent_response.content)
 
             # Convert agent response to API response
             response = QueryResponse(

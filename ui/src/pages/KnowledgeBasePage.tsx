@@ -8,9 +8,7 @@ import { Input } from '@/components/ui/input'
 import { RefreshCw, Upload, Database, FileText, AlertCircle, CheckCircle, Info } from 'lucide-react'
 
 import { baseUrl } from '@/lib/api'
-
-// import { debug } from '@/lib/api'
-const debug = true
+import { debug } from '@/lib/api'
 
 const remoteRepoUrl: string = process.env.VITE_REMOTE_REPO_URL || ''
 const alertTimeout: number = 10000
