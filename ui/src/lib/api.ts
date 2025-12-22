@@ -62,20 +62,20 @@ class ApiService {
 
   private async handleResponse<T>(response: Response): Promise<ApiResponse<T>> {
     try {
-      if (response.ok) {
+      if (response.ok && response.status === 200) {
         const data = await response.json()
         return { success: true, data }
       } else {
         const errorData = await response.json().catch(() => ({}))
-        return { 
-          success: false, 
-          error: errorData.detail || `HTTP ${response.status}: ${response.statusText}` 
+        return {
+          success: false,
+          error: errorData.detail || `HTTP ${response.status}: ${response.statusText}`
         }
       }
     } catch (error) {
-      return { 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Unknown error occurred' 
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error occurred'
       }
     }
   }

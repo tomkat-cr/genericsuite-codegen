@@ -52,7 +52,8 @@ class RepositoryCloner:
             raise ImportError(
                 "GitPython not installed. Install with: pip install GitPython")
 
-    def clone_repository(self, repo_url: str, force_refresh: bool = True
+    def clone_repository(self, repo_url: str, repo_branch: str,
+                         force_refresh: bool = True
                          ) -> Dict[str, Any]:
         """
         Clone or update a repository.
@@ -102,9 +103,15 @@ class RepositoryCloner:
                         shutil.rmtree(self.local_dir)
 
             # Clone repository
-            logger.info(f"Cloning repository {repo_url} to {self.local_dir}")
+            logger.info(
+                f"Cloning repository {repo_url}#{repo_branch}"
+                f" to {self.local_dir}")
             try:
-                git.Repo.clone_from(repo_url, self.local_dir)
+                git.Repo.clone_from(
+                    url=repo_url,
+                    to_path=str(self.local_dir),
+                    branch=repo_branch
+                )
             except Exception as e:
                 logger.error(f"Error cloning repository: {e}")
                 response['success'] = False
@@ -158,6 +165,7 @@ class DocumentIngestionOrchestrator:
 
     def __init__(self,
                  repo_url: str,
+                 repo_branch: str,
                  local_dir: str,
                  database_manager,
                  embedding_provider: Optional[str] = None,
@@ -178,6 +186,7 @@ class DocumentIngestionOrchestrator:
             progress_callback: Optional callback for progress updates
         """
         self.repo_url = repo_url
+        self.repo_branch = repo_branch
         self.local_dir = local_dir
         self.database_manager = database_manager
         self.embedding_provider = embedding_provider
@@ -264,7 +273,7 @@ class DocumentIngestionOrchestrator:
         )
 
         cloner_response = self.cloner.clone_repository(
-            self.repo_url, force_refresh)
+            self.repo_url, self.repo_branch, force_refresh)
 
         if cloner_response['success']:
             self._update_progress(increment_completed=True)
@@ -593,12 +602,14 @@ def load_progress_from_file():
 
 # Convenience functions
 def create_ingestion_orchestrator(repo_url: str,
+                                  repo_branch: str,
                                   local_dir: str,
                                   database_manager,
                                   **kwargs) -> DocumentIngestionOrchestrator:
     """Create a document ingestion orchestrator."""
     return DocumentIngestionOrchestrator(
         repo_url=repo_url,
+        repo_branch=repo_branch,
         local_dir=local_dir,
         database_manager=database_manager,
         **kwargs
@@ -606,6 +617,7 @@ def create_ingestion_orchestrator(repo_url: str,
 
 
 def run_ingestion(repo_url: str,
+                  repo_branch: str,
                   local_dir: str,
                   database_manager,
                   force_refresh: bool = True,
@@ -613,6 +625,7 @@ def run_ingestion(repo_url: str,
     """Run complete document ingestion workflow."""
     orchestrator = create_ingestion_orchestrator(
         repo_url=repo_url,
+        repo_branch=repo_branch,
         local_dir=local_dir,
         database_manager=database_manager,
         **kwargs

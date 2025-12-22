@@ -284,7 +284,31 @@ asyncio.run(main())
 
 ### Using with Kiro MCP Configuration
 
-Add to your `.kiro/settings/mcp.json`:
+#### Setting Up Kiro MCP Configuration
+
+If your `.kiro/settings/mcp.json` file is empty or doesn't exist, create it with the following configuration:
+
+```json
+{
+  "mcpServers": {
+    "genericsuite-codegen": {
+      "command": "sh",
+      "args": ["/absolute/path/to/genericsuite-codegen/mcp-server/run_mcp_server.sh"],
+      "env": {
+        "MCP_API_KEY": "ag-api-key-...",
+        "MCP_TRANSPORT": "stdio"
+      },
+      "disabled": false,
+      "autoApprove": [
+        "search_knowledge_base",
+        "get_knowledge_base_stats"
+      ]
+    }
+  }
+}
+```
+
+**Alternative configuration using Poetry directly**:
 
 ```json
 {
@@ -292,7 +316,7 @@ Add to your `.kiro/settings/mcp.json`:
     "genericsuite-codegen": {
       "command": "poetry",
       "args": ["run", "python", "start_mcp_server.py"],
-      "cwd": "/path/to/mcp-server",
+      "cwd": "/absolute/path/to/genericsuite-codegen/mcp-server",
       "env": {
         "MCP_SERVER_PORT": "8070",
         "MCP_DEBUG": "0"
@@ -306,6 +330,20 @@ Add to your `.kiro/settings/mcp.json`:
   }
 }
 ```
+
+#### Configuration Notes
+
+- **Path Requirements**: Replace `/absolute/path/to/genericsuite-codegen` with the actual absolute path to your project
+- **Shell Script vs Poetry**: The shell script approach (`run_mcp_server.sh`) is recommended as it handles environment setup automatically
+- **Auto-Approve**: List tools that don't require manual approval for each use
+- **API Key**: Set a unique API key if authentication is enabled (`MCP_REQUIRE_AUTH=1`)
+
+#### Kiro Integration Steps
+
+1. **Create/Update Configuration**: Add the server configuration to `.kiro/settings/mcp.json`
+2. **Restart Kiro**: Restart Kiro or use the command palette to reload MCP servers
+3. **Verify Connection**: Check the MCP Server view in Kiro to ensure the server is connected
+4. **Test Tools**: Try using one of the auto-approved tools to verify functionality
 
 ## Error Handling
 
@@ -367,10 +405,10 @@ Response headers include:
 
 ```bash
 # Basic functionality test
-poetry run python simple_test.py
+poetry run python run_mcp_simple_test.py
 
 # Full test suite (requires server components)
-poetry run python test_mcp_server.py
+poetry run python run_mcp_server_test.py
 
 # Using Make
 make test

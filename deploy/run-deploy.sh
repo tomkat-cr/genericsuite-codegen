@@ -88,6 +88,9 @@ OTHER_DOCKER_COMPOSE_PARAMS=""
 if [ $(is_docker_port_in_use 27017 gscodegen-mongo) = "0" ]; then
     if [ "$USE_LOCAL_MONGODB" != "0" ]; then
         OTHER_DOCKER_COMPOSE_PARAMS="${OTHER_DOCKER_COMPOSE_PARAMS} --profile use_local_mongodb"
+    else
+        echo ""
+        echo "WARNING: Port 27017 is in use by any running docker container different than 'gscodegen-mongo'"
     fi
 fi
 
@@ -96,6 +99,9 @@ fi
 if [ $(is_docker_port_in_use 8081 gscodegen-mongo-express) = "0" ]; then
     if [ "$USE_LOCAL_MONGODB" != "0" ]; then
         OTHER_DOCKER_COMPOSE_PARAMS="${OTHER_DOCKER_COMPOSE_PARAMS} --profile use_local_mongodb_express"
+    else
+        echo ""
+        echo "WARNING: Port 8081 is in use by any running docker container different than 'gscodegen-mongo-express'"
     fi
 fi
 

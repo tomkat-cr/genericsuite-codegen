@@ -1,0 +1,89 @@
+{
+  "templates": {
+    "json": {
+      "template": "show me comprehensive examples of JSON table configuration files in GenericSuite with all possible fields and options",
+      "file_type_filter": "json",
+      "priority": 1,
+      "description": "Comprehensive JSON table configurations with all available options"
+    },
+    "langchain": {
+      "template": "provide detailed examples of Python LangChain tool implementations in GenericSuite including error handling and best practices",
+      "file_type_filter": "py",
+      "priority": 1,
+      "description": "Advanced LangChain tool implementations with error handling"
+    },
+    "mcp": {
+      "template": "show me complete MCP server tool examples in GenericSuite with proper protocol implementation and validation",
+      "file_type_filter": "py",
+      "priority": 1,
+      "description": "Complete MCP server tools with protocol compliance"
+    },
+    "frontend": {
+      "template": "provide React frontend component examples in GenericSuite using TypeScript, Tailwind CSS, and Shadcn/ui",
+      "file_type_filter": "tsx",
+      "priority": 1,
+      "description": "Modern React components with TypeScript and styling"
+    },
+    "backend": {
+      "template": "show me FastAPI backend endpoint examples in GenericSuite with proper error handling, validation, and documentation",
+      "file_type_filter": "py",
+      "priority": 1,
+      "description": "Production-ready FastAPI endpoints with comprehensive error handling"
+    },
+    "frontend_ai": {
+      "template": "provide React frontend examples with AI integration in GenericSuite including chat interfaces, streaming, and real-time updates",
+      "file_type_filter": "tsx",
+      "priority": 1,
+      "description": "AI-integrated React components with streaming and real-time features"
+    },
+    "backend_ai": {
+      "template": "show me FastAPI backend examples with AI agent integration in GenericSuite including Pydantic AI, tool usage, and streaming responses",
+      "file_type_filter": "py",
+      "priority": 1,
+      "description": "AI-integrated FastAPI backends with agent frameworks"
+    },
+    "database": {
+      "template": "provide MongoDB database model and operation examples in GenericSuite with proper indexing, aggregation, and error handling",
+      "file_type_filter": "py",
+      "priority": 1,
+      "description": "MongoDB operations with indexing and aggregation"
+    },
+    "testing": {
+      "template": "show me comprehensive testing examples in GenericSuite including unit tests, integration tests, and mocking strategies",
+      "file_type_filter": "py",
+      "priority": 1,
+      "description": "Comprehensive testing strategies and implementations"
+    },
+    "docker": {
+      "template": "provide Docker configuration examples in GenericSuite including Dockerfiles, docker-compose, and deployment strategies",
+      "file_type_filter": "dockerfile",
+      "priority": 1,
+      "description": "Docker configurations and deployment strategies"
+    },
+    "api_design": {
+      "template": "show me API design patterns and examples in GenericSuite including RESTful endpoints, error responses, and documentation",
+      "file_type_filter": "py",
+      "priority": 1,
+      "description": "API design patterns and best practices"
+    },
+    "security": {
+      "template": "provide security implementation examples in GenericSuite including authentication, authorization, and data validation",
+      "file_type_filter": "py",
+      "priority": 1,
+      "description": "Security implementations and best practices"
+    },
+    "generic": {
+      "template": "show me general coding patterns, conventions, and best practices used throughout GenericSuite projects",
+      "file_type_filter": null,
+      "priority": 0,
+      "description": "General GenericSuite coding patterns and conventions"
+    }
+  },
+  "template_groups": {
+    "ai_tools": ["langchain", "mcp", "backend_ai"],
+    "frontend": ["frontend", "frontend_ai"],
+    "backend": ["backend", "backend_ai", "api_design", "database"],
+    "infrastructure": ["docker", "testing", "security"],
+    "configuration": ["json", "generic"]
+  }
+}

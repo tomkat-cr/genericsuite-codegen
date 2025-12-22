@@ -8,7 +8,7 @@ and all API endpoints for the GenericSuite CodeGen RAG system.
 import os
 import logging
 from contextlib import asynccontextmanager
-from typing import Dict, Any, List, Optional, Union
+from typing import List, Optional, Union
 
 from fastapi import FastAPI, HTTPException, Request, \
     UploadFile, BackgroundTasks, Body
@@ -21,26 +21,26 @@ from fastapi.exceptions import RequestValidationError
 import uvicorn
 
 from .types import (
-    HealthResponse,
+    # HealthResponse,
     ErrorResponse,
-    AppInfo,
+    # AppInfo,
     QueryRequest,
-    QueryResponse,
+    # QueryResponse,
     ConversationCreate,
     ConversationUpdate,
-    Conversation,
-    ConversationList,
+    # Conversation,
+    # ConversationList,
     KnowledgeBaseUpdate,
-    KnowledgeBaseStatus,
-    DocumentInfo,
+    # KnowledgeBaseStatus,
+    # DocumentInfo,
     # ProgressUpdate,
-    Statistics,
+    # Statistics,
     SearchQuery,
-    SearchResponse,
+    # SearchResponse,
     FileGenerationRequest,
     GeneratedFile,
-    GeneratedFilesResponse,
-    FilePackage,
+    # GeneratedFilesResponse,
+    # FilePackage,
     StandardGsResponse,
     StandardGsErrorResponse,
     GenerationRequest,
@@ -50,7 +50,7 @@ from genericsuite_codegen.document_processing.types import (
     IngestionResult,
     IngestionStatistics,
     IngestionStatus,
-    IngestionRepositoryInfo,
+    # IngestionRepositoryInfo,
 )
 
 from .utilities import (
@@ -73,7 +73,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO if DEBUG else logging.WARNING)
 
 
-EP_PREFIX = ''
+EP_PREFIX = '/v1'
 PERFORM_AGENT_HEALT_CHECK = os.getenv("PERFORM_AGENT_HEALT_CHECK", "0") == "1"
 
 
@@ -298,15 +298,35 @@ def setup_exception_handlers(app: FastAPI) -> None:
         return Response(status_code=500, content=str(error_response))
 
 
+def success_wrapper(result: any) -> any:
+    return {
+        # "success": True,
+        "data": result,
+    }
+
+
 def result_wrapper(
     result: Union[StandardGsResponse, StandardGsErrorResponse],
 ) -> Union[HTTPException, StandardGsResponse]:
+    """
+    Wrap the result in a error or success response.
+
+    Args:
+        result: The result to wrap. It must have the following attributes:
+            - error: bool
+            - error_message: str
+            - status_code: int
+            - result: any
+
+    Returns:
+        The wrapped result.
+    """
     if result.error:
         raise HTTPException(
             status_code=result.status_code,
             detail=result.error_message,
         )
-    return result
+    return success_wrapper(result.result)
 
 
 def setup_routes(app: FastAPI) -> None:
@@ -322,7 +342,11 @@ def setup_routes(app: FastAPI) -> None:
     methods = get_endpoint_methods()
 
     # Health check endpoints
-    @app.get("/health", response_model=HealthResponse, tags=["Health"])
+    @app.get(
+        EP_PREFIX + "/health",
+        # response_model=HealthResponse,
+        tags=["Health"]
+    )
     async def health_check():
         """
         Health check endpoint.
@@ -330,9 +354,12 @@ def setup_routes(app: FastAPI) -> None:
         Returns:
             HealthResponse: Application health status.
         """
-        return methods.health_check_endpoint()
+        return success_wrapper(methods.health_check_endpoint())
 
-    @app.get("/", response_model=AppInfo, tags=["Info"])
+    @app.get(
+        EP_PREFIX + "/",
+        # response_model=AppInfo,
+        tags=["Info"])
     async def root():
         """
         Root endpoint with application information.
@@ -340,9 +367,12 @@ def setup_routes(app: FastAPI) -> None:
         Returns:
             AppInfo: Application information.
         """
-        return get_app_info()
+        return success_wrapper(get_app_info())
 
-    @app.get("/status", response_model=Dict[str, Any], tags=["Health"])
+    @app.get(
+        "/status",
+        # response_model=Dict[str, Any],
+        tags=["Health"])
     async def status():
         """
         Detailed status endpoint.
@@ -350,14 +380,13 @@ def setup_routes(app: FastAPI) -> None:
         Returns:
             Dict[str, Any]: Detailed application status.
         """
-        result = result_wrapper(methods.status_endpoint())
-        return result.result
+        return result_wrapper(methods.status_endpoint())
 
     # Agent Query Endpoints
 
     @app.post(
         EP_PREFIX + "/query",
-        response_model=QueryResponse,
+        # response_model=QueryResponse,
         tags=["Agent"])
     async def query_agent(
         req: Request,
@@ -379,10 +408,11 @@ def setup_routes(app: FastAPI) -> None:
                                       translate_path=True))
         logger.info(f"/query | query_agent | result.result: {result}")
         logger.info(f"dict(result.result): {dict(result.result)}")
-        # return result.result
-        return dict(result.result)
+        return result
 
-    @app.post(EP_PREFIX + "/query/stream", tags=["Agent"])
+    @app.post(
+        EP_PREFIX + "/query/stream",
+        tags=["Agent"])
     async def stream_query_agent(
         req: Request,
         request: Optional[QueryRequest] = Body(default=None),
@@ -398,7 +428,6 @@ def setup_routes(app: FastAPI) -> None:
             StreamingResponse: Streaming agent response.
         """
         correlation_id = getattr(req.state, "correlation_id", "unknown")
-
         return StreamingResponse(
             methods.stream_agent_query(request, correlation_id),
             media_type="text/plain",
@@ -411,12 +440,16 @@ def setup_routes(app: FastAPI) -> None:
 
     # Conversation Management Endpoints
 
-    @app.post(EP_PREFIX + "/conversations", response_model=Conversation,
-              tags=["Conversations"])
+    @app.post(
+        EP_PREFIX + "/conversations",
+        # response_model=Conversation,
+        tags=["Conversations"]
+    )
     async def create_conversation(
+        req: Request,
         request: Optional[ConversationCreate] = Body(default=None),
-        user_id: str = "default_user",  # In a real app, this would come from
-        # authentication
+        # TODO: In a real app, this would come from authentication
+        user_id: str = "default_user",
     ):
         """
         Create a new conversation.
@@ -428,20 +461,20 @@ def setup_routes(app: FastAPI) -> None:
         Returns:
             Conversation: Created conversation.
         """
-        result = result_wrapper(
+        return result_wrapper(
             await methods.create_conversation(
                 request, user_id))
-        return result.result
 
     @app.get(
-        EP_PREFIX + "/conversations", response_model=ConversationList,
+        EP_PREFIX + "/conversations",
+        # response_model=ConversationList,
         tags=["Conversations"]
     )
     async def get_conversations(
         page: int = 1,
         page_size: int = 20,
-        user_id: str = "default_user",  # In a real app, this would come from
-        # authentication
+        # TODO: In a real app, this would come from authentication
+        user_id: str = "default_user",
     ):
         """
         Get user conversations with pagination.
@@ -454,20 +487,19 @@ def setup_routes(app: FastAPI) -> None:
         Returns:
             ConversationList: Paginated conversation list.
         """
-        result = result_wrapper(
+        return result_wrapper(
             await methods.get_conversations(user_id, page, page_size)
         )
-        return result.result
 
     @app.get(
         EP_PREFIX + "/conversations/{conversation_id}",
-        response_model=Conversation,
+        # response_model=Conversation,
         tags=["Conversations"],
     )
     async def get_conversation(
         conversation_id: str,
-        user_id: str = "default_user",  # In a real app, this would come from
-        # authentication
+        # TODO: In a real app, this would come from authentication
+        user_id: str = "default_user",
     ):
         """
         Get a specific conversation.
@@ -479,21 +511,20 @@ def setup_routes(app: FastAPI) -> None:
         Returns:
             Conversation: Conversation data.
         """
-        result = result_wrapper(
+        return result_wrapper(
             await methods.get_conversation(conversation_id, user_id)
         )
-        return result.result
 
     @app.put(
         EP_PREFIX + "/conversations/{conversation_id}",
-        response_model=Conversation,
+        # response_model=Conversation,
         tags=["Conversations"],
     )
     async def update_conversation(
         conversation_id: str,
         request: Optional[ConversationUpdate] = Body(default=None),
-        user_id: str = "default_user",  # In a real app, this would come from
-        # authentication
+        # TODO: In a real app, this would come from authentication
+        user_id: str = "default_user",
     ):
         """
         Update a conversation.
@@ -506,18 +537,19 @@ def setup_routes(app: FastAPI) -> None:
         Returns:
             Conversation: Updated conversation.
         """
-        result = result_wrapper(
+        return result_wrapper(
             await methods.update_conversation(conversation_id, request,
                                               user_id)
         )
-        return result.result
 
-    @app.delete(EP_PREFIX + "/conversations/{conversation_id}",
-                tags=["Conversations"])
+    @app.delete(
+        EP_PREFIX + "/conversations/{conversation_id}",
+        tags=["Conversations"]
+    )
     async def delete_conversation(
         conversation_id: str,
-        user_id: str = "default_user",  # In a real app, this would come from
-        # authentication
+        # TODO: In a real app, this would come from authentication
+        user_id: str = "default_user",
     ):
         """
         Delete a conversation.
@@ -529,18 +561,20 @@ def setup_routes(app: FastAPI) -> None:
         Returns:
             Dict[str, str]: Deletion confirmation.
         """
-        result = result_wrapper(
+        return result_wrapper(
             await methods.delete_conversation(conversation_id, user_id)
         )
-        return result.result
 
     # Knowledge Base Management Endpoints
 
-    @app.post("/update-knowledge-base", tags=["Knowledge Base"])
+    @app.post(
+        EP_PREFIX + "/update-knowledge-base",
+        # response_model=IngestionResult,
+        tags=["Knowledge Base"]
+    )
     async def update_knowledge_base(
         background_tasks: BackgroundTasks,
         request: Optional[KnowledgeBaseUpdate] = Body(default=None),
-        response_model=IngestionResult,
     ):
         """
         Trigger knowledge base update.
@@ -563,26 +597,30 @@ def setup_routes(app: FastAPI) -> None:
             request,
         )
 
-        return IngestionResult(
-            success=True,
-            status="Knowledge base update started",
-            statistics=IngestionStatistics(
-                total_documents=0,
-                total_chunks=0,
-                total_embeddings=0,
-                duration_seconds=0,
-            ),
-            progress=IngestionProgress(
-                status=IngestionStatus.CLONING,
-                current_step="Knowledge base update started",
-                total_steps=1,
-                completed_steps=0,
+        return result_wrapper(
+            StandardGsResponse(
+                result=IngestionResult(
+                    success=True,
+                    status="Knowledge base update started",
+                    statistics=IngestionStatistics(
+                        total_documents=0,
+                        total_chunks=0,
+                        total_embeddings=0,
+                        duration_seconds=0,
+                    ),
+                    progress=IngestionProgress(
+                        status=IngestionStatus.CLONING,
+                        current_step="Knowledge base update started",
+                        total_steps=1,
+                        completed_steps=0,
+                    )
+                ).to_dict(),
             )
         )
 
     @app.get(
         EP_PREFIX + "/knowledge-base/status",
-        response_model=KnowledgeBaseStatus,
+        # response_model=KnowledgeBaseStatus,
         tags=["Knowledge Base"],
     )
     async def get_knowledge_base_status():
@@ -592,11 +630,11 @@ def setup_routes(app: FastAPI) -> None:
         Returns:
             KnowledgeBaseStatus: Current knowledge base status.
         """
-        result = result_wrapper(await methods.get_knowledge_base_status())
-        return result.result
+        return result_wrapper(await methods.get_knowledge_base_status())
 
     @app.post(
-        EP_PREFIX + "/upload-document", response_model=DocumentInfo,
+        EP_PREFIX + "/upload-document",
+        # response_model=DocumentInfo,
         tags=["Knowledge Base"]
     )
     async def upload_document(file: UploadFile,
@@ -611,14 +649,14 @@ def setup_routes(app: FastAPI) -> None:
         Returns:
             DocumentInfo: Information about the uploaded document.
         """
-        result = result_wrapper(await methods.upload_document(file,
-                                                              description))
-        return result.result
+        return result_wrapper(
+            await methods.upload_document(file,
+                                          description))
 
     @app.get(
         EP_PREFIX + "/knowledge-base/progress",
-        # response_model=ProgressUpdate,
-        response_model=IngestionProgress,
+        # # response_model=ProgressUpdate,
+        # response_model=IngestionProgress,
         tags=["Knowledge Base"],
     )
     async def get_operation_progress():
@@ -632,9 +670,8 @@ def setup_routes(app: FastAPI) -> None:
             # ProgressUpdate: Operation progress information.
             IngestionProgress: Operation progress information.
         """
-        result = result_wrapper(
+        return result_wrapper(
             await methods.get_operation_progress())
-        return result.result
 
         # TODO:
         # This would be implemented with a proper progress tracking system
@@ -644,12 +681,12 @@ def setup_routes(app: FastAPI) -> None:
         #     status="completed",
         #     progress=1.0,
         #     message="Operation completed",
-        #     started_at=datetime.utcnow(),
+        #     started_at=datetime.datetime.now(datetime.UTC),
         # )
 
     @app.get(
         EP_PREFIX + "/knowledge-base/statistics",
-        response_model=Statistics,
+        # response_model=Statistics,
         tags=["Knowledge Base"],
     )
     async def get_knowledge_base_statistics():
@@ -659,12 +696,11 @@ def setup_routes(app: FastAPI) -> None:
         Returns:
             Statistics: Knowledge base and system statistics.
         """
-        result = result_wrapper(await methods.get_statistics())
-        return result.result
+        return result_wrapper(await methods.get_statistics())
 
     @app.post(
         EP_PREFIX + "/search",
-        response_model=SearchResponse,
+        # response_model=SearchResponse,
         tags=["Knowledge Base"]
     )
     async def search_knowledge_base(query: SearchQuery):
@@ -680,9 +716,12 @@ def setup_routes(app: FastAPI) -> None:
         result = result_wrapper(await methods.search_knowledge_base(
             query, translate_path=True))
         logger.info(f"API /search | result: {result}")
-        return result.result
+        return result
 
-    @app.post(EP_PREFIX + "/knowledge-base/clean", tags=["Knowledge Base"])
+    @app.post(
+        EP_PREFIX + "/knowledge-base/clean",
+        tags=["Knowledge Base"]
+    )
     async def clean_knowledge_base():
         """
         Clean all vectors from the knowledge base.
@@ -690,14 +729,13 @@ def setup_routes(app: FastAPI) -> None:
         Returns:
             Dict[str, str]: Cleanup confirmation.
         """
-        result = result_wrapper(await methods.clean_knowledge_base())
-        return result.result
+        return result_wrapper(await methods.clean_knowledge_base())
 
     # File Generation and Download Endpoints
 
     @app.post(
         EP_PREFIX + "/generate-file",
-        response_model=GeneratedFile,
+        # response_model=GeneratedFile,
         tags=["File Generation"]
     )
     async def generate_file(
@@ -712,12 +750,11 @@ def setup_routes(app: FastAPI) -> None:
         Returns:
             GeneratedFile: Generated file information.
         """
-        result = result_wrapper(await methods.generate_file(request))
-        return result.result
+        return result_wrapper(await methods.generate_file(request))
 
     @app.post(
         EP_PREFIX + "/generate-package",
-        response_model=FilePackage,
+        # response_model=FilePackage,
         tags=["File Generation"]
     )
     async def create_file_package(files: List[GeneratedFile]):
@@ -730,8 +767,7 @@ def setup_routes(app: FastAPI) -> None:
         Returns:
             FilePackage: File package information.
         """
-        result = result_wrapper(await methods.create_file_package(files))
-        return await result.result
+        return result_wrapper(await methods.create_file_package(files))
 
     @app.get(
         EP_PREFIX + "/download/file/{filename}",
@@ -787,7 +823,7 @@ def setup_routes(app: FastAPI) -> None:
 
     @app.post(
         EP_PREFIX + "/generate/json-config",
-        response_model=GeneratedFilesResponse,
+        # response_model=GeneratedFilesResponse,
         tags=["Code Generation"],
     )
     async def generate_json_config(
@@ -813,11 +849,11 @@ def setup_routes(app: FastAPI) -> None:
         logger.info(
             f"ENDPOINT >> generate_json_config | Result: {result}")
         result = result_wrapper(result)
-        return result.result
+        return result
 
     @app.post(
         EP_PREFIX + "/generate/python-code",
-        response_model=GeneratedFilesResponse,
+        # response_model=GeneratedFilesResponse,
         tags=["Code Generation"],
     )
     async def generate_python_code(
@@ -833,7 +869,7 @@ def setup_routes(app: FastAPI) -> None:
         Returns:
             GeneratedFile: Generated Python code file.
         """
-        result = result_wrapper(
+        return result_wrapper(
             await methods.generate_python_code_endpoint(
                 request.requirements,
                 request.tool_name,
@@ -841,11 +877,10 @@ def setup_routes(app: FastAPI) -> None:
                 request.type,
             )
         )
-        return result.result
 
     @app.post(
         EP_PREFIX + "/generate/frontend-code",
-        response_model=GeneratedFilesResponse,
+        # response_model=GeneratedFilesResponse,
         tags=["Code Generation"],
     )
     async def generate_frontend_code(
@@ -860,14 +895,13 @@ def setup_routes(app: FastAPI) -> None:
         Returns:
             List[GeneratedFile]: Generated frontend code files.
         """
-        result = result_wrapper(
+        return result_wrapper(
             await methods.generate_frontend_code_endpoint(request.requirements)
         )
-        return result.result
 
     @app.get(
         EP_PREFIX + "/get-repo-info",
-        response_model=IngestionRepositoryInfo,
+        # response_model=IngestionRepositoryInfo,
         tags=["Local Repo"],
     )
     async def get_repo_info():
@@ -880,11 +914,11 @@ def setup_routes(app: FastAPI) -> None:
         repo_name = repo_url.split("/")[-1].split(".")[0]
         rc = RepositoryCloner(f"{local_dir}/{repo_name}")
         result = rc.get_repository_info()
-        return result
+        return success_wrapper(result)
 
     @app.post(
         EP_PREFIX + "/generate/backend-code",
-        response_model=GeneratedFilesResponse,
+        # response_model=GeneratedFilesResponse,
         tags=["Code Generation"],
     )
     async def generate_backend_code(
@@ -900,13 +934,12 @@ def setup_routes(app: FastAPI) -> None:
         Returns:
             List[GeneratedFile]: Generated backend code files.
         """
-        result = result_wrapper(
+        return result_wrapper(
             await methods.generate_backend_code_endpoint(
                 request.requirements,
                 request.framework
             )
         )
-        return result.result
 
 
 # Create the application instance

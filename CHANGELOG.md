@@ -17,6 +17,33 @@ This project adheres to [Semantic Versioning](http://semver.org/) and [Keep a Ch
 ### Security
 
 
+## [1.3.0] - 2025-10-01
+
+### Added
+- Enhanced Search Types: Comprehensive type definitions for dual search operations and context-aware generation
+  - `CodeGenerationContext` for code generation context information
+  - `DualSearchResult` for dual vector search results
+  - `DocumentContent` and `DocumentMetadata` for document handling
+  - `SearchTemplate` and `EnhancedSearchConfig` for configurable search templates
+- Complete API models for enhanced search operations
+- Exception hierarchy for enhanced search error handling
+- API /v1 to all endpoints.
+- Remote repository branch with the REMOTE_REPO_BRANCH environment variable.
+
+### Changed
+- MCP server main file "start_mcp_server.py" moved from "mcp-server/" to "server/".
+- Server test runs with local MongoDB and "run-server.sh test".
+
+### Fixed
+- UI API call error handling verifying the response status.
+
+### Security
+- Update dependencies according to Github Dependabot suggestions:
+  - Change: Bump Vite to version 5.4.20 and Black to version 24.10.0 in package-lock.json, poetry.lock, and pyproject.toml files.
+  - Change: Adjust Python version requirement for Black to >=3.9.
+  - Change: Update content hashes in lock files for consistency.
+
+
 ## [1.2.0] - 2025-09-30
 
 ### Added

@@ -7,9 +7,16 @@ response formatting, and data transfer objects in the GenericSuite CodeGen API.
 
 from typing import Dict, Any, List, Optional
 from datetime import datetime
+import datetime as dt
 from enum import Enum
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import (
+    BaseModel,
+    # ConfigDict,
+    Field,
+    field_validator,
+    field_serializer,
+)
 
 from genericsuite_codegen.agent.types import (
     AgentModel,
@@ -48,15 +55,14 @@ class LLMProvider(str, Enum):
 
 class BaseResponse(BaseModel):
     """Base response model with common fields."""
-    model_config = ConfigDict(
-        json_encoders={
-            datetime: lambda v: v.isoformat()
-        }
-    )
-
     timestamp: datetime = Field(
-        default_factory=datetime.utcnow,
+        default=dt.datetime.now(dt.UTC),
         description="Response timestamp")
+
+    @field_serializer('timestamp')
+    def serialize_timestamp(self, value: datetime) -> str:
+        """Serialize datetime to ISO format string."""
+        return value.isoformat()
 
 
 class ErrorResponse(BaseResponse):
@@ -192,7 +198,8 @@ class Message(BaseModel):
     role: str = Field(description="Message role (user/assistant)")
     content: str = Field(description="Message content")
     timestamp: datetime = Field(
-        default_factory=datetime.utcnow, description="Message timestamp")
+        default=dt.datetime.now(dt.UTC),
+        description="Message timestamp")
     sources: Optional[List[str]] = Field(
         default=None, description="Source documents for assistant messages")
     token_usage: Optional[Dict[str, int]] = Field(
@@ -292,6 +299,7 @@ class KnowledgeBaseStatus(BaseResponse):
     document_count: int = Field(description="Total number of documents")
     chunk_count: int = Field(description="Total number of chunks")
     repository_url: str = Field(description="Current repository URL")
+    repository_branch: str = Field(description="Current repository branch")
     repository_commit: Optional[str] = Field(
         default=None, description="Current repository commit hash")
     error_message: Optional[str] = Field(
@@ -441,7 +449,8 @@ class SearchResponse(BaseResponse):
 
 class KnowledgeBaseStatistics(BaseModel):
     total_chunks: int = Field(description="Total chunks")
-    last_updated: Optional[datetime] = Field(description="Last updated")
+    last_updated: Optional[datetime] = Field(
+        description="Last updated")
 
 
 class ConversationStatistics(BaseModel):

@@ -32,7 +32,10 @@ from .tools import (
     KnowledgeBaseTool,
     validate_search_query,
     format_sources_for_attribution,
+    DEFAULT_MAX_CONTEXT_LENGTH
 )
+from .enhanced_search_types import EnhancedSearchConfig
+from .search_templates import SearchTemplateManager
 from .prompts import get_prompt_manager
 
 
@@ -61,15 +64,27 @@ class GenericSuiteAgent:
     code generation, documentation queries, and configuration creation.
     """
 
-    def __init__(self, config: Optional[AgentConfig] = None):
+    def __init__(
+        self,
+        config: Optional[AgentConfig] = None,
+        enhanced_search_config: Optional[EnhancedSearchConfig] = None
+    ):
         """
         Initialize the GenericSuite AI agent.
 
         Args:
             config: Agent configuration. If None, uses environment defaults.
+            enhanced_search_config: Enhanced search configuration.
+                If None, uses defaults.
         """
         self.config = config or self._create_default_config()
         self.prompt_manager = get_prompt_manager()
+
+        # Initialize enhanced search configuration
+        self.enhanced_search_config = (
+            enhanced_search_config or
+            self._create_default_enhanced_search_config()
+        )
 
         # Initialize LLM model
         self.inference_args = {}
@@ -79,9 +94,14 @@ class GenericSuiteAgent:
         self.kb_tool = None
         self.agent = None
 
+        enhanced_status = (
+            'enabled' if self.enhanced_search_config.fallback_enabled
+            else 'disabled'
+        )
         logger.info(
-            "Initialized GenericSuite agent with "
-            f"{self.config.model_provider} provider"
+            f"Initialized GenericSuite agent with "
+            f"{self.config.model_provider} provider and enhanced search "
+            f"{enhanced_status}"
         )
 
     def _create_default_config(self) -> AgentConfig:
@@ -106,6 +126,61 @@ class GenericSuiteAgent:
             f"Agent config: {agent_config}"
         )
         return agent_config
+
+    def _create_default_enhanced_search_config(self) -> EnhancedSearchConfig:
+        """Create default enhanced search configuration from environment."""
+        try:
+            # Initialize template manager to get templates
+            template_manager = SearchTemplateManager()
+            templates = template_manager.get_all_templates()
+
+            # Create enhanced search config
+            enhanced_config = EnhancedSearchConfig(
+                templates=templates,
+                local_repo_path=os.getenv(
+                    "ENHANCED_SEARCH_LOCAL_REPO_PATH", "local_repo_files"
+                ),
+                max_context_length=int(
+                    os.getenv("ENHANCED_SEARCH_MAX_CONTEXT_LENGTH", "10000")),
+                fallback_enabled=os.getenv(
+                    "ENHANCED_SEARCH_FALLBACK_ENABLED", "true"
+                ).lower() == "true",
+                search_result_limit=int(
+                    os.getenv("ENHANCED_SEARCH_RESULT_LIMIT", "10")
+                ),
+                context_determination_enabled=os.getenv(
+                    "ENHANCED_SEARCH_CONTEXT_DETERMINATION_ENABLED", "true"
+                ).lower() == "true",
+                document_retrieval_enabled=os.getenv(
+                    "ENHANCED_SEARCH_ENABLE_DOC_RETRIEVAL", "true"
+                ).lower() == "true",
+                similarity_threshold=float(
+                    os.getenv("ENHANCED_SEARCH_SIMILARITY_THRESHOLD", "0.7")
+                ),
+                merge_strategy=os.getenv(
+                    "ENHANCED_SEARCH_MERGE_STRATEGY", "prioritize_context"
+                )
+            )
+
+            logger.info(
+                f"Enhanced search config: "
+                f"local_repo_path={enhanced_config.local_repo_path}, "
+                f"fallback_enabled={enhanced_config.fallback_enabled}, "
+                f"document_retrieval="
+                f"{enhanced_config.document_retrieval_enabled}"
+            )
+
+            return enhanced_config
+
+        except Exception as e:
+            logger.warning(f"Failed to create enhanced search config: {e}")
+            # Return minimal config with fallback enabled
+            return EnhancedSearchConfig(
+                templates={},
+                local_repo_path="local_repo_files",
+                max_context_length=10000,
+                fallback_enabled=True
+            )
 
     def _initialize_model(self) -> Model:
         """
@@ -255,8 +330,8 @@ class GenericSuiteAgent:
                 result, request, sources, kb_context)
 
             logger.info(
-                f"Generated response ({len(response.content)} chars) with"
-                f" {len(sources)} sources"
+                f"Generated response ({len(response.content)} chars) with "
+                f"{len(sources)} sources"
             )
             return response
 
@@ -271,7 +346,23 @@ class GenericSuiteAgent:
     def set_kb_tool_and_agent(self) -> KnowledgeBaseTool:
         """Get the knowledge base tool."""
         if self.kb_tool is None:
-            self.kb_tool = KnowledgeBaseTool()
+            # Initialize knowledge base tool with enhanced search enabled
+            enable_enhanced_search = (
+                self.enhanced_search_config.fallback_enabled
+            )
+            self.kb_tool = KnowledgeBaseTool(
+                enable_enhanced_search=enable_enhanced_search
+            )
+
+            # Configure enhanced search if available
+            if (enable_enhanced_search and
+                hasattr(self.kb_tool, 'enhanced_search') and
+                    self.kb_tool.enhanced_search is not None):
+                self.kb_tool.enhanced_search.update_config(
+                    self.enhanced_search_config
+                )
+                logger.info("Enhanced search configured with custom settings")
+
         if self.agent is None:
             self.agent = self._create_agent()
 
@@ -290,14 +381,25 @@ class GenericSuiteAgent:
             # Determine file type filter based on task type
             file_type_filter = self._get_file_type_filter(request.task_type)
 
+        except Exception as e:
+            logger.error(f"Failed to get file type filter: {e}")
+            raise
+
+        try:
             self.set_kb_tool_and_agent()
 
+        except Exception as e:
+            logger.error(f"Failed to set KB tool and agent: {e}")
+            raise
+
+        try:
             # Get context from knowledge base
-            context, sources = self.kb_tool.get_context_for_generation(
-                query=request.query,
-                max_context_length=request.context_limit,
-                file_type_filter=file_type_filter,
-            )
+            context, sources, raw_results = \
+                self.kb_tool.get_context_for_generation(
+                    query=request.query,
+                    max_context_length=request.context_limit,
+                    file_type_filter=file_type_filter,
+                )
 
             return context, sources
 
@@ -539,6 +641,78 @@ class GenericSuiteAgent:
         self.agent = self._create_agent()
         logger.info("Agent configuration updated")
 
+    def update_enhanced_search_config(
+        self, new_config: EnhancedSearchConfig
+    ) -> None:
+        """
+        Update enhanced search configuration.
+
+        Args:
+            new_config: New enhanced search configuration to apply.
+        """
+        self.enhanced_search_config = new_config
+
+        # Update existing knowledge base tool if it exists
+        if (self.kb_tool is not None and
+            hasattr(self.kb_tool, 'enhanced_search') and
+                self.kb_tool.enhanced_search is not None):
+            self.kb_tool.enhanced_search.update_config(new_config)
+            logger.info("Enhanced search configuration updated")
+        else:
+            # Reset kb_tool to force re-initialization with new config
+            self.kb_tool = None
+            logger.info(
+                "Enhanced search configuration updated - "
+                "will apply on next use"
+            )
+
+    def get_enhanced_search_info(self) -> Dict[str, Any]:
+        """
+        Get information about enhanced search capabilities.
+
+        Returns:
+            Dict[str, Any]: Enhanced search information.
+        """
+        if self.kb_tool is None:
+            return {
+                "available": False,
+                "reason": "Knowledge base tool not initialized"
+            }
+
+        if hasattr(self.kb_tool, 'get_enhanced_search_info'):
+            return self.kb_tool.get_enhanced_search_info()
+        else:
+            return {
+                "available": False,
+                "reason": (
+                    "Enhanced search not supported by knowledge base tool"
+                )
+            }
+
+    def set_enhanced_search_enabled(self, enabled: bool) -> None:
+        """
+        Enable or disable enhanced search functionality.
+
+        Args:
+            enabled: Whether to enable enhanced search
+        """
+        # Update config
+        self.enhanced_search_config.fallback_enabled = enabled
+
+        # Update existing knowledge base tool if it exists
+        if (self.kb_tool is not None and
+                hasattr(self.kb_tool, 'set_enhanced_search_enabled')):
+            self.kb_tool.set_enhanced_search_enabled(enabled)
+            logger.info(
+                f"Enhanced search {'enabled' if enabled else 'disabled'}")
+        else:
+            # Reset kb_tool to force re-initialization with new setting
+            self.kb_tool = None
+            logger.info(
+                f"Enhanced search {'enabled' if enabled else 'disabled'} - "
+                "will apply on next use"
+            )
+
     def get_model_info(self) -> Dict[str, Any]:
         """
         Get information about the current model configuration.
@@ -546,13 +720,19 @@ class GenericSuiteAgent:
         Returns:
             Dict[str, Any]: Model information.
         """
-        return {
+        model_info = {
             "provider": self.config.model_provider,
             "model_name": self.config.model_name,
             "temperature": self.config.temperature,
             "max_tokens": self.config.max_tokens,
             "timeout": self.config.timeout,
         }
+
+        # Add enhanced search information
+        enhanced_search_info = self.get_enhanced_search_info()
+        model_info["enhanced_search"] = enhanced_search_info
+
+        return model_info
 
     async def health_check(self) -> Dict[str, Any]:
         """
@@ -571,12 +751,16 @@ class GenericSuiteAgent:
 
             response = await self.query(test_request)
 
+            # Get enhanced search status
+            enhanced_search_info = self.get_enhanced_search_info()
+
             return {
                 "status": "healthy",
                 "model": self.config.model_name,
                 "provider": self.config.model_provider,
                 "test_response_length": len(response.content),
                 "sources_available": len(response.sources) > 0,
+                "enhanced_search": enhanced_search_info,
             }
 
         except Exception as e:
@@ -593,36 +777,43 @@ class GenericSuiteAgent:
 _agent_instance: Optional[GenericSuiteAgent] = None
 
 
-def get_agent(config: Optional[AgentConfig] = None) -> GenericSuiteAgent:
+def get_agent(
+    config: Optional[AgentConfig] = None,
+    enhanced_search_config: Optional[EnhancedSearchConfig] = None
+) -> GenericSuiteAgent:
     """
     Get or create the global agent instance.
 
     Args:
         config: Optional configuration for new agent.
+        enhanced_search_config: Optional enhanced search configuration.
 
     Returns:
         GenericSuiteAgent: Global agent instance.
     """
     global _agent_instance
 
-    if _agent_instance is None or config is not None:
-        _agent_instance = GenericSuiteAgent(config)
+    if (_agent_instance is None):
+        _agent_instance = GenericSuiteAgent(config, enhanced_search_config)
 
     return _agent_instance
 
 
-def initialize_agent(config: Optional[AgentConfig] = None
-                     ) -> GenericSuiteAgent:
+def initialize_agent(
+    config: Optional[AgentConfig] = None,
+    enhanced_search_config: Optional[EnhancedSearchConfig] = None
+) -> GenericSuiteAgent:
     """
     Initialize the GenericSuite AI agent.
 
     Args:
         config: Optional agent configuration.
+        enhanced_search_config: Optional enhanced search configuration.
 
     Returns:
         GenericSuiteAgent: Initialized agent instance.
     """
-    agent = get_agent(config)
+    agent = get_agent(config, enhanced_search_config)
     logger.info("GenericSuite AI agent initialized successfully")
     return agent
 
@@ -652,6 +843,65 @@ def create_agent_config_from_env() -> AgentConfig:
     )
 
 
+def create_enhanced_search_config_from_env() -> EnhancedSearchConfig:
+    """
+    Create enhanced search configuration from environment variables.
+
+    Returns:
+        EnhancedSearchConfig: Enhanced search configuration from environment.
+    """
+    try:
+        # Initialize template manager to get templates
+        template_manager = SearchTemplateManager()
+        templates = template_manager.get_all_templates()
+
+        return EnhancedSearchConfig(
+            templates=templates,
+            local_repo_path=os.getenv(
+                "LOCAL_REPO_DIR", "./local_repo_files"
+            ),
+            max_context_length=int(
+                os.getenv(
+                    "ENHANCED_SEARCH_MAX_CONTEXT_LENGTH", str(
+                        DEFAULT_MAX_CONTEXT_LENGTH)
+                )
+            ),
+            fallback_enabled=os.getenv(
+                "ENHANCED_SEARCH_FALLBACK_ENABLED", "true"
+            ).lower() == "true",
+            context_determination_enabled=os.getenv(
+                "ENHANCED_SEARCH_CONTEXT_DETERMINATION_ENABLED",
+                "true"
+            ).lower() == "true",
+            document_retrieval_enabled=os.getenv(
+                "ENHANCED_SEARCH_ENABLE_DOC_RETRIEVAL", "true"
+            ).lower() == "true",
+            search_result_limit=int(
+                os.getenv("ENHANCED_SEARCH_RESULT_LIMIT", "10")
+            ),
+            similarity_threshold=float(
+                os.getenv(
+                    "ENHANCED_SEARCH_SIMILARITY_THRESHOLD", "0.7"
+                )
+            ),
+            merge_strategy=os.getenv(
+                "ENHANCED_SEARCH_MERGE_STRATEGY",
+                "prioritize_context"
+            )
+        )
+    except Exception as e:
+        logger.warning(
+            f"Failed to create enhanced search config from environment: {e}"
+        )
+        # Return minimal config with fallback enabled
+        return EnhancedSearchConfig(
+            templates={},
+            local_repo_path="local_repo_files",
+            max_context_length=10000,
+            fallback_enabled=True
+        )
+
+
 def validate_agent_config(config: AgentConfig) -> bool:
     """
     Validate agent configuration.
@@ -677,6 +927,35 @@ def validate_agent_config(config: AgentConfig) -> bool:
     return True
 
 
+def validate_enhanced_search_config(config: EnhancedSearchConfig) -> bool:
+    """
+    Validate enhanced search configuration.
+
+    Args:
+        config: Enhanced search configuration to validate.
+
+    Returns:
+        bool: True if configuration is valid.
+    """
+    if not config.local_repo_path:
+        return False
+
+    if config.max_context_length < 100:
+        return False
+
+    if config.search_result_limit < 1:
+        return False
+
+    valid_strategies = ["prioritize_context", "balanced", "prioritize_user"]
+    if config.merge_strategy not in valid_strategies:
+        return False
+
+    if not (0.0 <= config.similarity_threshold <= 1.0):
+        return False
+
+    return True
+
+
 if __name__ == "__main__":
     # Example usage and testing
     import asyncio
@@ -684,13 +963,18 @@ if __name__ == "__main__":
     async def test_agent():
         """Test the GenericSuite agent."""
         try:
-            # Initialize agent
+            # Initialize agent with enhanced search
             config = create_agent_config_from_env()
-            agent = initialize_agent(config)
+            enhanced_config = create_enhanced_search_config_from_env()
+            agent = initialize_agent(config, enhanced_config)
 
             # Test health check
             health = await agent.health_check()
             print(f"Health check: {health}")
+
+            # Test enhanced search info
+            enhanced_info = agent.get_enhanced_search_info()
+            print(f"Enhanced search info: {enhanced_info}")
 
             # Test query
             request = QueryRequest(
@@ -701,6 +985,13 @@ if __name__ == "__main__":
             response = await agent.query(request)
             print(f"Response: {response.content[:200]}...")
             print(f"Sources: {response.sources}")
+
+            # Test enhanced search toggle
+            agent.set_enhanced_search_enabled(False)
+            print("Enhanced search disabled")
+
+            agent.set_enhanced_search_enabled(True)
+            print("Enhanced search re-enabled")
 
         except Exception as e:
             print(f"Test error: {e}")

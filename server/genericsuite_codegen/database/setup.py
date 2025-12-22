@@ -26,7 +26,7 @@ from pymongo.operations import SearchIndexModel
 
 from genericsuite_codegen.document_processing.types import EmbeddedChunk
 
-DEBUG = False
+DEBUG = True
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -40,19 +40,6 @@ class SearchResult:
     metadata: Dict[str, Any]
     similarity_score: float
     document_path: str
-
-
-# @dataclass
-# class DocumentEmbeddedChunk:
-#     """Document chunk with embedding vector."""
-#     chunk_id: str
-#     document_path: str
-#     content: str
-#     embedding: List[float]
-#     chunk_index: int
-#     file_type: str
-#     metadata: Dict[str, Any]
-#     created_at: datetime
 
 
 class DatabaseConnectionError(Exception):
@@ -860,7 +847,7 @@ async def health_check() -> Dict[str, Any]:
 #         chunk_index=chunk_index,
 #         file_type=file_type,
 #         metadata=metadata or {},
-#         created_at=datetime.utcnow(),
+#         created_at=datetime.datetime.now(datetime.UTC),
 #     )
 
 

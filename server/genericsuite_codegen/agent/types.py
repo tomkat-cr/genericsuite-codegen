@@ -1,5 +1,6 @@
 from typing import List, Dict, Any, Optional
 from datetime import datetime
+import datetime as dt
 
 from dataclasses import dataclass
 from pydantic import BaseModel, Field
@@ -267,7 +268,7 @@ class AgentResponse(BaseModel):
     )
     task_type: str = Field(description="Type of task performed")
     timestamp: datetime = Field(
-        default_factory=datetime.utcnow, description="Response timestamp"
+        default=dt.datetime.now(dt.UTC), description="Response timestamp"
     )
     model_used: str = Field(description="Model used for generation")
     token_usage: Optional[Dict[str, int]] = Field(

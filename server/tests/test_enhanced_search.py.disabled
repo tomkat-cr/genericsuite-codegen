@@ -1,0 +1,436 @@
+"""
+Unit tests for EnhancedVectorSearch.
+"""
+
+import pytest
+from unittest.mock import Mock, AsyncMock, patch
+from typing import List
+
+from genericsuite_codegen.database.setup import SearchResult
+from genericsuite_codegen.agent.enhanced_search import EnhancedVectorSearch
+from genericsuite_codegen.agent.enhanced_search_types import (
+    CodeGenerationContext,
+    DualSearchResult,
+    EnhancedSearchConfig,
+    DualSearchError,
+    SearchMergeError
+)
+from genericsuite_codegen.agent.context_determination import ContextDeterminationService
+from genericsuite_codegen.agent.search_templates import SearchTemplateManager
+
+
+class TestEnhancedVectorSearch:
+    """Test cases for EnhancedVectorSearch."""
+
+    @pytest.fixture
+    def mock_kb_tool(self):
+        """Create a mock KnowledgeBaseTool."""
+        mock_tool = Mock()
+        mock_tool.search_knowledge_base = AsyncMock()
+        return mock_tool
+
+    @pytest.fixture
+    def mock_template_manager(self):
+        """Create a mock SearchTemplateManager."""
+        mock_manager = Mock(spec=SearchTemplateManager)
+        mock_manager.get_template.return_value = "test template query"
+        return mock_manager
+
+    @pytest.fixture
+    def mock_context_service(self):
+        """Create a mock ContextDeterminationService."""
+        mock_service = Mock(spec=ContextDeterminationService)
+        mock_service.determine_context.return_value = CodeGenerationContext(
+            code_type="json",
+            confidence=0.8
+        )
+        mock_service.get_contextual_search_query.return_value = "contextual query"
+        return mock_service
+
+    @pytest.fixture
+    def enhanced_search(self, mock_kb_tool, mock_template_manager, mock_context_service):
+        """Create EnhancedVectorSearch instance with mocks."""
+        return EnhancedVectorSearch(
+            kb_tool=mock_kb_tool,
+            template_manager=mock_template_manager,
+            context_service=mock_context_service
+        )
+
+    def test_init_with_all_dependencies(self, mock_kb_tool, mock_template_manager, mock_context_service):
+        """Test initialization with all dependencies provided."""
+        search = EnhancedVectorSearch(
+            kb_tool=mock_kb_tool,
+            template_manager=mock_template_manager,
+            context_service=mock_context_service
+        )
+
+        assert search.kb_tool == mock_kb_tool
+        assert search.template_manager == mock_template_manager
+        assert search.context_service == mock_context_service
+
+    def test_init_with_minimal_dependencies(self, mock_kb_tool):
+        """Test initialization with minimal dependencies."""
+        search = EnhancedVectorSearch(kb_tool=mock_kb_tool)
+
+        assert search.kb_tool == mock_kb_tool
+        assert search.template_manager is not None
+        assert search.context_service is not None
+
+    @pytest.mark.asyncio
+    async def test_dual_search_success(self, enhanced_search, mock_search_results):
+        """Test successful dual search execution."""
+        # Setup mock responses
+        user_results = mock_search_results[:2]
+        context_results = mock_search_results[1:]
+
+        enhanced_search.kb_tool.search_knowledge_base.side_effect = [
+            user_results,
+            context_results
+        ]
+
+        # Execute dual search
+        result = await enhanced_search.dual_search(
+            user_query="create json config",
+            code_context=CodeGenerationContext(code_type="json"),
+            max_context_length=5000
+        )
+
+        # Verify result structure
+        assert isinstance(result, DualSearchResult)
+        assert result.user_results == user_results
+        assert result.context_results == context_results
+        assert len(result.merged_results) > 0
+        assert result.user_query == "create json config"
+        assert result.contextual_query == "contextual query"
+
+    @pytest.mark.asyncio
+    async def test_dual_search_user_query_only(self, enhanced_search, mock_search_results):
+        """Test dual search when contextual search fails."""
+        # Setup mock responses - context search fails
+        user_results = mock_search_results[:2]
+
+        enhanced_search.kb_tool.search_knowledge_base.side_effect = [
+            user_results,
+            Exception("Context search failed")
+        ]
+
+        # Execute dual search
+        result = await enhanced_search.dual_search(
+            user_query="create json config",
+            code_context=CodeGenerationContext(code_type="json"),
+            max_context_length=5000
+        )
+
+        # Should fallback to user results only
+        assert isinstance(result, DualSearchResult)
+        assert result.user_results == user_results
+        assert result.context_results == []
+        assert result.merged_results == user_results
+
+    @pytest.mark.asyncio
+    async def test_dual_search_both_searches_fail(self, enhanced_search):
+        """Test dual search when both searches fail."""
+        # Setup mock responses - both searches fail
+        enhanced_search.kb_tool.search_knowledge_base.side_effect = [
+            Exception("User search failed"),
+            Exception("Context search failed")
+        ]
+
+        # Should raise DualSearchError
+        with pytest.raises(DualSearchError, match="Both user and contextual searches failed"):
+            await enhanced_search.dual_search(
+                user_query="create json config",
+                code_context=CodeGenerationContext(code_type="json"),
+                max_context_length=5000
+            )
+
+    @pytest.mark.asyncio
+    async def test_dual_search_empty_query(self, enhanced_search):
+        """Test dual search with empty user query."""
+        with pytest.raises(DualSearchError, match="User query cannot be empty"):
+            await enhanced_search.dual_search(
+                user_query="",
+                code_context=CodeGenerationContext(code_type="json"),
+                max_context_length=5000
+            )
+
+    @pytest.mark.asyncio
+    async def test_dual_search_invalid_context_length(self, enhanced_search):
+        """Test dual search with invalid context length."""
+        with pytest.raises(DualSearchError, match="max_context_length must be positive"):
+            await enhanced_search.dual_search(
+                user_query="create json config",
+                code_context=CodeGenerationContext(code_type="json"),
+                max_context_length=0
+            )
+
+    def test_merge_search_results_no_overlap(self, enhanced_search, mock_search_results):
+        """Test merging search results with no overlap."""
+        user_results = mock_search_results[:2]
+        context_results = mock_search_results[2:]
+
+        merged = enhanced_search.merge_search_results(
+            user_results, context_results)
+
+        assert len(merged) == len(user_results) + len(context_results)
+        # Context results should come first (higher priority)
+        assert merged[0] in context_results
+
+    def test_merge_search_results_with_overlap(self, enhanced_search, mock_search_results):
+        """Test merging search results with overlapping results."""
+        user_results = mock_search_results[:2]
+        # Overlaps with user_results[1]
+        context_results = mock_search_results[1:]
+
+        merged = enhanced_search.merge_search_results(
+            user_results, context_results)
+
+        # Should deduplicate based on document_path
+        unique_paths = set(result.document_path for result in merged)
+        assert len(merged) == len(unique_paths)
+
+    def test_merge_search_results_empty_lists(self, enhanced_search):
+        """Test merging empty search result lists."""
+        merged = enhanced_search.merge_search_results([], [])
+        assert merged == []
+
+    def test_merge_search_results_one_empty(self, enhanced_search, mock_search_results):
+        """Test merging when one list is empty."""
+        user_results = mock_search_results[:2]
+        context_results = []
+
+        merged = enhanced_search.merge_search_results(
+            user_results, context_results)
+        assert merged == user_results
+
+    def test_prioritize_context_results(self, enhanced_search, mock_search_results):
+        """Test that context results are prioritized over user results."""
+        user_results = [
+            SearchResult(content="user content", metadata={},
+                         similarity_score=0.9, document_path="user_1")
+        ]
+        context_results = [
+            SearchResult(content="context content", metadata={},
+                         similarity_score=0.7, document_path="context_1")
+        ]
+
+        merged = enhanced_search.merge_search_results(
+            user_results, context_results)
+
+        # Context result should come first despite lower score
+        assert merged[0].document_path == "context_1"
+        assert merged[1].document_path == "user_1"
+
+    def test_deduplicate_results(self, enhanced_search):
+        """Test deduplication of search results."""
+        duplicate_result = SearchResult(
+            content="duplicate content",
+            metadata={},
+            similarity_score=0.8,
+            document_path="duplicate_1"
+        )
+
+        user_results = [duplicate_result]
+        context_results = [duplicate_result]  # Same result
+
+        merged = enhanced_search.merge_search_results(
+            user_results, context_results)
+
+        # Should only appear once
+        assert len(merged) == 1
+        assert merged[0].document_path == "duplicate_1"
+
+    def test_apply_context_length_limit(self, enhanced_search, mock_search_results):
+        """Test applying context length limit to merged results."""
+        # Create results with known content lengths
+        long_results = []
+        for i in range(10):
+            result = SearchResult(
+                content="x" * 1000,  # 1000 characters each
+                metadata={},
+                similarity_score=0.8,
+                document_path=f"long_{i}"
+            )
+            long_results.append(result)
+
+        limited = enhanced_search._apply_context_length_limit(
+            long_results, max_length=3500)
+
+        # Should limit to approximately 3500 characters
+        total_length = sum(len(result.content) for result in limited)
+        assert total_length <= 3500
+        assert len(limited) < len(long_results)
+
+    def test_apply_context_length_limit_no_limit(self, enhanced_search, mock_search_results):
+        """Test applying context length limit with no effective limit."""
+        limited = enhanced_search._apply_context_length_limit(
+            mock_search_results, max_length=10000)
+
+        # Should return all results if under limit
+        assert len(limited) == len(mock_search_results)
+
+    def test_calculate_result_priority_context(self, enhanced_search):
+        """Test priority calculation for context results."""
+        result = SearchResult(content="test", metadata={},
+                              similarity_score=0.8, document_path="test_1")
+
+        priority = enhanced_search._calculate_result_priority(
+            result, is_context_result=True)
+
+        assert isinstance(priority, float)
+        # Context results should have higher priority
+        assert priority > enhanced_search._calculate_result_priority(
+            result, is_context_result=False)
+
+    def test_calculate_result_priority_user(self, enhanced_search):
+        """Test priority calculation for user results."""
+        result = SearchResult(content="test", metadata={},
+                              similarity_score=0.8, document_path="test_1")
+
+        priority = enhanced_search._calculate_result_priority(
+            result, is_context_result=False)
+
+        assert isinstance(priority, float)
+        assert priority > 0.0
+
+    def test_format_search_context_success(self, enhanced_search, mock_search_results):
+        """Test formatting search results into context string."""
+        context_str = enhanced_search._format_search_context(
+            mock_search_results)
+
+        assert isinstance(context_str, str)
+        assert len(context_str) > 0
+        # Should contain content from results
+        for result in mock_search_results:
+            assert result.content in context_str
+
+    def test_format_search_context_empty(self, enhanced_search):
+        """Test formatting empty search results."""
+        context_str = enhanced_search._format_search_context([])
+
+        assert context_str == ""
+
+    def test_extract_sources_from_results(self, enhanced_search, mock_search_results):
+        """Test extracting unique sources from search results."""
+        sources = enhanced_search._extract_sources_from_results(
+            mock_search_results)
+
+        assert isinstance(sources, list)
+        assert len(sources) > 0
+        # Should be unique sources
+        assert len(sources) == len(set(sources))
+
+    def test_extract_sources_empty_results(self, enhanced_search):
+        """Test extracting sources from empty results."""
+        sources = enhanced_search._extract_sources_from_results([])
+
+        assert sources == []
+
+    @pytest.mark.asyncio
+    async def test_performance_monitoring(self, enhanced_search, mock_search_results):
+        """Test that performance is monitored during dual search."""
+        enhanced_search.kb_tool.search_knowledge_base.side_effect = [
+            mock_search_results[:2],
+            mock_search_results[1:]
+        ]
+
+        with patch('genericsuite_codegen.agent.enhanced_search.performance_tracking') as mock_perf:
+            await enhanced_search.dual_search(
+                user_query="create json config",
+                code_context=CodeGenerationContext(code_type="json"),
+                max_context_length=5000
+            )
+
+            # Should have called performance tracking
+            assert mock_perf.called
+
+    @pytest.mark.asyncio
+    async def test_error_handling_and_logging(self, enhanced_search):
+        """Test error handling and logging during search failures."""
+        enhanced_search.kb_tool.search_knowledge_base.side_effect = Exception(
+            "Search failed")
+
+        with patch('genericsuite_codegen.agent.enhanced_search.handle_enhanced_search_errors') as mock_handler:
+            with pytest.raises(DualSearchError):
+                await enhanced_search.dual_search(
+                    user_query="create json config",
+                    code_context=CodeGenerationContext(code_type="json"),
+                    max_context_length=5000
+                )
+
+            # Should have called error handler
+            assert mock_handler.called
+
+    def test_validate_search_inputs_valid(self, enhanced_search):
+        """Test input validation with valid inputs."""
+        # Should not raise exception
+        enhanced_search._validate_search_inputs(
+            user_query="valid query",
+            code_context=CodeGenerationContext(code_type="json"),
+            max_context_length=5000
+        )
+
+    def test_validate_search_inputs_empty_query(self, enhanced_search):
+        """Test input validation with empty query."""
+        with pytest.raises(DualSearchError, match="User query cannot be empty"):
+            enhanced_search._validate_search_inputs(
+                user_query="",
+                code_context=CodeGenerationContext(code_type="json"),
+                max_context_length=5000
+            )
+
+    def test_validate_search_inputs_none_context(self, enhanced_search):
+        """Test input validation with None context."""
+        with pytest.raises(DualSearchError, match="Code context cannot be None"):
+            enhanced_search._validate_search_inputs(
+                user_query="valid query",
+                code_context=None,
+                max_context_length=5000
+            )
+
+    def test_validate_search_inputs_invalid_length(self, enhanced_search):
+        """Test input validation with invalid context length."""
+        with pytest.raises(DualSearchError, match="max_context_length must be positive"):
+            enhanced_search._validate_search_inputs(
+                user_query="valid query",
+                code_context=CodeGenerationContext(code_type="json"),
+                max_context_length=-1
+            )
+
+    @pytest.mark.asyncio
+    async def test_search_with_custom_config(self, mock_kb_tool, mock_search_results):
+        """Test search with custom configuration."""
+        config = EnhancedSearchConfig(
+            templates={},
+            local_repo_path="custom_path",
+            max_context_length=8000,
+            fallback_enabled=True
+        )
+
+        search = EnhancedVectorSearch(
+            kb_tool=mock_kb_tool,
+            config=config
+        )
+
+        mock_kb_tool.search_knowledge_base.side_effect = [
+            mock_search_results[:2],
+            mock_search_results[1:]
+        ]
+
+        result = await search.dual_search(
+            user_query="create json config",
+            code_context=CodeGenerationContext(code_type="json"),
+            max_context_length=8000
+        )
+
+        assert isinstance(result, DualSearchResult)
+
+    def test_get_search_statistics(self, enhanced_search):
+        """Test getting search statistics."""
+        stats = enhanced_search.get_search_statistics()
+
+        assert isinstance(stats, dict)
+        assert "total_searches" in stats
+        assert "successful_searches" in stats
+        assert "failed_searches" in stats
+        assert "average_response_time" in stats

@@ -10,7 +10,7 @@ import logging
 import uuid
 import time
 from typing import Dict, Any, Optional
-from datetime import datetime
+import datetime
 import json
 import re
 
@@ -148,7 +148,7 @@ def log_request_response(
         "method": method,
         "url": url,
         "event_type": event_type,
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": get_utcnow_iso()
     }
 
     if status_code is not None:
@@ -639,7 +639,27 @@ def get_utcnow_fmt() -> str:
     Returns:
         str: Formatted datetime string.
     """
-    return datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+    return datetime.datetime.now(datetime.UTC).strftime('%Y%m%d_%H%M%S')
+
+
+def get_utcnow_iso() -> str:
+    """
+    Get current UTC datetime as ISO formatted string.
+
+    Returns:
+        str: Formatted datetime string.
+    """
+    return datetime.datetime.now(datetime.UTC).isoformat()
+
+
+def get_utcnow() -> datetime:
+    """
+    Get current UTC datetime as ISO formatted string.
+
+    Returns:
+        str: Formatted datetime string.
+    """
+    return datetime.datetime.now(datetime.UTC)
 
 
 class RateLimiter:

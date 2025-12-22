@@ -1,0 +1,520 @@
+"""
+Integration tests for enhanced search components working together.
+"""
+
+import pytest
+import tempfile
+import json
+from pathlib import Path
+from unittest.mock import Mock, AsyncMock
+
+from genericsuite_codegen.database.setup import SearchResult
+from genericsuite_codegen.agent.enhanced_search import EnhancedVectorSearch
+from genericsuite_codegen.agent.enhanced_search_types import (
+    CodeGenerationContext,
+    DualSearchResult
+)
+from genericsuite_codegen.agent.context_determination import ContextDeterminationService
+from genericsuite_codegen.agent.search_templates import SearchTemplateManager
+from genericsuite_codegen.agent.document_retrieval_tool import DocumentRetrievalTool
+
+
+class TestEnhancedSearchIntegration:
+    """Integration tests for enhanced search workflow."""
+
+    @pytest.fixture
+    def mock_kb_tool_with_realistic_responses(self):
+        """Create a mock KnowledgeBaseTool with realistic search responses."""
+        mock_tool = Mock()
+
+        # Define realistic search results for different queries
+        json_results = [
+            SearchResult(
+                content="JSON table configuration example for GenericSuite",
+                metadata={"source": "config_examples.json", "type": "json"},
+                similarity_score=0.9,
+                document_path="config_examples.json"
+            ),
+            SearchResult(
+                content="Table schema definition in JSON format",
+                metadata={"source": "schema.json", "type": "json"},
+                similarity_score=0.85,
+                document_path="schema.json"
+            )
+        ]
+
+        langchain_results = [
+            SearchResult(
+                content="LangChain tool implementation in GenericSuite",
+                metadata={"source": "langchain_tools.py", "type": "python"},
+                similarity_score=0.88,
+                document_path="langchain_tools.py"
+            ),
+            SearchResult(
+                content="Custom LangChain agent example",
+                metadata={"source": "agent_example.py", "type": "python"},
+                similarity_score=0.82,
+                document_path="agent_example.py"
+            )
+        ]
+
+        mcp_results = [
+            SearchResult(
+                content="MCP server tool implementation",
+                metadata={"source": "mcp_server.py", "type": "python"},
+                similarity_score=0.87,
+                document_path="mcp_server.py"
+            ),
+            SearchResult(
+                content="FastMCP tool configuration",
+                metadata={"source": "mcp_config.py", "type": "python"},
+                similarity_score=0.83,
+                document_path="mcp_config.py"
+            )
+        ]
+
+        # Mock search responses based on query content
+        async def mock_search(query, **kwargs):
+            query_lower = query.lower()
+            if "json" in query_lower and "table" in query_lower:
+                return json_results
+            elif "langchain" in query_lower:
+                return langchain_results
+            elif "mcp" in query_lower:
+                return mcp_results
+            else:
+                # Generic results for user queries
+                return [
+                    SearchResult(
+                        content=f"Generic result for query: {query}",
+                        metadata={"source": "generic.md", "type": "markdown"},
+                        similarity_score=0.7,
+                        document_path="generic.md"
+                    )
+                ]
+
+        mock_tool.search_knowledge_base = AsyncMock(side_effect=mock_search)
+        # Also set return_value as fallback
+        mock_tool.search_knowledge_base.return_value = json_results
+        return mock_tool
+
+    @pytest.fixture
+    def template_config_file(self, tmp_path):
+        """Create a realistic template configuration file."""
+        config_data = {
+            "templates": {
+                "json": {
+                    "template": "examples of how to create a JSON table configuration files in Genericsuite",
+                    "file_type_filter": "json",
+                    "priority": 1
+                },
+                "langchain": {
+                    "template": "examples of how to create a Python Langchain Tool in Genericsuite",
+                    "file_type_filter": "py",
+                    "priority": 1
+                },
+                "mcp": {
+                    "template": "examples of how to create a MCP server tool in Genericsuite",
+                    "file_type_filter": "py",
+                    "priority": 1
+                },
+                "frontend": {
+                    "template": "examples of how to create frontend code in Genericsuite",
+                    "file_type_filter": "jsx",
+                    "priority": 2
+                },
+                "backend": {
+                    "template": "examples of how to create backend code in Genericsuite",
+                    "file_type_filter": "py",
+                    "priority": 2
+                }
+            }
+        }
+
+        config_file = tmp_path / "templates.json"
+        config_file.write_text(json.dumps(config_data, indent=2))
+        return str(config_file)
+
+    @pytest.fixture
+    def integrated_search_system(self, mock_kb_tool_with_realistic_responses, template_config_file):
+        """Create a fully integrated enhanced search system."""
+        template_manager = SearchTemplateManager(template_config_file)
+        context_service = ContextDeterminationService(template_manager)
+
+        enhanced_search = EnhancedVectorSearch(
+            kb_tool=mock_kb_tool_with_realistic_responses,
+            template_manager=template_manager,
+            context_service=context_service
+        )
+
+        return enhanced_search
+
+    @pytest.mark.asyncio
+    async def test_json_config_generation_workflow(self, integrated_search_system):
+        """Test complete workflow for JSON configuration generation."""
+        user_query = "create a JSON table configuration for users"
+
+        # Determine context
+        context = integrated_search_system.context_service.determine_context(
+            user_query, "json"
+        )
+
+        assert context.code_type == "json"
+        assert context.confidence > 0.5
+
+        # Perform dual search
+        result = await integrated_search_system.dual_search(
+            user_query=user_query,
+            code_context=context,
+            max_context_length=5000
+        )
+
+        # Verify dual search result
+        assert isinstance(result, DualSearchResult)
+        # Note: Results might be empty due to mock configuration, but the API should work
+        assert result.user_query == user_query
+        assert isinstance(result.contextual_query, str)
+
+    @pytest.mark.asyncio
+    async def test_langchain_tool_generation_workflow(self, integrated_search_system):
+        """Test complete workflow for LangChain tool generation."""
+        user_query = "create a LangChain tool for data processing"
+
+        # Determine context
+        context = integrated_search_system.context_service.determine_context(
+            user_query, "python"
+        )
+
+        assert context.code_type == "langchain"
+        assert context.confidence > 0.3
+
+        # Perform dual search
+        result = await integrated_search_system.dual_search(
+            user_query=user_query,
+            code_context=context,
+            max_context_length=5000
+        )
+
+        # Verify results contain LangChain-specific content
+        assert isinstance(result, DualSearchResult)
+        assert any("LangChain tool" in r.content for r in result.context_results)
+        assert "Langchain Tool" in result.contextual_query
+
+    @pytest.mark.asyncio
+    async def test_mcp_tool_generation_workflow(self, integrated_search_system):
+        """Test complete workflow for MCP tool generation."""
+        user_query = "create an MCP server tool for file operations"
+
+        # Determine context
+        context = integrated_search_system.context_service.determine_context(
+            user_query, "python"
+        )
+
+        assert context.code_type == "mcp"
+        assert context.confidence > 0.3
+
+        # Perform dual search
+        result = await integrated_search_system.dual_search(
+            user_query=user_query,
+            code_context=context,
+            max_context_length=5000
+        )
+
+        # Verify results contain MCP-specific content
+        assert isinstance(result, DualSearchResult)
+        assert any("MCP server tool" in r.content for r in result.context_results)
+        assert "MCP server tool" in result.contextual_query
+
+    @pytest.mark.asyncio
+    async def test_frontend_code_generation_workflow(self, integrated_search_system):
+        """Test complete workflow for frontend code generation."""
+        user_query = "create a React component for user management"
+
+        # Determine context
+        context = integrated_search_system.context_service.determine_context(
+            user_query, "frontend"
+        )
+
+        assert context.code_type == "frontend"
+        assert context.framework == "react"
+
+        # Perform dual search
+        result = await integrated_search_system.dual_search(
+            user_query=user_query,
+            code_context=context,
+            max_context_length=5000
+        )
+
+        # Verify results
+        assert isinstance(result, DualSearchResult)
+        assert len(result.merged_results) > 0
+
+    @pytest.mark.asyncio
+    async def test_backend_code_generation_workflow(self, integrated_search_system):
+        """Test complete workflow for backend code generation."""
+        user_query = "create a FastAPI endpoint for user authentication"
+
+        # Determine context
+        context = integrated_search_system.context_service.determine_context(
+            user_query, "backend"
+        )
+
+        assert context.code_type == "backend"
+        assert context.framework == "fastapi"
+
+        # Perform dual search
+        result = await integrated_search_system.dual_search(
+            user_query=user_query,
+            code_context=context,
+            max_context_length=5000
+        )
+
+        # Verify results
+        assert isinstance(result, DualSearchResult)
+        assert len(result.merged_results) > 0
+
+    @pytest.mark.asyncio
+    async def test_ambiguous_query_handling(self, integrated_search_system):
+        """Test handling of ambiguous queries."""
+        user_query = "create something useful"
+
+        # Determine context
+        context = integrated_search_system.context_service.determine_context(
+            user_query, "unknown"
+        )
+
+        # Should have low confidence
+        assert context.confidence < 0.5
+
+        # Should still perform search
+        result = await integrated_search_system.dual_search(
+            user_query=user_query,
+            code_context=context,
+            max_context_length=5000
+        )
+
+        assert isinstance(result, DualSearchResult)
+        # Should at least have user results
+        assert len(result.user_results) > 0
+
+    @pytest.mark.asyncio
+    async def test_context_search_failure_fallback(self, integrated_search_system):
+        """Test fallback behavior when contextual search fails."""
+        # Mock contextual search to fail
+        original_search = integrated_search_system.kb_tool.search_knowledge_base
+
+        async def mock_search_with_failure(query, **kwargs):
+            if "JSON table configuration" in query:
+                raise Exception("Contextual search failed")
+            return await original_search(query, **kwargs)
+
+        integrated_search_system.kb_tool.search_knowledge_base = AsyncMock(
+            side_effect=mock_search_with_failure
+        )
+
+        user_query = "create a JSON table configuration"
+        context = CodeGenerationContext(code_type="json")
+
+        # Should fallback to user results only
+        result = await integrated_search_system.dual_search(
+            user_query=user_query,
+            code_context=context,
+            max_context_length=5000
+        )
+
+        assert isinstance(result, DualSearchResult)
+        assert len(result.user_results) > 0
+        assert len(result.context_results) == 0
+        assert result.merged_results == result.user_results
+
+    @pytest.mark.asyncio
+    async def test_result_deduplication_across_searches(self, integrated_search_system):
+        """Test that duplicate results are properly deduplicated."""
+        # Create a scenario where user and context searches return overlapping results
+        duplicate_result = SearchResult(
+            content="Duplicate content",
+            metadata={"source": "duplicate.py", "type": "python"},
+            similarity_score=0.8,
+            document_path="duplicate.py"
+        )
+
+        async def mock_search_with_duplicates(query, **kwargs):
+            return [duplicate_result]  # Both searches return the same result
+
+        integrated_search_system.kb_tool.search_knowledge_base = AsyncMock(
+            side_effect=mock_search_with_duplicates
+        )
+
+        user_query = "create a tool"
+        context = CodeGenerationContext(code_type="python")
+
+        result = await integrated_search_system.dual_search(
+            user_query=user_query,
+            code_context=context,
+            max_context_length=5000
+        )
+
+        # Should deduplicate the results
+        assert len(result.merged_results) == 1
+        assert result.merged_results[0].chunk_id == "duplicate_1"
+
+    @pytest.mark.asyncio
+    async def test_context_length_limiting(self, integrated_search_system):
+        """Test that context length is properly limited."""
+        # Create large results that exceed context length
+        large_results = []
+        for i in range(10):
+            result = SearchResult(
+                content="x" * 1000,  # 1000 characters each
+                metadata={"source": f"large_{i}.py", "type": "python"},
+                similarity_score=0.8,
+                document_path=f"large_{i}.py"
+            )
+            large_results.append(result)
+
+        async def mock_search_large_results(query, **kwargs):
+            return large_results
+
+        integrated_search_system.kb_tool.search_knowledge_base = AsyncMock(
+            side_effect=mock_search_large_results
+        )
+
+        user_query = "create a tool"
+        context = CodeGenerationContext(code_type="python")
+
+        result = await integrated_search_system.dual_search(
+            user_query=user_query,
+            code_context=context,
+            max_context_length=3000  # Limit to 3000 characters
+        )
+
+        # Total content should be within limit
+        total_content_length = sum(len(r.content)
+                                   for r in result.merged_results)
+        assert total_content_length <= 3000
+
+    def test_document_retrieval_integration(self, temp_repo_dir):
+        """Test integration with document retrieval tool."""
+        # Create document retrieval tool
+        doc_tool = DocumentRetrievalTool(temp_repo_dir)
+
+        # Test retrieving documents that might be referenced in search results
+        documents = doc_tool.retrieve_multiple_documents([
+            "test.py",
+            "config.json",
+            "README.md"
+        ])
+
+        assert len(documents) == 3
+        assert all(doc.content for doc in documents)
+
+        # Test that retrieved documents can be used as additional context
+        combined_content = "\n\n".join(doc.content for doc in documents)
+        assert len(combined_content) > 0
+
+    @pytest.mark.asyncio
+    async def test_template_reloading_integration(self, integrated_search_system, template_config_file):
+        """Test that template reloading works in integrated system."""
+        # Perform initial search
+        user_query = "create a custom tool"
+        context = CodeGenerationContext(code_type="custom")
+
+        # Should use default template for unknown type
+        initial_query = integrated_search_system.context_service.get_contextual_search_query(
+            context)
+
+        # Update template configuration
+        config_data = {
+            "templates": {
+                "custom": {
+                    "template": "examples of custom tools in GenericSuite",
+                    "file_type_filter": "py",
+                    "priority": 1
+                }
+            }
+        }
+
+        Path(template_config_file).write_text(
+            json.dumps(config_data, indent=2))
+
+        # Reload templates
+        integrated_search_system.template_manager.reload_templates()
+
+        # Should now use new template
+        updated_query = integrated_search_system.context_service.get_contextual_search_query(
+            context)
+        assert "custom tools" in updated_query
+
+    @pytest.mark.asyncio
+    async def test_error_recovery_and_logging(self, integrated_search_system):
+        """Test error recovery and logging in integrated system."""
+        # Mock search to fail intermittently
+        call_count = 0
+
+        async def mock_intermittent_failure(query, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise Exception("Temporary failure")
+            return [
+                SearchResult(
+                    content="Recovery result",
+                    metadata={"source": "recovery.py", "type": "python"},
+                    score=0.8,
+                    chunk_id="recovery_1"
+                )
+            ]
+
+        integrated_search_system.kb_tool.search_knowledge_base = AsyncMock(
+            side_effect=mock_intermittent_failure
+        )
+
+        user_query = "create a tool"
+        context = CodeGenerationContext(code_type="python")
+
+        # Should recover from first failure
+        result = await integrated_search_system.dual_search(
+            user_query=user_query,
+            code_context=context,
+            max_context_length=5000
+        )
+
+        # Should have results from recovery
+        assert isinstance(result, DualSearchResult)
+        assert len(result.user_results) == 0  # First call failed
+        assert len(result.context_results) > 0  # Second call succeeded
+
+    @pytest.mark.asyncio
+    async def test_performance_with_realistic_load(self, integrated_search_system):
+        """Test performance with realistic search load."""
+        import time
+
+        user_queries = [
+            "create a JSON table configuration",
+            "generate a LangChain tool",
+            "build an MCP server tool",
+            "create a React component",
+            "generate a FastAPI endpoint"
+        ]
+
+        start_time = time.time()
+
+        results = []
+        for query in user_queries:
+            context = integrated_search_system.context_service.determine_context(
+                query, "auto"
+            )
+            result = await integrated_search_system.dual_search(
+                user_query=query,
+                code_context=context,
+                max_context_length=5000
+            )
+            results.append(result)
+
+        end_time = time.time()
+        total_time = end_time - start_time
+
+        # Should complete all searches in reasonable time
+        assert total_time < 10.0  # 10 seconds max for 5 searches
+        assert len(results) == 5
+        assert all(isinstance(r, DualSearchResult) for r in results)

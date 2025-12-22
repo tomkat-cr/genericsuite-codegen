@@ -11,8 +11,8 @@ up:
 run: up
 
 run-db-only:
-	# To run only the containerized database:
-	CONTAINER_TO_RUN=gscodegen-mongo make run
+	# To run only the local containerized database:
+	CONTAINER_TO_RUN="gscodegen-mongo gscodegen-mongo-express" make run
 
 # Stop all services
 down:
@@ -64,7 +64,7 @@ build:
 start:
 	npm run start
 
-dev: run-db-only
+dev:
 	npm run dev
 
 clean:

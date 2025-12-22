@@ -32,6 +32,14 @@ if [ "$ACTION" = "run" ]; then
         --host 0.0.0.0 \
         --port 8000
 
+elif [ "$ACTION" = "test" ]; then
+    echo "Running tests..."
+    export ALLOWED_HOSTS="*"
+    export OPENAI_API_KEY="sk-proj-1234567890"
+    export LLM_API_KEY="sk-proj-1234567890"
+    export LOCAL_REPO_DIR="../local_repo_files"
+    poetry run pytest "${TEST_FILTER}"
+
 else
     echo "Error: Invalid action specified: $ACTION"
     exit 1

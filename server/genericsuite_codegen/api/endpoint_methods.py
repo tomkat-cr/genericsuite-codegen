@@ -7,13 +7,8 @@ separated from the route definitions for better organization and testing.
 
 import os
 import logging
-# import re
 import uuid
 from typing import Dict, Any, List, Optional
-from datetime import datetime
-
-# from fastapi import HTTPException, UploadFile, BackgroundTasks
-# from fastapi.responses import StreamingResponse
 
 from .types import (
     QueryRequest,
@@ -51,8 +46,9 @@ from .utilities import (
     get_content_type,
     extract_code_blocks,
     get_app_info,
-    get_utcnow_fmt,
     local_path_to_url,
+    get_utcnow_fmt,
+    get_utcnow,
 )
 from genericsuite_codegen.agent.agent import (
     get_agent,
@@ -164,6 +160,8 @@ class EndpointMethods:
             agent_response = await self.agent.query(agent_request,
                                                     context=agent_context)
 
+            logger.info(f">>> Agent response: {agent_response}")
+
             sources = ([local_path_to_url(source)
                        for source in agent_response.sources]
                        if translate_path else agent_response.sources)
@@ -259,7 +257,7 @@ class EndpointMethods:
         self,
         request: ConversationCreate,
         user_id: str
-    ) -> Conversation:
+    ) -> Dict[str, str]:
         """
         Create a new conversation.
 
@@ -268,7 +266,8 @@ class EndpointMethods:
             user_id: User ID.
 
         Returns:
-            Conversation: Created conversation.
+            Dict[str, str]: standardized response with create
+                conversation as result=StandardGsResponse().
         """
         try:
             # Validate user_id
@@ -290,7 +289,7 @@ class EndpointMethods:
                 title = request.title.strip()
             else:
                 title = "New Conversation " + \
-                        f"{datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}"
+                        f"{get_utcnow_fmt()}"
 
             # Ensure title uniqueness for this user
             title = await self._ensure_unique_title(title, user_id)
@@ -299,8 +298,8 @@ class EndpointMethods:
                 "user_id": user_id,
                 "title": title,
                 "messages": [],
-                "creation_date": datetime.utcnow(),
-                "update_date": datetime.utcnow()
+                "creation_date": get_utcnow(),
+                "update_date": get_utcnow()
             }
 
             # Add initial message if provided
@@ -310,7 +309,7 @@ class EndpointMethods:
                     "id": message_id,
                     "role": "user",
                     "content": request.initial_message.strip(),
-                    "timestamp": datetime.utcnow(),
+                    "timestamp": get_utcnow(),
                     "sources": None,
                     "token_usage": None
                 })
@@ -340,7 +339,7 @@ class EndpointMethods:
         user_id: str,
         page: int = 1,
         page_size: int = 20
-    ) -> ConversationList:
+    ) -> Dict[str, str]:
         """
         Get user conversations with pagination.
 
@@ -350,7 +349,8 @@ class EndpointMethods:
             page_size: Items per page.
 
         Returns:
-            ConversationList: Paginated conversation list.
+            Dict[str, str]: Paginated conversation list as
+                result=ConversationList().
         """
         try:
             # Validate inputs
@@ -410,7 +410,7 @@ class EndpointMethods:
         self,
         conversation_id: str,
         user_id: str
-    ) -> Conversation:
+    ) -> Dict[str, str]:
         """
         Get a specific conversation.
 
@@ -419,7 +419,7 @@ class EndpointMethods:
             user_id: User ID.
 
         Returns:
-            Conversation: Conversation data.
+            Dict[str, str]: Conversation data as result=Conversation().
         """
         try:
             from bson import ObjectId
@@ -465,7 +465,7 @@ class EndpointMethods:
         conversation_id: str,
         request: ConversationUpdate,
         user_id: str
-    ) -> Conversation:
+    ) -> Dict[str, str]:
         """
         Update a conversation.
 
@@ -475,7 +475,7 @@ class EndpointMethods:
             user_id: User ID.
 
         Returns:
-            Conversation: Updated conversation.
+            Dict[str, str]: Updated conversation as result=Conversation().
         """
         try:
             from bson import ObjectId
@@ -495,7 +495,7 @@ class EndpointMethods:
 
             conversations = self.db.database.ai_chatbot_conversations
 
-            update_data = {"update_date": datetime.utcnow()}
+            update_data = {"update_date": get_utcnow()}
 
             if request.title is not None:
                 # Validate title
@@ -680,12 +680,12 @@ class EndpointMethods:
         result = get_ingestion_progress()
         return std_response(result=result)
 
-    async def get_knowledge_base_status(self) -> KnowledgeBaseStatus:
+    async def get_knowledge_base_status(self) -> Dict[str, str]:
         """
         Get knowledge base status.
 
         Returns:
-            KnowledgeBaseStatus: Current status.
+            Dict[str, str]: Current status as result=KnowledgeBaseStatus().
         """
         try:
             knowledge_base = self.db.database.knowledge_base
@@ -707,6 +707,7 @@ class EndpointMethods:
             # Get repository info from environment
             import os
             repository_url = os.getenv("REMOTE_REPO_URL", "")
+            repository_branch = os.getenv("REMOTE_REPO_BRANCH", "")
 
             return std_response(
                 result=KnowledgeBaseStatus(
@@ -715,6 +716,7 @@ class EndpointMethods:
                     document_count=unique_files,
                     chunk_count=document_count,
                     repository_url=repository_url,
+                    repository_branch=repository_branch,
                     last_update=None  # TODO: This would be tracked in database
                 )
             )
@@ -730,7 +732,7 @@ class EndpointMethods:
         self,
         file: any,
         description: Optional[str] = None
-    ) -> DocumentInfo:
+    ) -> Dict[str, str]:
         """
         Upload and process a document.
 
@@ -739,7 +741,7 @@ class EndpointMethods:
             description: Optional description.
 
         Returns:
-            DocumentInfo: Document information.
+            Dict[str, str]: Document information as result=DocumentInfo().
         """
         try:
             # Read file content
@@ -754,7 +756,7 @@ class EndpointMethods:
                 filename=file.filename or "unknown",
                 file_type=file.content_type or "unknown",
                 size=len(content),
-                upload_date=datetime.utcnow(),
+                upload_date=get_utcnow(),
                 description=description,
                 chunk_count=1  # Placeholder
             )
@@ -775,7 +777,7 @@ class EndpointMethods:
     async def generate_file(
         self,
         request: FileGenerationRequest
-    ) -> GeneratedFile:
+    ) -> Dict[str, str]:
         """
         Generate a file from content.
 
@@ -783,7 +785,8 @@ class EndpointMethods:
             request: File generation request.
 
         Returns:
-            GeneratedFile: Generated file information.
+            Dict[str, str]: Generated file information as
+                result=GeneratedFile().
         """
         try:
             # Validate content based on file type
@@ -817,7 +820,7 @@ class EndpointMethods:
     async def create_file_package(
         self,
         files: List[GeneratedFile]
-    ) -> FilePackage:
+    ) -> Dict[str, str]:
         """
         Create a package from multiple files.
 
@@ -825,7 +828,7 @@ class EndpointMethods:
             files: List of files to package.
 
         Returns:
-            FilePackage: File package information.
+            Dict[str, str]: File package information as result=FilePackage().
         """
         try:
             total_size = sum(file.size for file in files)
@@ -852,7 +855,7 @@ class EndpointMethods:
         self,
         query: SearchQuery,
         translate_path: bool = False,
-    ) -> SearchResponse:
+    ) -> Dict[str, str]:
         """
         Search the knowledge base.
 
@@ -860,7 +863,7 @@ class EndpointMethods:
             query: Search query.
 
         Returns:
-            SearchResponse: Search results.
+            Dict[str, str]: Search results as result=SearchResponse().
         """
         try:
             import time
@@ -935,7 +938,7 @@ class EndpointMethods:
         Get system statistics.
 
         Returns:
-            Statistics: System statistics.
+            Dict[str, str]: System statistics as result=Statistics().
         """
         try:
             # Get knowledge base stats
@@ -995,7 +998,7 @@ class EndpointMethods:
     def _convert_conversation_document(
         self,
         doc: Dict[str, Any]
-    ) -> Conversation:
+    ) -> Dict[str, str]:
         """Convert MongoDB document to Conversation model."""
         from .types import Message
 
@@ -1096,7 +1099,7 @@ class EndpointMethods:
                 "id": assistant_message_id,
                 "role": "assistant",
                 "content": assistant_message,
-                "timestamp": datetime.utcnow(),
+                "timestamp": get_utcnow(),
                 "sources": sources or [],
                 "token_usage": token_usage
             }
@@ -1106,7 +1109,7 @@ class EndpointMethods:
                 {"_id": ObjectId(conversation_id)},
                 {
                     "$push": {"messages": message_to_add},
-                    "$set": {"update_date": datetime.utcnow()}
+                    "$set": {"update_date": get_utcnow()}
                 }
             )
 
@@ -1234,7 +1237,7 @@ class EndpointMethods:
                     "id": user_message_id,
                     "role": "user",
                     "content": user_message,
-                    "timestamp": datetime.utcnow(),
+                    "timestamp": get_utcnow(),
                     "sources": None,
                     "token_usage": None
                 },
@@ -1242,7 +1245,7 @@ class EndpointMethods:
                     "id": assistant_message_id,
                     "role": "assistant",
                     "content": assistant_message,
-                    "timestamp": datetime.utcnow(),
+                    "timestamp": get_utcnow(),
                     "sources": sources or [],
                     "token_usage": token_usage
                 }
@@ -1253,7 +1256,7 @@ class EndpointMethods:
                 {"_id": ObjectId(conversation_id)},
                 {
                     "$push": {"messages": {"$each": messages_to_add}},
-                    "$set": {"update_date": datetime.utcnow()}
+                    "$set": {"update_date": get_utcnow()}
                 }
             )
 
@@ -1273,10 +1276,12 @@ class EndpointMethods:
     def _get_working_data(self, repository_url: str = None) -> str:
         """Get working data."""
         repo_url = repository_url or os.getenv("REMOTE_REPO_URL")
+        repo_branch = os.getenv("REMOTE_REPO_BRANCH")
         local_dir = os.getenv("LOCAL_REPO_DIR")
         if repo_url and local_dir:
             return std_response(result={
                 "repository_url": repo_url,
+                "repository_branch": repo_branch,
                 "local_dir": local_dir
             })
         return std_error_response(
@@ -1301,9 +1306,11 @@ class EndpointMethods:
             if working_data.error:
                 return working_data
             repo_url = working_data.result["repository_url"]
+            repo_branch = working_data.result["repository_branch"]
             local_dir = working_data.result["local_dir"]
             result = run_ingestion(
                 repo_url=repo_url,
+                repo_branch=repo_branch,
                 local_dir=local_dir,
                 force_refresh=request.force_refresh or True,
                 database_manager=self.db,

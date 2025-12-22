@@ -15,6 +15,7 @@ from .server import (
     report_mcp_config,
     print_output,
     logger,
+    configure_logging,
 )
 
 __all__ = [
@@ -26,4 +27,5 @@ __all__ = [
     "report_mcp_config",
     "print_output",
     "logger",
+    "configure_logging",
 ]

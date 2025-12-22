@@ -4,27 +4,29 @@
 
 # Get the directory of this script
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-cd $SCRIPT_DIR
+# cd $SCRIPT_DIR
 
 MCP_RUN_USING_POETRY=1
+MCP_SERVER_DIR="../server"
+cd "${MCP_SERVER_DIR}"
 
-clean_up() {
-    echo "🧹 Cleaning up..."
-    rm -rf genericsuite_codegen
-    if [ ! "$MCP_RUN_USING_POETRY" = "1" ]; then
-        deactivate
-    fi
-    echo "🧹 Cleaning up... done"
-}
+# clean_up() {
+#     echo "🧹 Cleaning up..."
+#     rm -rf genericsuite_codegen
+#     if [ ! "$MCP_RUN_USING_POETRY" = "1" ]; then
+#         deactivate
+#     fi
+#     echo "🧹 Cleaning up... done"
+# }
 
-# Always execute the function clean_up when the script is terminated
-trap clean_up EXIT
+# # Always execute the function clean_up when the script is terminated
+# trap clean_up EXIT
 
-copy_lib() {
-    echo "🔗 Linking common assets..."
-    # cp -r ../server/genericsuite_codegen .
-    ln -s ../server/genericsuite_codegen .
-}
+# copy_lib() {
+#     echo "🔗 Linking common assets..."
+#     # cp -r ../server/genericsuite_codegen .
+#     ln -s ../server/genericsuite_codegen .
+# }
 
 # .env file read
 if [ -f ../.env ]; then
@@ -36,7 +38,8 @@ else
 fi
 
 echo "🥗 Starting GenericSuite CodeGen MCP Server..."
-echo "📂 Server directory: $SCRIPT_DIR"
+echo "📂 Server directory: $MCP_SERVER_DIR"
+echo "📂 Script directory: $SCRIPT_DIR"
 
 # Check if Python is available
 if ! command -v python3 &> /dev/null; then
@@ -107,7 +110,7 @@ fi
 APP_RUN_ARGS="MCP_SERVER_PORT=$MCP_SERVER_PORT MCP_SERVER_HOST=$MCP_SERVER_HOST MCP_TRANSPORT=$MCP_TRANSPORT"
 
 # Copy library
-copy_lib
+# copy_lib
 
 # Start the server
 echo "🚀 Starting MCP server..."

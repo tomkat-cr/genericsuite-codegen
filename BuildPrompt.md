@@ -101,7 +101,7 @@ genericsuite-codegen/          # Main project directory
 │   ├── mcp_server.py
 │   ├── run_mcp_server.sh
 │   └── tests/
-│       └── test_mcp_server.py
+│       └── run_mcp_server_test.py
 ├── server/                       # Server (Python + FastAPI)
 │   ├── Makefile
 │   ├── package.json

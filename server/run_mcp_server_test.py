@@ -30,7 +30,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-async def test_mcp_server():
+async def run_mcp_server_test():
     """Test the MCP server functionality."""
     try:
         logger.info("Testing GenericSuite CodeGen MCP Server...")
@@ -170,7 +170,7 @@ async def main():
 
     tests = [
         ("Configuration", test_configuration),
-        ("MCP Server", test_mcp_server),
+        ("MCP Server", run_mcp_server_test),
         ("MCP Tools", test_mcp_tools)
     ]
 

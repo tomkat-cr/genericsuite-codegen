@@ -39,6 +39,22 @@ from genericsuite_codegen.agent.types import (
     ContextResult,
 )
 
+from genericsuite_codegen.agent.document_retrieval_tool \
+    import DocumentRetrievalTool
+from genericsuite_codegen.agent.enhanced_search_types import (
+    DocumentRetrievalRequest,
+    DocumentRetrievalResponse,
+    BatchDocumentRetrievalRequest,
+    BatchDocumentRetrievalResponse,
+    DocumentRetrievalError,
+    CodeGenerationContext,
+    DualSearchResult
+)
+from genericsuite_codegen.agent.enhanced_search import EnhancedVectorSearch
+from genericsuite_codegen.agent.context_determination import (
+    ContextDeterminationService)
+from genericsuite_codegen.agent.search_templates import SearchTemplateManager
+
 DEBUG = True
 
 # Configure logging
@@ -58,14 +74,24 @@ class KnowledgeBaseTool:
 
     Provides methods for searching the knowledge base, ranking results,
     and generating context summaries with source attribution.
+    Enhanced with dual search capability for contextual GenericSuite rules.
     """
 
-    def __init__(self):
+    def __init__(self, enable_enhanced_search: bool = True):
         """Initialize the knowledge base tool."""
         self.db_manager = get_database_manager()
         # self.db_manager = initialize_database()
         self.embedding_provider = None
         self._initialize_embedding_provider()
+
+        # Enhanced search components
+        self.enable_enhanced_search = enable_enhanced_search
+        self.enhanced_search = None
+        self.template_manager = None
+        self.context_service = None
+
+        if self.enable_enhanced_search:
+            self._initialize_enhanced_search()
 
     def _initialize_embedding_provider(self) -> None:
         """Initialize the embedding provider for query vectorization."""
@@ -78,6 +104,31 @@ class KnowledgeBaseTool:
                 f"Failed to initialize embedding provider: {e}")
             raise RuntimeError(
                 f"Embedding provider initialization failed: {e}")
+
+    def _initialize_enhanced_search(self) -> None:
+        """Initialize enhanced search components."""
+        try:
+            # Initialize template manager
+            self.template_manager = SearchTemplateManager()
+
+            # Initialize context determination service
+            self.context_service = ContextDeterminationService(
+                self.template_manager
+            )
+
+            # Initialize enhanced vector search
+            self.enhanced_search = EnhancedVectorSearch(
+                kb_tool=self,
+                template_manager=self.template_manager,
+                context_service=self.context_service
+            )
+
+            logger.info("Initialized enhanced search components")
+
+        except Exception as e:
+            logger.warning(f"Failed to initialize enhanced search: {e}")
+            self.enable_enhanced_search = False
+            logger.info("Falling back to standard search functionality")
 
     def search(
         self, query: str, limit: int = 5,
@@ -316,48 +367,129 @@ class KnowledgeBaseTool:
         query: str,
         max_context_length: int = DEFAULT_MAX_CONTEXT_LENGTH,
         file_type_filter: Optional[str] = None,
-        limit: int = 10
+        limit: int = 10,
+        enable_dual_search: bool = True,
+        code_context: Optional[CodeGenerationContext] = None
     ) -> Tuple[str, List[str]]:
         """
         Get formatted context for code generation with length limits.
+        Enhanced with dual search capability for contextual GenericSuite rules.
 
         Args:
             query: Search query for context retrieval.
             max_context_length: Maximum total context length in characters.
             file_type_filter: Optional filter by file type.
             limit: Maximum number of results to return. Default is 10.
+            enable_dual_search: Enable enhanced dual search if available.
+            code_context: Optional pre-determined code generation context.
+
         Returns:
             Tuple[str, List[str]]: Formatted context string, list of
             sources (only the document paths), and raw_results.
         """
         try:
-            # Search for relevant context
-            search_results = self.search(
+            # Use enhanced search if available and enabled
+            if (self.enable_enhanced_search and
+                enable_dual_search and
+                    self.enhanced_search is not None):
+
+                return self._get_enhanced_context_for_generation(
+                    query=query,
+                    max_context_length=max_context_length,
+                    file_type_filter=file_type_filter,
+                    limit=limit,
+                    code_context=code_context
+                )
+
+            # Fallback to standard search
+            return self._get_standard_context_for_generation(
                 query=query,
-                limit=limit,  # Get more results for better selection
-                file_type_filter=file_type_filter
+                max_context_length=max_context_length,
+                file_type_filter=file_type_filter,
+                limit=limit
             )
 
-            if not search_results.results:
-                return "No relevant context found.", []
+        except Exception as e:
+            logger.error(f"Failed to get context for generation: {e}")
+            return f"Error retrieving context: {e}", [], []
+
+    def _get_enhanced_context_for_generation(
+        self,
+        query: str,
+        max_context_length: int,
+        file_type_filter: Optional[str],
+        limit: int,
+        code_context: Optional[CodeGenerationContext]
+    ) -> Tuple[str, List[str]]:
+        """
+        Get context using enhanced dual search capability.
+
+        Args:
+            query: Search query for context retrieval.
+            max_context_length: Maximum total context length in characters.
+            file_type_filter: Optional filter by file type.
+            limit: Maximum number of results to return.
+            code_context: Optional pre-determined code generation context.
+
+        Returns:
+            Tuple[str, List[str]]: Formatted context string, list of sources,
+            raw_results.
+        """
+        try:
+            logger.info(f"Using enhanced dual search for query: '{query}'")
+
+            # Perform dual search
+            dual_result = self.enhanced_search._sync_dual_search(
+                user_query=query,
+                code_context=code_context,
+                max_context_length=max_context_length,
+                file_type_filter=file_type_filter,
+                limit=limit
+            )
+
+            # Use merged results for context generation
+            search_results = dual_result.merged_results
+
+            if not search_results:
+                logger.info(
+                    "No results from enhanced search, trying standard search")
+                return self._get_standard_context_for_generation(
+                    query=query,
+                    max_context_length=max_context_length,
+                    file_type_filter=file_type_filter,
+                    limit=limit
+                )
 
             # Rank results by relevance
-            raw_results = [
-                SearchResult(
-                    content=r.content,
-                    metadata=r.metadata,
-                    similarity_score=r.similarity_score,
-                    document_path=r.document_path
-                )
-                for r in search_results.results
-            ]
-
-            ranked_context = self.rank_context_by_relevance(raw_results, query)
+            ranked_context = self.rank_context_by_relevance(
+                search_results, query)
 
             # Build context string within length limits
             context_parts = []
             current_length = 0
             sources = []
+
+            # Add context information about dual search
+            if dual_result.contextual_query:
+                context_header = (
+                    f"Enhanced context for: {query}\n"
+                    f"Contextual search: {dual_result.contextual_query}\n"
+                    f"Context type: {dual_result.context_used.code_type}"
+                )
+                if dual_result.context_used.framework:
+                    context_header += (
+                        f" ({dual_result.context_used.framework})")
+                context_header += (
+                    f"\nConfidence: "
+                    f"{dual_result.context_used.confidence:.2f}\n")
+                context_header += "=" * 60 + "\n\n"
+            else:
+                context_header = (
+                    f"Relevant context for: {query}\n" +
+                    "=" * 50 + "\n\n")
+
+            header_length = len(context_header)
+            available_length = max_context_length - header_length
 
             for context in ranked_context:
                 # Format context entry
@@ -365,15 +497,15 @@ class KnowledgeBaseTool:
                 content_with_source = f"{source_info}\n{context.content}\n"
 
                 # Check if adding this context would exceed the limit
-                if current_length + len(content_with_source) \
-                   > max_context_length:
+                if (current_length + len(content_with_source) >
+                        available_length):
                     # Try to fit a truncated version
-                    remaining_space = max_context_length - current_length - \
-                        len(source_info) - 20
+                    remaining_space = (available_length -
+                                       current_length - len(source_info) - 20)
                     if remaining_space > 100:
                         # Only add if we have reasonable space
-                        truncated_content = \
-                            context.content[:remaining_space] + "..."
+                        truncated_content = (
+                            context.content[:remaining_space] + "...")
                         context_parts.append(
                             f"{source_info}\n{truncated_content}\n")
                         sources.append(context.source_path)
@@ -385,17 +517,106 @@ class KnowledgeBaseTool:
 
             # Join all context parts
             formatted_context = "\n---\n".join(context_parts)
+            final_context = context_header + formatted_context
 
-            # Add summary header
-            header = f"Relevant context for: {query}\n" + "=" * 50 + "\n\n"
-            final_context = header + formatted_context
+            # Remove duplicate sources and include dual search results
+            unique_sources = list(set(sources))
 
-            # Remove duplicate sources
-            return final_context, list(set(sources)), raw_results
+            logger.info(f"Enhanced search returned {len(search_results)} "
+                        f"results from {len(unique_sources)} sources")
+
+            return final_context, unique_sources, search_results
 
         except Exception as e:
-            logger.error(f"Failed to get context for generation: {e}")
-            return f"Error retrieving context: {e}", [], []
+            logger.error(f"Enhanced context generation failed: {e}")
+            logger.info("Falling back to standard search")
+            return self._get_standard_context_for_generation(
+                query=query,
+                max_context_length=max_context_length,
+                file_type_filter=file_type_filter,
+                limit=limit
+            )
+
+    def _get_standard_context_for_generation(
+        self,
+        query: str,
+        max_context_length: int,
+        file_type_filter: Optional[str],
+        limit: int
+    ) -> Tuple[str, List[str]]:
+        """
+        Get context using standard single search (backward compatibility).
+
+        Args:
+            query: Search query for context retrieval.
+            max_context_length: Maximum total context length in characters.
+            file_type_filter: Optional filter by file type.
+            limit: Maximum number of results to return.
+
+        Returns:
+            Tuple[str, List[str]]: Formatted context string, list of sources,
+            raw_results.
+        """
+        # Search for relevant context
+        search_results = self.search(
+            query=query,
+            limit=limit,  # Get more results for better selection
+            file_type_filter=file_type_filter
+        )
+
+        if not search_results.results:
+            return "No relevant context found.", [], []
+
+        # Rank results by relevance
+        raw_results = [
+            SearchResult(
+                content=r.content,
+                metadata=r.metadata,
+                similarity_score=r.similarity_score,
+                document_path=r.document_path
+            )
+            for r in search_results.results
+        ]
+
+        ranked_context = self.rank_context_by_relevance(raw_results, query)
+
+        # Build context string within length limits
+        context_parts = []
+        current_length = 0
+        sources = []
+
+        for context in ranked_context:
+            # Format context entry
+            source_info = f"Source: {context.source_path}"
+            content_with_source = f"{source_info}\n{context.content}\n"
+
+            # Check if adding this context would exceed the limit
+            if current_length + len(content_with_source) > max_context_length:
+                # Try to fit a truncated version
+                remaining_space = max_context_length - current_length - \
+                    len(source_info) - 20
+                if remaining_space > 100:
+                    # Only add if we have reasonable space
+                    truncated_content = \
+                        context.content[:remaining_space] + "..."
+                    context_parts.append(
+                        f"{source_info}\n{truncated_content}\n")
+                    sources.append(context.source_path)
+                break
+
+            context_parts.append(content_with_source)
+            sources.append(context.source_path)
+            current_length += len(content_with_source)
+
+        # Join all context parts
+        formatted_context = "\n---\n".join(context_parts)
+
+        # Add summary header
+        header = f"Relevant context for: {query}\n" + "=" * 50 + "\n\n"
+        final_context = header + formatted_context
+
+        # Remove duplicate sources
+        return final_context, list(set(sources)), raw_results
 
     def search_similar_documents(
         self,
@@ -426,6 +647,120 @@ class KnowledgeBaseTool:
             if r.similarity_score >= similarity_threshold
         ]
         return search_results
+
+    def set_enhanced_search_enabled(self, enabled: bool) -> None:
+        """
+        Enable or disable enhanced search functionality.
+
+        Args:
+            enabled: Whether to enable enhanced search
+        """
+        if enabled and not self.enable_enhanced_search:
+            # Try to initialize enhanced search if not already done
+            self._initialize_enhanced_search()
+
+        self.enable_enhanced_search = enabled
+        logger.info(f"Enhanced search {'enabled' if enabled else 'disabled'}")
+
+    def is_enhanced_search_available(self) -> bool:
+        """
+        Check if enhanced search is available and properly initialized.
+
+        Returns:
+            True if enhanced search is available, False otherwise
+        """
+        return (self.enable_enhanced_search and
+                self.enhanced_search is not None and
+                self.template_manager is not None and
+                self.context_service is not None)
+
+    def get_enhanced_search_info(self) -> Dict[str, Any]:
+        """
+        Get information about enhanced search capabilities.
+
+        Returns:
+            Dictionary with enhanced search information
+        """
+        if not self.is_enhanced_search_available():
+            return {
+                "available": False,
+                "reason": "Enhanced search not initialized or disabled"
+            }
+
+        return {
+            "available": True,
+            "supported_code_types": (
+                self.template_manager.get_supported_code_types()),
+            "available_templates": (
+                len(self.template_manager.get_all_templates())),
+            "statistics": self.enhanced_search.get_search_statistics()
+        }
+
+    def perform_dual_search(
+        self,
+        user_query: str,
+        code_context: Optional[CodeGenerationContext] = None,
+        max_context_length: int = DEFAULT_MAX_CONTEXT_LENGTH,
+        file_type_filter: Optional[str] = None,
+        limit: int = 10
+    ) -> Optional[DualSearchResult]:
+        """
+        Perform dual search directly and return detailed results.
+
+        Args:
+            user_query: The user's search query
+            code_context: Optional pre-determined code generation context
+            max_context_length: Maximum context length
+            file_type_filter: Optional file type filter
+            limit: Maximum number of results
+
+        Returns:
+            DualSearchResult if enhanced search is available, None otherwise
+        """
+        if not self.is_enhanced_search_available():
+            logger.warning("Enhanced search not available for dual search")
+            return None
+
+        try:
+            return self.enhanced_search._sync_dual_search(
+                user_query=user_query,
+                code_context=code_context,
+                max_context_length=max_context_length,
+                file_type_filter=file_type_filter,
+                limit=limit
+            )
+        except Exception as e:
+            logger.error(f"Dual search failed: {e}")
+            return None
+
+    def determine_code_context(
+        self,
+        user_query: str,
+        task_type: Optional[str] = None
+    ) -> Optional[CodeGenerationContext]:
+        """
+        Determine code generation context from user query.
+
+        Args:
+            user_query: The user's query
+            task_type: Optional task type hint
+
+        Returns:
+            CodeGenerationContext if context service is available,
+            None otherwise
+        """
+        if not self.is_enhanced_search_available():
+            logger.warning("Context determination not available")
+            return None
+
+        try:
+            return self.context_service.determine_context(
+                user_query=user_query,
+                task_type=task_type
+            )
+        except Exception as e:
+            logger.error(f"Context determination failed: {e}")
+            return None
 
 
 # JSON Configuration Generation Tools
@@ -1385,6 +1720,7 @@ from typing import Dict, Any, Optional, List, Sequence
 from fastmcp import FastMCP
 from pydantic import BaseModel, Field
 import logging
+import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -1422,7 +1758,7 @@ def {tool_function_name}({function_parameters}) -> Dict[str, Any]:
             "success": True,
             "result": result,
             "tool": "{tool_name}",
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.datetime.now(datetime.UTC).isoformat()
         }}
 
     except Exception as e:
@@ -1431,7 +1767,7 @@ def {tool_function_name}({function_parameters}) -> Dict[str, Any]:
             "success": False,
             "error": str(e),
             "tool": "{tool_name}",
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.datetime.now(datetime.UTC).isoformat()
         }}
 
 
@@ -3197,7 +3533,7 @@ def validate_{module_name}_update(data):
     return {{
         "data": data,
         "status": "success",
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.datetime.now(datetime.UTC).isoformat()
     }}
 
 
@@ -3207,7 +3543,7 @@ def handle_error(error, status_code=500):
     return {{
         "error": str(error),
         "status": "error",
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.datetime.now(datetime.UTC).isoformat()
     }}'''
 
     def _get_fastapi_imports(self) -> List[str]:
@@ -3526,6 +3862,303 @@ def get_all_frontend_backend_tools(kb_tool: KnowledgeBaseTool) -> List[Tool]:
     ]
 
 
+def create_document_retrieval_tool() -> Tool:
+    """
+    Create a Pydantic AI tool for document retrieval from local storage.
+
+    Returns:
+        Tool: Pydantic AI tool for retrieving documents.
+    """
+    doc_retrieval_tool = DocumentRetrievalTool()
+
+    def retrieve_document_from_local_storage(
+        request: DocumentRetrievalRequest
+    ) -> DocumentRetrievalResponse:
+        """
+        Retrieve a complete document from local storage.
+
+        This tool allows the agent to access full document content from the
+        local_repo_files directory, providing complete GenericSuite knowledge
+        base articles for accurate code generation.
+
+        Args:
+            request: Document retrieval request with path and options.
+
+        Returns:
+            DocumentRetrievalResponse: Retrieved document or error information.
+        """
+        try:
+            # Validate request
+            if not request.document_path:
+                return DocumentRetrievalResponse(
+                    success=False,
+                    error_message="Document path is required",
+                    metadata={"error_code": "MISSING_PATH"}
+                )
+
+            # Check file size limit (convert MB to bytes)
+            max_size_bytes = request.max_size_mb * 1024 * 1024
+
+            # Get document metadata first to check size
+            metadata = doc_retrieval_tool.get_document_metadata(
+                request.document_path)
+
+            if not metadata.exists:
+                return DocumentRetrievalResponse(
+                    success=False,
+                    error_message="Document not found: "
+                    f"{request.document_path}",
+                    metadata={
+                        "error_code": "FILE_NOT_FOUND",
+                        "requested_path": request.document_path
+                    }
+                )
+
+            if not metadata.is_readable:
+                error_msg = (metadata.error_message or
+                             "Document is not readable (possibly binary)")
+                return DocumentRetrievalResponse(
+                    success=False,
+                    error_message=error_msg,
+                    metadata={
+                        "error_code": "NOT_READABLE",
+                        "is_binary": metadata.is_binary,
+                        "file_type": metadata.file_type
+                    }
+                )
+
+            if metadata.size > max_size_bytes:
+                return DocumentRetrievalResponse(
+                    success=False,
+                    error_message=(f"Document too large: {metadata.size} "
+                                   f"bytes (limit: {max_size_bytes} bytes)"),
+                    metadata={
+                        "error_code": "FILE_TOO_LARGE",
+                        "file_size": metadata.size,
+                        "size_limit": max_size_bytes
+                    }
+                )
+
+            # Retrieve the document
+            document = doc_retrieval_tool.retrieve_document(
+                request.document_path)
+
+            # Prepare response data
+            document_data = {
+                "path": document.path,
+                "content": document.content,
+                "file_type": document.file_type,
+                "size": document.size,
+                "last_modified": document.last_modified.isoformat(),
+                "encoding": document.encoding,
+                "is_binary": document.is_binary
+            }
+
+            if request.include_metadata:
+                document_data["metadata"] = document.metadata
+
+            return DocumentRetrievalResponse(
+                success=True,
+                document=document_data,
+                metadata={
+                    "retrieval_successful": True,
+                    "content_length": len(document.content),
+                    "encoding_used": document.encoding
+                }
+            )
+
+        except DocumentRetrievalError as e:
+            logger.error(f"Document retrieval error: {e}")
+            return DocumentRetrievalResponse(
+                success=False,
+                error_message=str(e),
+                metadata={
+                    "error_code": getattr(e, 'error_code', 'RETRIEVAL_ERROR'),
+                    "error_type": "DocumentRetrievalError"
+                }
+            )
+        except Exception as e:
+            logger.error(f"Unexpected error in document retrieval: {e}")
+            return DocumentRetrievalResponse(
+                success=False,
+                error_message=f"Unexpected error: {str(e)}",
+                metadata={
+                    "error_code": "UNEXPECTED_ERROR",
+                    "error_type": type(e).__name__
+                }
+            )
+
+    return Tool(retrieve_document_from_local_storage, description=(
+        "Retrieve complete document content from local storage. Use this tool "
+        "to access full GenericSuite knowledge base articles, configuration "
+        "examples, and code samples from the local_repo_files directory. "
+        "Provide the document path returned by knowledge base search results "
+        "to get the complete content for accurate code generation."
+    ))
+
+
+def create_batch_document_retrieval_tool() -> Tool:
+    """
+    Create a Pydantic AI tool for batch document retrieval from local storage.
+
+    Returns:
+        Tool: Pydantic AI tool for retrieving multiple documents.
+    """
+    doc_retrieval_tool = DocumentRetrievalTool()
+
+    def retrieve_multiple_documents_from_local_storage(
+        request: BatchDocumentRetrievalRequest
+    ) -> BatchDocumentRetrievalResponse:
+        """
+        Retrieve multiple documents from local storage in a single operation.
+
+        This tool allows the agent to efficiently retrieve multiple documents
+        at once, useful when the knowledge base search returns several relevant
+        documents that need to be accessed for comprehensive code generation.
+
+        Args:
+            request: Batch document retrieval request with paths and options.
+
+        Returns:
+            BatchDocumentRetrievalResponse: Results of batch retrieval
+            operation.
+        """
+        try:
+            successful_retrievals = []
+            failed_retrievals = []
+            max_size_bytes = request.max_size_mb * 1024 * 1024
+
+            logger.info(
+                "Starting batch retrieval of "
+                f"{len(request.document_paths)} documents")
+
+            for document_path in request.document_paths:
+                try:
+                    # Get metadata first to check size and readability
+                    metadata = doc_retrieval_tool.get_document_metadata(
+                        document_path)
+
+                    if not metadata.exists:
+                        failed_retrievals.append({
+                            "path": document_path,
+                            "error_message": "Document not found",
+                            "error_code": "FILE_NOT_FOUND"
+                        })
+                        continue
+
+                    if not metadata.is_readable:
+                        error_msg = metadata.error_message or \
+                            "Document is not readable"
+                        failed_retrievals.append({
+                            "path": document_path,
+                            "error_message": error_msg,
+                            "error_code": "NOT_READABLE"
+                        })
+                        continue
+
+                    if metadata.size > max_size_bytes:
+                        failed_retrievals.append({
+                            "path": document_path,
+                            "error_message":
+                            f"Document too large: {metadata.size} bytes",
+                            "error_code": "FILE_TOO_LARGE"
+                        })
+                        continue
+
+                    # Retrieve the document
+                    document = doc_retrieval_tool.retrieve_document(
+                        document_path)
+
+                    # Prepare document data
+                    document_data = {
+                        "path": document.path,
+                        "content": document.content,
+                        "file_type": document.file_type,
+                        "size": document.size,
+                        "last_modified": document.last_modified.isoformat(),
+                        "encoding": document.encoding,
+                        "is_binary": document.is_binary
+                    }
+
+                    if request.include_metadata:
+                        document_data["metadata"] = document.metadata
+
+                    successful_retrievals.append(document_data)
+
+                except DocumentRetrievalError as e:
+                    failed_retrievals.append({
+                        "path": document_path,
+                        "error_message": str(e),
+                        "error_code": getattr(e, 'error_code',
+                                              'RETRIEVAL_ERROR')
+                    })
+
+                    if not request.continue_on_error:
+                        break
+
+                except Exception as e:
+                    failed_retrievals.append({
+                        "path": document_path,
+                        "error_message": f"Unexpected error: {str(e)}",
+                        "error_code": "UNEXPECTED_ERROR"
+                    })
+
+                    if not request.continue_on_error:
+                        break
+
+            return BatchDocumentRetrievalResponse(
+                successful_retrievals=successful_retrievals,
+                failed_retrievals=failed_retrievals,
+                total_requested=len(request.document_paths),
+                total_successful=len(successful_retrievals),
+                total_failed=len(failed_retrievals),
+                metadata={
+                    "batch_completed": True,
+                    "continue_on_error": request.continue_on_error,
+                    "max_size_mb": request.max_size_mb
+                }
+            )
+
+        except Exception as e:
+            logger.error(f"Unexpected error in batch document retrieval: {e}")
+            return BatchDocumentRetrievalResponse(
+                successful_retrievals=[],
+                failed_retrievals=[{
+                    "path": "batch_operation",
+                    "error_message": f"Batch operation failed: {str(e)}",
+                    "error_code": "BATCH_OPERATION_ERROR"
+                }],
+                total_requested=len(request.document_paths),
+                total_successful=0,
+                total_failed=len(request.document_paths),
+                metadata={
+                    "batch_completed": False,
+                    "error_type": type(e).__name__
+                }
+            )
+
+    return Tool(retrieve_multiple_documents_from_local_storage, description=(
+        "Retrieve multiple documents from local storage in a single operation."
+        " Use this tool when you need to access several documents at once for "
+        "comprehensive code generation. Provide a list of document paths "
+        "returned by knowledge base search results to get all the complete "
+        "content efficiently."
+    ))
+
+
+def get_all_document_retrieval_tools() -> List[Tool]:
+    """
+    Get all document retrieval tools for agent integration.
+
+    Returns:
+        List[Tool]: List of document retrieval tools.
+    """
+    return [
+        create_document_retrieval_tool(),
+        create_batch_document_retrieval_tool()
+    ]
+
+
 def get_all_agent_tools(kb_tool: KnowledgeBaseTool) -> List[Tool]:
     """
     Get all tools for the GenericSuite AI agent.
@@ -3538,6 +4171,7 @@ def get_all_agent_tools(kb_tool: KnowledgeBaseTool) -> List[Tool]:
     tools.extend(get_all_json_generation_tools(kb_tool))
     tools.extend(get_all_python_generation_tools(kb_tool))
     tools.extend(get_all_frontend_backend_tools(kb_tool))
+    tools.extend(get_all_document_retrieval_tools())
     return tools
 
 

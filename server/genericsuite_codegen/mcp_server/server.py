@@ -31,18 +31,24 @@ DEBUG = True
 
 DEFAULT_MCP_TRANSPORT = "http"
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout),
-        logging.FileHandler('mcp_server.log')
-    ]
-)
+
+def configure_logging(log_file_path: str = "./mcp_server.log",
+                      debug: bool = DEBUG):
+    """
+    Configure logging for the MCP server.
+    """
+    logging.basicConfig(
+        level=logging.INFO if debug else logging.DEBUG,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.StreamHandler(sys.stdout),
+            logging.FileHandler(log_file_path)
+        ]
+    )
+
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO if DEBUG else logging.WARNING)
+logger.setLevel(logging.INFO if DEBUG else logging.DEBUG)
 
 
 @dataclass

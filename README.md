@@ -48,11 +48,15 @@ GenericSuite CodeGen leverages AI and knowledge base search to assist developers
 - 🤖 **AI-Powered Code Generation**: Generate JSON configurations, Python tools, and application code
 - 🔍 **Intelligent Knowledge Base**: Vector search through GenericSuite documentation and examples
 - 🛠️ **Multiple Code Types**: Support for JSON configs, LangChain tools, MCP tools, frontend, and backend code
+- 🎯 **Context-Aware Generation**: Automatic search for relevant examples based on code generation type
 - 🌐 **Web Interface**: User-friendly React frontend with real-time code preview
 - 📡 **MCP Server**: Integration with AI development environments via Model Context Protocol
 - 🐳 **Docker Support**: Complete containerized deployment with MongoDB
 - 🔄 **Real-time Streaming**: Streaming responses for better user experience
 - 📚 **Document Processing**: Automated ingestion and processing of documentation
+- 🔍 **Document Retrieval Tool**: Secure agent tool for accessing complete GenericSuite documents with path validation and error handling
+- 🎯 **Enhanced Search Types**: Comprehensive type definitions for dual search operations, context-aware generation, and document retrieval workflows
+- 🛡️ **Security Features**: Path validation, binary file detection, and secure document access controls
 
 ## Technologies
 
@@ -217,7 +221,7 @@ make hard-restart
 
 ### MCP Server
 
-The MCP server provides integration with AI development tools:
+The MCP server provides integration with AI development tools through the Model Context Protocol:
 
 **Start MCP server**:
 ```bash
@@ -231,7 +235,35 @@ cd mcp-server && make check-env
 
 **MCP server endpoints**:
 - HTTP: `http://localhost:8070`
+- STDIO: Available for direct process communication
 - WebSocket: Available for real-time communication
+
+**Configure MCP Client Integration**:
+
+For Kiro integration, add to your `.kiro/settings/mcp.json`:
+```json
+{
+  "mcpServers": {
+    "genericsuite-codegen": {
+      "command": "sh",
+      "args": ["/absolute/path/to/genericsuite-codegen/mcp-server/run_mcp_server.sh"],
+      "env": {
+        "MCP_API_KEY": "ag-api-key-...",
+        "MCP_TRANSPORT": "stdio"
+      },
+      "disabled": false,
+      "autoApprove": [
+        "search_knowledge_base",
+        "get_knowledge_base_stats"
+      ]
+    }
+  }
+}
+```
+
+For other MCP clients, see the configuration examples in the `mcp-server/` directory.
+
+**New to MCP setup?** See the [MCP Setup Guide](./mcp-server/MCP_SETUP_GUIDE.md) for step-by-step configuration instructions.
 
 ## Screenshots
 
@@ -283,6 +315,62 @@ cd mcp-server && make check-env
 
 ![Code Generation Page](./assets/screenshots/genericsuite.codegen.ui.code.generation.060.png)
 ![Code Generation Page](./assets/screenshots/genericsuite.codegen.ui.code.generation.070.png)
+
+## Enhanced Search Documentation
+
+Comprehensive documentation for the enhanced vector search capabilities is available:
+
+- **[Enhanced Search Overview](server/docs/README.md)**: Complete documentation index and overview
+- **[API Documentation](server/docs/API_DOCUMENTATION.md)**: Detailed API reference with enhanced search capabilities
+- **[Enhanced Search Examples](server/docs/ENHANCED_SEARCH_EXAMPLES.md)**: Practical examples of dual search results and document retrieval
+- **[Configuration Guide](server/docs/CONFIGURATION_GUIDE.md)**: Configuration options and template customization
+- **[Troubleshooting Guide](server/docs/TROUBLESHOOTING_GUIDE.md)**: Diagnostic procedures and issue resolution
+
+## Implementation Status
+
+### ✅ Completed Features
+
+**Enhanced Search Type Definitions**: Comprehensive data models and API types for dual search operations
+- Location: `server/genericsuite_codegen/agent/enhanced_search_types.py`
+- Includes: `CodeGenerationContext`, `DualSearchResult`, `DocumentContent`, `DocumentMetadata`, `SearchTemplate`, `EnhancedSearchConfig`
+- Exception hierarchy with specific error codes for different failure scenarios
+
+**Document Retrieval Tool**: Secure agent tool for accessing complete documents from local storage
+- Location: `server/genericsuite_codegen/agent/document_retrieval_tool.py`
+- Features: Path validation, binary file detection, encoding detection, batch operations
+- Security: Prevents directory traversal attacks, validates file access permissions
+- Integration: Available as Pydantic AI tools in the agent workflow
+
+**Agent Tool Integration**: Document retrieval tools integrated with the AI agent
+- Location: `server/genericsuite_codegen/agent/tools.py`
+- Tools: `retrieve_document_from_local_storage`, `retrieve_multiple_documents_from_local_storage`
+- Error handling: Comprehensive error responses with specific error codes
+
+**Search Template Manager**: Configurable templates for different code generation types
+- Location: `server/genericsuite_codegen/agent/search_templates.py`
+- Configuration: `server/genericsuite_codegen/config/search_templates.json`
+- Features: File-based configuration, hardcoded fallbacks, template validation, dynamic reloading
+- Templates: JSON, LangChain, MCP, frontend, backend, AI-enhanced variants
+
+**Context Determination Service**: Automatic context detection from user queries
+- Location: `server/genericsuite_codegen/agent/context_determination.py`
+- Features: Keyword-based detection, pattern matching, confidence scoring
+- Integration: Automatic contextual search selection based on detected code type
+
+**Enhanced Vector Search Engine**: Dual search combining user queries with contextual rules
+- Location: `server/genericsuite_codegen/agent/enhanced_search.py`
+- Features: Parallel dual search, result merging, fallback handling
+- Integration: Seamless integration with existing knowledge base tool
+
+**Comprehensive Testing**: Unit and integration tests for enhanced search components
+- Location: `server/tests/`
+- Coverage: All enhanced search components, error handling, integration scenarios
+- Types: Unit tests, integration tests, end-to-end workflow tests
+
+**Complete Documentation**: Comprehensive documentation with examples and troubleshooting
+- Location: `server/docs/`
+- Includes: API reference, configuration guide, examples, troubleshooting procedures
+- Coverage: All enhanced search features, integration patterns, common issues
 
 ## System Architecture
 

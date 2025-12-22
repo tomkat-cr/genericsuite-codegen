@@ -1,22 +1,23 @@
-import { useState, useCallback, useEffect } from 'react'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Progress } from '@/components/ui/progress'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { RefreshCw, Upload, Database, FileText, AlertCircle, CheckCircle, Info } from 'lucide-react'
+import { Progress } from '@/components/ui/progress'
+import { AlertCircle, CheckCircle, Database, FileText, Info, RefreshCw, Upload } from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
 
-import { baseUrl } from '@/lib/api'
-import { debug } from '@/lib/api'
+import { baseUrl, debug } from '@/lib/api'
 
 const remoteRepoUrl: string = process.env.VITE_REMOTE_REPO_URL || ''
+const remoteRepoBranch: string = process.env.VITE_REMOTE_REPO_BRANCH || ''
 const alertTimeout: number = 10000
 
 interface KnowledgeBaseStats {
   documentCount: number
   lastUpdated: string
   repositoryUrl: string
+  repositoryBranch: string
   status: 'healthy' | 'updating' | 'error'
 }
 
@@ -42,6 +43,7 @@ export function KnowledgeBasePage() {
     documentCount: 0,
     lastUpdated: 'Never',
     repositoryUrl: remoteRepoUrl,
+    repositoryBranch: remoteRepoBranch,
     status: 'healthy'
   })
   
@@ -53,6 +55,8 @@ export function KnowledgeBasePage() {
 
   const addAlert = (type: 'success' | 'error' | 'info', message: string) => {
     const id = Date.now().toString()
+    if (debug) console.log('addAlert | id', id)
+    if (alerts.some(alert => alert.message === message)) return
     setAlerts(prev => [...prev, { id, type, message }])
     setTimeout(() => {
       setAlerts(prev => prev.filter(alert => alert.id !== id))
@@ -62,7 +66,8 @@ export function KnowledgeBasePage() {
   const getProgress = async () => {
     // if (!isUpdating) return
     const response = await fetch(`${baseUrl}/knowledge-base/progress`)
-    const resultData = await response.json()
+    const result = await response.json()
+    const resultData = result.data
     if (debug) console.log('getProgress | result', resultData)
     setUpdateProgress({
       stage: IngestionStatus[resultData.status as keyof typeof IngestionStatus],
@@ -142,14 +147,10 @@ export function KnowledgeBasePage() {
         })
       })
 
-      if (response.ok) {
-        const resultData = await response.json()
+      if (response.ok && response.status === 200) {
+        const result = await response.json()
+        const resultData = result.data
         if (debug) console.log('update-knowledge-base | resultData', resultData)
-        if (!resultData.success) {
-          setStats(prev => ({ ...prev, status: 'error' }))
-          addAlert('error', resultData.error ?? 'Failed to update knowledge base [1]')
-          return
-        }
         setStats(prev => ({
           ...prev,
           documentCount: resultData.statistics.total_documents ?? prev.documentCount,
@@ -158,14 +159,16 @@ export function KnowledgeBasePage() {
         }))
         addAlert('success', resultData.status ?? 'Knowledge base updated successfully! [2]')
       } else {
-        throw new Error('Failed to update knowledge base')
+        // throw new Error('Failed to update knowledge base')
+        setStats(prev => ({ ...prev, status: 'error' }))
+        addAlert('error', (response.statusText ?? 'Failed to update knowledge base') + ' [' + response.status + ']')
+        setIsUpdating(false)
+        return
       }
     } catch (error) {
       setStats(prev => ({ ...prev, status: 'error' }))
       addAlert('error', 'Failed to update knowledge base. Please try again.')
-    // } finally {
-    //   setIsUpdating(false)
-    //   setUpdateProgress(null)
+      setIsUpdating(false)
     }
   }
 
@@ -184,7 +187,7 @@ export function KnowledgeBasePage() {
         body: formData
       })
 
-      if (response.ok) {
+      if (response.ok && response.status === 200) {
         const result = await response.json()
         setStats(prev => ({
           ...prev,
@@ -291,6 +294,12 @@ export function KnowledgeBasePage() {
             <span className="text-sm font-medium">Repository URL</span>
             <div className="text-sm text-muted-foreground font-mono bg-muted p-2 rounded">
               {stats.repositoryUrl}
+            </div>
+          </div>
+          <div className="space-y-2">
+            <span className="text-sm font-medium">Repository Branch</span>
+            <div className="text-sm text-muted-foreground font-mono bg-muted p-2 rounded">
+              {stats.repositoryBranch}
             </div>
           </div>
         </CardContent>

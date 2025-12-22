@@ -18,6 +18,7 @@ from genericsuite_codegen.mcp_server import (
     report_mcp_config,
     print_output,
     logger,
+    configure_logging,
 )
 
 # Add the current directory to Python path
@@ -25,12 +26,13 @@ current_dir = Path(__file__).parent
 sys.path.insert(0, str(current_dir))
 
 # Add the server directory to Python path for imports
-server_dir = current_dir.parent / "server"
+server_dir = current_dir.parent / "mcp-server"
 sys.path.insert(0, str(server_dir))
 
 
 def main():
     """Main entry point for the MCP server startup script."""
+    configure_logging(f"{server_dir}/mcp_server.log")
     try:
         logger.info("=" * 60)
         logger.info("GenericSuite CodeGen MCP Server Startup")

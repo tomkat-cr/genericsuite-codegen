@@ -1,0 +1,44 @@
+{
+  "templates": {
+    "json": {
+      "template": "examples of how to create a JSON table configuration files in Genericsuite",
+      "file_type_filter": "json",
+      "priority": 1
+    },
+    "langchain": {
+      "template": "examples of how to create a Python Langchain Tool in Genericsuite",
+      "file_type_filter": "py",
+      "priority": 1
+    },
+    "mcp": {
+      "template": "examples of how to create a MCP server tool in Genericsuite",
+      "file_type_filter": "py",
+      "priority": 1
+    },
+    "frontend": {
+      "template": "examples of how to create frontend code in Genericsuite",
+      "file_type_filter": "jsx",
+      "priority": 1
+    },
+    "backend": {
+      "template": "examples of how to create backend code in Genericsuite",
+      "file_type_filter": "py",
+      "priority": 1
+    },
+    "frontend_ai": {
+      "template": "examples of how to create frontend with AI code in Genericsuite",
+      "file_type_filter": "jsx",
+      "priority": 1
+    },
+    "backend_ai": {
+      "template": "examples of how to create backend with AI code in Genericsuite",
+      "file_type_filter": "py",
+      "priority": 1
+    },
+    "generic": {
+      "template": "examples and rules for creating code in Genericsuite",
+      "file_type_filter": null,
+      "priority": 0
+    }
+  }
+}

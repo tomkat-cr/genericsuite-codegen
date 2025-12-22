@@ -1,0 +1,89 @@
+{
+  "templates": {
+    "json": {
+      "template": "examples of how to create a JSON table configuration files in Genericsuite",
+      "file_type_filter": "json",
+      "priority": 1,
+      "description": "JSON table configuration files for GenericSuite CRUD operations"
+    },
+    "langchain": {
+      "template": "examples of how to create a Python Langchain Tool in Genericsuite",
+      "file_type_filter": "py",
+      "priority": 1,
+      "description": "LangChain tool implementations for AI agent workflows"
+    },
+    "mcp": {
+      "template": "examples of how to create a MCP server tool in Genericsuite",
+      "file_type_filter": "py",
+      "priority": 1,
+      "description": "Model Context Protocol server tools for AI development environments"
+    },
+    "frontend": {
+      "template": "examples of how to create frontend code in Genericsuite",
+      "file_type_filter": "jsx",
+      "priority": 1,
+      "description": "React frontend components and pages"
+    },
+    "backend": {
+      "template": "examples of how to create backend code in Genericsuite",
+      "file_type_filter": "py",
+      "priority": 1,
+      "description": "FastAPI backend endpoints and services"
+    },
+    "frontend_ai": {
+      "template": "examples of how to create frontend with AI code in Genericsuite",
+      "file_type_filter": "jsx",
+      "priority": 1,
+      "description": "AI-integrated React frontend components with chat and streaming"
+    },
+    "backend_ai": {
+      "template": "examples of how to create backend with AI code in Genericsuite",
+      "file_type_filter": "py",
+      "priority": 1,
+      "description": "AI-integrated FastAPI backend with agent and LLM integration"
+    },
+    "database": {
+      "template": "examples of how to create database models and operations in Genericsuite",
+      "file_type_filter": "py",
+      "priority": 1,
+      "description": "MongoDB database models and operations"
+    },
+    "api_endpoints": {
+      "template": "examples of how to create API endpoints in Genericsuite",
+      "file_type_filter": "py",
+      "priority": 1,
+      "description": "FastAPI endpoint implementations with proper error handling"
+    },
+    "ui_components": {
+      "template": "examples of how to create UI components in Genericsuite",
+      "file_type_filter": "jsx",
+      "priority": 1,
+      "description": "Reusable React UI components with Shadcn/ui"
+    },
+    "docker": {
+      "template": "examples of how to create Docker configurations in Genericsuite",
+      "file_type_filter": "dockerfile",
+      "priority": 1,
+      "description": "Docker and deployment configurations"
+    },
+    "testing": {
+      "template": "examples of how to create tests in Genericsuite",
+      "file_type_filter": "py",
+      "priority": 1,
+      "description": "Unit and integration test implementations"
+    },
+    "generic": {
+      "template": "examples and rules for creating code in Genericsuite",
+      "file_type_filter": null,
+      "priority": 0,
+      "description": "General GenericSuite coding patterns and conventions"
+    }
+  },
+  "template_groups": {
+    "ai_tools": ["langchain", "mcp", "backend_ai"],
+    "frontend": ["frontend", "frontend_ai", "ui_components"],
+    "backend": ["backend", "backend_ai", "api_endpoints", "database"],
+    "configuration": ["json", "docker"],
+    "development": ["testing", "generic"]
+  }
+}
