@@ -224,21 +224,38 @@ class AgentModel(BaseModel):
 class AgentConfig(BaseModel):
     """Configuration for the GenericSuite AI agent."""
 
-    model_provider: str = Field(
-        default="openai", description="LLM provider (openai, litellm)"
+    model_api: str = Field(
+        default="openai",
+        description="LLM API (openai, litellm)"
     )
-    model_name: str = Field(default="gpt-4", description="Model name to use")
+    model_provider: str = Field(
+        default="openai",
+        description="LLM provider (openai, huggingface,"
+        " aimlapi, together, xai, nvidia, rhymes, ollama)"
+    )
+    model_name: str = Field(
+        default="gpt-4o-mini",
+        description="Model name to use")
     temperature: float = Field(
-        default=0.1, description="Model temperature (0.0 to 1.0)"
+        default=0.1,
+        description="Model temperature (0.0 to 1.0)"
     )
     max_tokens: Optional[int] = Field(
-        default=None, description="Maximum tokens for responses"
+        default=None,
+        description="Maximum tokens for responses"
     )
-    timeout: int = Field(default=60, description="Request timeout in seconds")
+    timeout: int = Field(
+        default=60,
+        description="Request timeout in seconds")
+    stop: Optional[List[str]] = Field(
+        default=None,
+        description="Stop sequences for the model")
     api_key: Optional[str] = Field(
-        default=None, description="API key for the provider")
+        default=None,
+        description="API key for the provider")
     base_url: Optional[str] = Field(
-        default=None, description="Custom base URL for API")
+        default=None,
+        description="Custom base URL for API")
 
 
 class QueryRequest(BaseModel):

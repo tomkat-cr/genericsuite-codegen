@@ -8,11 +8,13 @@ export interface Message {
   content: string
   timestamp: string
   sources?: Array<string>
-  // sources?: Array<{
-  //   title: string
-  //   path: string
-  //   similarity: number
-  // }>
+  task_type?: string
+  model_used?: string
+  token_usage?: {
+    prompt_tokens: number
+    completion_tokens: number
+    total_tokens: number
+  }
 }
 
 export interface Conversation {
@@ -64,7 +66,7 @@ class ApiService {
     try {
       if (response.ok && response.status === 200) {
         const data = await response.json()
-        return { success: true, data }
+        return { success: true, data: typeof data.data !== 'undefined' ? data.data : data }
       } else {
         const errorData = await response.json().catch(() => ({}))
         return {

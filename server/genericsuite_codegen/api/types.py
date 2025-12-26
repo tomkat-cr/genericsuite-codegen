@@ -202,6 +202,10 @@ class Message(BaseModel):
         description="Message timestamp")
     sources: Optional[List[str]] = Field(
         default=None, description="Source documents for assistant messages")
+    task_type: Optional[str] = Field(
+        default=None, description="Type of task performed")
+    model_used: Optional[str] = Field(
+        default=None, description="Model used for generation")
     token_usage: Optional[Dict[str, int]] = Field(
         default=None, description="Token usage for this message")
 

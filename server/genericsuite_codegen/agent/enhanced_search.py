@@ -6,12 +6,14 @@ queries with contextual GenericSuite rules and patterns to ensure generated
 code follows established conventions.
 """
 
-import logging
 from typing import List, Dict, Any, Optional, Tuple, TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from .tools import KnowledgeBaseTool
 from dataclasses import asdict
+
+from genericsuite_codegen.utilities.app_logger import (
+    log_debug,
+    log_warning,
+    log_error,
+)
 
 from genericsuite_codegen.database.setup import (
     SearchResult, VectorSearchError
@@ -34,8 +36,11 @@ from .enhanced_search_logging import (
     handle_enhanced_search_errors
 )
 # Avoid circular import - KnowledgeBaseTool will be passed as parameter
+if TYPE_CHECKING:
+    from .tools import KnowledgeBaseTool
 
-logger = logging.getLogger(__name__)
+
+DEBUG = False
 
 
 class EnhancedVectorSearch:
@@ -76,8 +81,9 @@ class EnhancedVectorSearch:
             merge_strategy="prioritize_context"
         )
 
-        logger.info("Initialized EnhancedVectorSearch with dual search "
-                    "capability")
+        _ = DEBUG and log_debug(
+            "Initialized EnhancedVectorSearch with dual search "
+            "capability")
 
     @log_performance("dual_search")
     @handle_enhanced_search_errors(fallback_enabled=True, fallback_value=None)
@@ -166,23 +172,23 @@ class EnhancedVectorSearch:
         ):
             try:
                 if not user_results and not context_results:
-                    logger.info("No search results to merge")
+                    _ = DEBUG and log_debug("No search results to merge")
                     return []
 
                 # If only one type of results, return them
                 if not context_results:
-                    logger.info(
+                    _ = DEBUG and log_debug(
                         "No context results, returning user results only")
                     return user_results[:self.config.search_result_limit]
 
                 if not user_results:
-                    logger.info(
+                    _ = DEBUG and log_debug(
                         "No user results, returning context results only")
                     return context_results[:self.config.search_result_limit]
 
                 # Validate merge strategy
                 if merge_strategy not in MERGE_PRIORITY_WEIGHTS:
-                    logger.warning(
+                    log_warning(
                         f"Invalid merge strategy '{merge_strategy}'"
                         ", using default 'prioritize_context'")
                     merge_strategy = "prioritize_context"
@@ -261,16 +267,17 @@ class EnhancedVectorSearch:
                 final_results = filtered_results[
                     : self.config.search_result_limit]
 
-                logger.info("Merged results using "
-                            f"'{merge_strategy}' strategy: "
-                            f"{len(combined_results)} combined -> "
-                            f"{len(filtered_results)} after threshold -> "
-                            f"{len(final_results)} final")
+                _ = DEBUG and log_debug(
+                    "Merged results using "
+                    f"'{merge_strategy}' strategy: "
+                    f"{len(combined_results)} combined -> "
+                    f"{len(filtered_results)} after threshold -> "
+                    f"{len(final_results)} final")
 
                 return final_results
 
             except Exception as e:
-                logger.error(f"Failed to merge search results: {e}")
+                log_error(f"Failed to merge search results: {e}")
                 raise SearchMergeError(
                     f"Result merging failed: {e}",
                     merge_strategy=merge_strategy,
@@ -316,7 +323,7 @@ class EnhancedVectorSearch:
 
                 # Check for reasonable limits
                 if search_limit > 100:
-                    logger.warning(
+                    log_warning(
                         f"Large search limit requested: {search_limit}")
                     search_limit = 100
 
@@ -338,18 +345,19 @@ class EnhancedVectorSearch:
                     )
                     results.append(search_result)
 
-                logger.debug("Vector search completed: "
-                             f"query='{query[:50]}...', "
-                             f"results={len(results)}, "
-                             f"filter={file_type_filter}")
+                _ = DEBUG and log_debug("Vector search completed: "
+                                        f"query='{query[:50]}...', "
+                                        f"results={len(results)}, "
+                                        f"filter={file_type_filter}")
 
                 return results
 
             except VectorSearchError as e:
-                logger.error(
+                log_error(
                     f"Vector search failed for query '{query[:50]}...': {e}")
                 if self.config.fallback_enabled:
-                    logger.info("Using fallback: returning empty results")
+                    _ = DEBUG and log_debug(
+                        "Using fallback: returning empty results")
                     return []  # Return empty results as fallback
                 raise DualSearchError(
                     f"Vector search failed: {e}",
@@ -357,11 +365,12 @@ class EnhancedVectorSearch:
                     original_exception=e
                 )
             except Exception as e:
-                logger.error(
+                log_error(
                     "Search operation failed for query "
                     f"'{query[:50]}...': {e}")
                 if self.config.fallback_enabled:
-                    logger.info("Using fallback: returning empty results")
+                    _ = DEBUG and log_debug(
+                        "Using fallback: returning empty results")
                     return []  # Return empty results as fallback
                 raise DualSearchError(
                     f"Search operation failed: {e}",
@@ -406,12 +415,13 @@ class EnhancedVectorSearch:
                     try:
                         code_context = self.context_service.determine_context(
                             user_query)
-                        logger.info(f"Determined context: "
-                                    f"{code_context.code_type} "
-                                    "(confidence: "
-                                    f"{code_context.confidence:.2f})")
+                        _ = DEBUG and log_debug(
+                            f"Determined context: "
+                            f"{code_context.code_type} "
+                            "(confidence: "
+                            f"{code_context.confidence:.2f})")
                     except Exception as e:
-                        logger.warning(f"Context determination failed: {e}")
+                        log_warning(f"Context determination failed: {e}")
                         # Create generic context as fallback
                         code_context = CodeGenerationContext(
                             code_type="generic",
@@ -419,7 +429,7 @@ class EnhancedVectorSearch:
                         )
 
                 # Perform user query search
-                logger.info(
+                _ = DEBUG and log_debug(
                     f"Performing user query search: '{user_query[:50]}...'")
                 user_results = self._perform_search(
                     query=user_query,
@@ -446,8 +456,9 @@ class EnhancedVectorSearch:
                             self.template_manager.get_file_type_filter(
                                 code_context.code_type))
 
-                        logger.info(f"Performing contextual search: "
-                                    f"'{contextual_query[:50]}...'")
+                        _ = DEBUG and log_debug(
+                            f"Performing contextual search: "
+                            f"'{contextual_query[:50]}...'")
                         context_results = self._perform_search(
                             query=contextual_query,
                             file_type_filter=context_file_filter,
@@ -455,7 +466,7 @@ class EnhancedVectorSearch:
                         )
 
                     except Exception as e:
-                        logger.warning(f"Contextual search failed: {e}")
+                        log_warning(f"Contextual search failed: {e}")
                         if not self.config.fallback_enabled:
                             raise DualSearchError(
                                 f"Contextual search failed: {e}",
@@ -494,9 +505,10 @@ class EnhancedVectorSearch:
                     success=True
                 )
 
-                logger.info(f"Dual search completed: {len(user_results)} user "
-                            f"results, {len(context_results)} context results,"
-                            f" {len(merged_results)} merged results")
+                _ = DEBUG and log_debug(
+                    f"Dual search completed: {len(user_results)} user "
+                    f"results, {len(context_results)} context results,"
+                    f" {len(merged_results)} merged results")
 
                 return dual_result
 
@@ -531,7 +543,7 @@ class EnhancedVectorSearch:
                     error_details=dual_error.to_dict()
                 )
 
-                logger.error(f"Dual search operation failed: {e}")
+                log_error(f"Dual search operation failed: {e}")
                 raise dual_error
 
     def update_config(self, new_config: EnhancedSearchConfig) -> None:
@@ -542,7 +554,7 @@ class EnhancedVectorSearch:
             new_config: New configuration to apply
         """
         self.config = new_config
-        logger.info("Updated enhanced search configuration")
+        _ = DEBUG and log_debug("Updated enhanced search configuration")
 
     def get_search_statistics(self) -> Dict[str, Any]:
         """

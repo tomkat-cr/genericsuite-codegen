@@ -4,14 +4,12 @@ Knowledge base search tools for the GenericSuite CodeGen AI agent.
 This module provides tools for vector similarity search, context retrieval,
 and source attribution for the Pydantic AI agent.
 """
-import logging
 from typing import List, Dict, Any, Optional, Tuple
 
 from pydantic_ai import Tool
 
 from genericsuite_codegen.database.setup import (
     get_database_manager,
-    # initialize_database,
     SearchResult,
     VectorSearchError,
     DatabaseConnectionError
@@ -19,7 +17,12 @@ from genericsuite_codegen.database.setup import (
 from genericsuite_codegen.document_processing.embeddings import \
     create_embedding_generator
 
-from genericsuite_codegen.api.utilities import local_path_to_url
+from genericsuite_codegen.utilities import local_path_to_url
+from genericsuite_codegen.utilities.app_logger import (
+    log_debug,
+    log_warning,
+    log_error,
+)
 
 from genericsuite_codegen.agent.types import (
     KnowledgeBaseSearchResults,
@@ -55,11 +58,8 @@ from genericsuite_codegen.agent.context_determination import (
     ContextDeterminationService)
 from genericsuite_codegen.agent.search_templates import SearchTemplateManager
 
-DEBUG = True
 
-# Configure logging
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO if DEBUG else logging.WARNING)
+DEBUG = False
 
 
 # Knowledge Base Tools
@@ -97,10 +97,10 @@ class KnowledgeBaseTool:
         """Initialize the embedding provider for query vectorization."""
         try:
             self.embedding_provider = create_embedding_generator()
-            logger.info(
+            _ = DEBUG and log_debug(
                 "Initialized embedding provider for knowledge base tool")
         except Exception as e:
-            logger.error(
+            log_error(
                 f"Failed to initialize embedding provider: {e}")
             raise RuntimeError(
                 f"Embedding provider initialization failed: {e}")
@@ -123,12 +123,13 @@ class KnowledgeBaseTool:
                 context_service=self.context_service
             )
 
-            logger.info("Initialized enhanced search components")
+            _ = DEBUG and log_debug("Initialized enhanced search components")
 
         except Exception as e:
-            logger.warning(f"Failed to initialize enhanced search: {e}")
+            log_warning(f"Failed to initialize enhanced search: {e}")
             self.enable_enhanced_search = False
-            logger.info("Falling back to standard search functionality")
+            _ = DEBUG and log_debug(
+                "Falling back to standard search functionality")
 
     def search(
         self, query: str, limit: int = 5,
@@ -151,8 +152,9 @@ class KnowledgeBaseTool:
             DatabaseConnectionError: If database connection fails.
         """
         try:
-            logger.info(f"Searching knowledge base for query: '{query}' "
-                        f"(limit: {limit})")
+            _ = DEBUG and log_debug(
+                f"Searching knowledge base for query: '{query}' "
+                f"(limit: {limit})")
 
             # Generate query embedding
             query_embedding = self.embedding_provider \
@@ -199,19 +201,19 @@ class KnowledgeBaseTool:
                 sources=list(sources)
             )
 
-            logger.info(
+            _ = DEBUG and log_debug(
                 f"Found {len(result_models)} results from "
                 f"{len(sources)} sources")
             return final_results
 
         except VectorSearchError as e:
-            logger.error(f"Vector search failed: {e}")
+            log_error(f"Vector search failed: {e}")
             raise
         except DatabaseConnectionError as e:
-            logger.error(f"Database connection failed: {e}")
+            log_error(f"Database connection failed: {e}")
             raise
         except Exception as e:
-            logger.error(f"Unexpected error during search: {e}")
+            log_error(f"Unexpected error during search: {e}")
             raise VectorSearchError(f"Search operation failed: {e}")
 
     def _generate_context_summary(self, results: List[SearchResult],
@@ -287,7 +289,8 @@ class KnowledgeBaseTool:
                 result, query_lower
             )
 
-            logger.info(f">>> rank_context_by_relevance | Result: {result}")
+            _ = DEBUG and log_debug(
+                f">>> rank_context_by_relevance | Result: {result}")
 
             context_ranking = ContextRanking(
                 content=result.content,
@@ -302,7 +305,7 @@ class KnowledgeBaseTool:
         # Sort by relevance score (descending)
         ranked_context.sort(key=lambda x: x.relevance_score, reverse=True)
 
-        logger.info(
+        _ = DEBUG and log_debug(
             ">>> rank_context_by_relevance | "
             f"Ranked context: {ranked_context}")
 
@@ -410,7 +413,7 @@ class KnowledgeBaseTool:
             )
 
         except Exception as e:
-            logger.error(f"Failed to get context for generation: {e}")
+            log_error(f"Failed to get context for generation: {e}")
             return f"Error retrieving context: {e}", [], []
 
     def _get_enhanced_context_for_generation(
@@ -436,7 +439,8 @@ class KnowledgeBaseTool:
             raw_results.
         """
         try:
-            logger.info(f"Using enhanced dual search for query: '{query}'")
+            _ = DEBUG and log_debug(
+                f"Using enhanced dual search for query: '{query}'")
 
             # Perform dual search
             dual_result = self.enhanced_search._sync_dual_search(
@@ -451,7 +455,7 @@ class KnowledgeBaseTool:
             search_results = dual_result.merged_results
 
             if not search_results:
-                logger.info(
+                _ = DEBUG and log_debug(
                     "No results from enhanced search, trying standard search")
                 return self._get_standard_context_for_generation(
                     query=query,
@@ -522,14 +526,15 @@ class KnowledgeBaseTool:
             # Remove duplicate sources and include dual search results
             unique_sources = list(set(sources))
 
-            logger.info(f"Enhanced search returned {len(search_results)} "
-                        f"results from {len(unique_sources)} sources")
+            _ = DEBUG and log_debug(
+                f"Enhanced search returned {len(search_results)} "
+                f"results from {len(unique_sources)} sources")
 
             return final_context, unique_sources, search_results
 
         except Exception as e:
-            logger.error(f"Enhanced context generation failed: {e}")
-            logger.info("Falling back to standard search")
+            log_error(f"Enhanced context generation failed: {e}"
+                      + "Falling back to standard search")
             return self._get_standard_context_for_generation(
                 query=query,
                 max_context_length=max_context_length,
@@ -660,7 +665,8 @@ class KnowledgeBaseTool:
             self._initialize_enhanced_search()
 
         self.enable_enhanced_search = enabled
-        logger.info(f"Enhanced search {'enabled' if enabled else 'disabled'}")
+        _ = DEBUG and log_debug(
+            f"Enhanced search {'enabled' if enabled else 'disabled'}")
 
     def is_enhanced_search_available(self) -> bool:
         """
@@ -718,7 +724,7 @@ class KnowledgeBaseTool:
             DualSearchResult if enhanced search is available, None otherwise
         """
         if not self.is_enhanced_search_available():
-            logger.warning("Enhanced search not available for dual search")
+            log_warning("Enhanced search not available for dual search")
             return None
 
         try:
@@ -730,7 +736,7 @@ class KnowledgeBaseTool:
                 limit=limit
             )
         except Exception as e:
-            logger.error(f"Dual search failed: {e}")
+            log_error(f"Dual search failed: {e}")
             return None
 
     def determine_code_context(
@@ -750,7 +756,7 @@ class KnowledgeBaseTool:
             None otherwise
         """
         if not self.is_enhanced_search_available():
-            logger.warning("Context determination not available")
+            log_warning("Context determination not available")
             return None
 
         try:
@@ -759,7 +765,7 @@ class KnowledgeBaseTool:
                 task_type=task_type
             )
         except Exception as e:
-            logger.error(f"Context determination failed: {e}")
+            log_error(f"Context determination failed: {e}")
             return None
 
 
@@ -958,7 +964,7 @@ class JSONConfigGenerator:
             )
 
         except Exception as e:
-            logger.error(f"Failed to generate table configuration: {e}")
+            log_error(f"Failed to generate table configuration: {e}")
             raise RuntimeError(f"Table configuration generation failed: {e}")
 
     def generate_form_config(self, requirements: str, form_name: str
@@ -1015,7 +1021,7 @@ class JSONConfigGenerator:
             )
 
         except Exception as e:
-            logger.error(f"Failed to generate form configuration: {e}")
+            log_error(f"Failed to generate form configuration: {e}")
             raise RuntimeError(f"Form configuration generation failed: {e}")
 
     def _parse_field_requirements(self, requirements: str) -> Dict[str, Any]:
@@ -1927,7 +1933,7 @@ def {function_name}({function_parameters}) -> {return_type}:
             )
 
         except Exception as e:
-            logger.error(f"Failed to generate Langchain tool: {e}")
+            log_error(f"Failed to generate Langchain tool: {e}")
             raise RuntimeError(f"Langchain tool generation failed: {e}")
 
     def generate_mcp_tool(self, requirements: str, tool_name: str
@@ -2013,7 +2019,7 @@ def {function_name}({function_parameters}) -> {return_type}:
             )
 
         except Exception as e:
-            logger.error(f"Failed to generate MCP tool: {e}")
+            log_error(f"Failed to generate MCP tool: {e}")
             raise RuntimeError(f"MCP tool generation failed: {e}")
 
     def generate_utility_function(self, requirements: str, function_name: str
@@ -2093,7 +2099,7 @@ def {function_name}({function_parameters}) -> {return_type}:
             )
 
         except Exception as e:
-            logger.error(f"Failed to generate utility function: {e}")
+            log_error(f"Failed to generate utility function: {e}")
             raise RuntimeError(f"Utility function generation failed: {e}")
 
     # Helper methods for code generation
@@ -2605,7 +2611,7 @@ export default {form_name};
                     sources)
 
         except Exception as e:
-            logger.error(f"Failed to generate React component: {e}")
+            log_error(f"Failed to generate React component: {e}")
             raise RuntimeError(f"React component generation failed: {e}")
 
     def _generate_form_component(self, requirements: str, component_name: str,
@@ -3171,7 +3177,7 @@ logger = logging.getLogger(__name__)
                 raise ValueError(f"Unsupported framework: {framework}")
 
         except Exception as e:
-            logger.error(f"Failed to generate {framework} code: {e}")
+            log_error(f"Failed to generate {framework} code: {e}")
             raise RuntimeError(f"{framework} code generation failed: {e}")
 
     def _generate_fastapi_code(
@@ -3968,7 +3974,7 @@ def create_document_retrieval_tool() -> Tool:
             )
 
         except DocumentRetrievalError as e:
-            logger.error(f"Document retrieval error: {e}")
+            log_error(f"Document retrieval error: {e}")
             return DocumentRetrievalResponse(
                 success=False,
                 error_message=str(e),
@@ -3978,7 +3984,7 @@ def create_document_retrieval_tool() -> Tool:
                 }
             )
         except Exception as e:
-            logger.error(f"Unexpected error in document retrieval: {e}")
+            log_error(f"Unexpected error in document retrieval: {e}")
             return DocumentRetrievalResponse(
                 success=False,
                 error_message=f"Unexpected error: {str(e)}",
@@ -4028,7 +4034,7 @@ def create_batch_document_retrieval_tool() -> Tool:
             failed_retrievals = []
             max_size_bytes = request.max_size_mb * 1024 * 1024
 
-            logger.info(
+            _ = DEBUG and log_debug(
                 "Starting batch retrieval of "
                 f"{len(request.document_paths)} documents")
 
@@ -4120,7 +4126,7 @@ def create_batch_document_retrieval_tool() -> Tool:
             )
 
         except Exception as e:
-            logger.error(f"Unexpected error in batch document retrieval: {e}")
+            log_error(f"Unexpected error in batch document retrieval: {e}")
             return BatchDocumentRetrievalResponse(
                 successful_retrievals=[],
                 failed_retrievals=[{

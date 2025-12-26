@@ -1,26 +1,9 @@
-import { useState, useRef, useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
+
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Textarea } from '@/components/ui/textarea'
-import { Input } from '@/components/ui/input'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Separator } from '@/components/ui/separator'
-import { Badge } from '@/components/ui/badge'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import {
-  Send,
-  MessageSquare,
-  Bot,
-  User,
-  Trash2,
-  Plus,
-  ExternalLink,
-  Copy,
-  Check,
-  Edit2,
-  X,
-  Save
-} from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -29,9 +12,28 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { Separator } from '@/components/ui/separator'
+import { Textarea } from '@/components/ui/textarea'
 import { apiService } from '@/lib/api'
+import {
+  Bot,
+  Check,
+  Copy,
+  Edit2,
+  ExternalLink,
+  MessageSquare,
+  Plus,
+  Save,
+  Send,
+  Trash2,
+  User,
+  X
+} from 'lucide-react'
 
 import type { Conversation, Message } from '@/lib/api'
+import { debug } from '@/lib/api'
 
 export function ChatPage() {
   const [conversations, setConversations] = useState<Conversation[]>([])
@@ -117,6 +119,7 @@ export function ChatPage() {
       })
 
       if (result.success && result.data) {
+        if (debug) console.log('>> createNewConversation | result.data:', result.data)
         setConversations(prev => [result.data!, ...prev])
         setCurrentConversation(result.data)
         return result.data
@@ -255,6 +258,7 @@ export function ChatPage() {
     setIsLoadingConversation(true)
     const result = await apiService.getConversation(conversationId)
     if (result.success && result.data) {
+      if (debug) console.log('>> loadConversation | result.data:', result.data)
       setCurrentConversation(result.data)
       setConversationError(null)
     } else {
@@ -347,12 +351,15 @@ export function ChatPage() {
   }
 
   const formatTimestamp = (date: Date) => {
+    // Convert date to local time
+    const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60 * 1000)
     return new Intl.DateTimeFormat('en-US', {
       hour: '2-digit',
       minute: '2-digit',
       month: 'short',
-      day: 'numeric'
-    }).format(date)
+      day: 'numeric',
+      year: 'numeric'
+    }).format(localDate)
   }
 
   return (
@@ -580,17 +587,6 @@ export function ChatPage() {
                               <div className="space-y-1">
                                 {msg.sources.map((source, index) => (
                                   <div key={index} className="flex items-center gap-2 text-xs">
-                                    {/* 
-                                    <Badge variant="outline" className="text-xs">
-                                      {(source.similarity * 100).toFixed(0)}% match
-                                    </Badge>
-                                    <span className="text-muted-foreground truncate">
-                                      {source.title || source.path}
-                                    </span>
-                                    <Button size="sm" variant="ghost" className="h-4 w-4 p-0">
-                                      <ExternalLink className="h-3 w-3" />
-                                    </Button>
-                                    */}
                                     <Badge variant="outline" className="text-xs">
                                       <a href={source} target="_blank" rel="noopener noreferrer">{source}</a>
                                     </Badge>
@@ -602,6 +598,47 @@ export function ChatPage() {
 
                                   </div>
                                 ))}
+                              </div>
+                            </div>
+                          )}
+                          {/* Model Used */}
+                          {debug && msg.model_used && (
+                            <div className="space-y-2">
+                              <p className="text-xs font-medium text-muted-foreground">Model Used:</p>
+                              <div className="space-y-1">
+                                <Badge variant="outline" className="text-xs">
+                                  {msg.model_used}
+                                </Badge>
+                              </div>
+                            </div>
+                          )}
+                          {/* Task Type */}
+                          {debug && msg.task_type && (
+                            <div className="flex items-center gap-2">
+                              <div className="">
+                                <p className="text-xs font-medium text-muted-foreground">Task Type:</p>
+                              </div>
+                              <div className="">
+                                <Badge variant="outline" className="text-xs">
+                                  {msg.task_type}
+                                </Badge>
+                              </div>
+                            </div>
+                          )}
+                          {/* token_usage */}
+                          {debug && msg.token_usage && (
+                            <div className="space-y-2">
+                              <p className="text-xs font-medium text-muted-foreground">Token Usage:</p>
+                              <div className="space-y-1">
+                                <Badge variant="outline" className="text-xs">
+                                  Prompt Tokens: {msg.token_usage.prompt_tokens}
+                                </Badge>
+                                <Badge variant="outline" className="text-xs">
+                                  Completion Tokens: {msg.token_usage.completion_tokens}
+                                </Badge>
+                                <Badge variant="outline" className="text-xs">
+                                  Total Tokens: {msg.token_usage.total_tokens}
+                                </Badge>
                               </div>
                             </div>
                           )}

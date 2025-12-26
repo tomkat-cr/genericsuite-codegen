@@ -115,7 +115,8 @@ export function CodeGenerationPage() {
         )
       }
 
-      const result = await response.json()
+      const resultComplete = await response.json()
+      const result = resultComplete.data
       if (debug) console.log('generateCode | result', result)
       
       const files: GeneratedFile[] = result.files || []

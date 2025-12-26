@@ -5,18 +5,23 @@ This module provides comprehensive monitoring, health checks, and system
 status reporting for the enhanced vector search system.
 """
 
-import logging
 from typing import Dict, Any, List
 from datetime import datetime
 from dataclasses import dataclass
 from enum import Enum
+
+from genericsuite_codegen.utilities.app_logger import (
+    log_error,
+)
+
 from .enhanced_search_logging import (
     get_performance_monitor,
     get_enhanced_search_logger
 )
 from .enhanced_search_error_handler import get_recovery_stats
 
-logger = logging.getLogger(__name__)
+
+DEBUG = False
 
 
 class HealthStatus(Enum):
@@ -112,7 +117,7 @@ class EnhancedSearchMonitor:
                     overall_status = HealthStatus.WARNING
 
             except Exception as e:
-                logger.error(f"Health check failed for {component_name}: {e}")
+                log_error(f"Health check failed for {component_name}: {e}")
                 components.append(ComponentHealth(
                     component_name=component_name,
                     status=HealthStatus.UNKNOWN,

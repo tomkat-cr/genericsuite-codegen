@@ -9,11 +9,6 @@
 
 GenericSuite CodeGen is an AI-powered RAG (Retrieval-Augmented Generation) system that generates JSON configuration files, Python tools, and application code following GenericSuite patterns. It combines a FastAPI backend with a React frontend and includes MCP (Model Context Protocol) server capabilities for seamless integration with AI development workflows.
 
-## Kiro-Driven Development Approach
-
-* How we used Kiro to develop the project: [Kiro-Usage.md](./Kiro-Usage.md)
-* Kiro step-by-step process to develop the project: [Kiro-SDLC-Screenshots.md](./Kiro-SDLC-Screenshots.md).
-
 ## Table of Contents
 
 - [Description](#description)
@@ -92,6 +87,7 @@ GenericSuite CodeGen leverages AI and knowledge base search to assist developers
 - **npm**: 8.0 or higher
 - **Docker**: For containerized deployment
 - **OpenAI API Key**: For AI functionality
+- **CRON**: For scheduled tasks
 
 ### Installation
 
@@ -121,6 +117,24 @@ HF_TOKEN=your_huggingface_token_here
 4. **Install dependencies**:
 ```bash
 make install
+```
+
+5. **Setup CRON**:
+
+Method # 1
+
+```bash
+# Add this to your crontab
+crontab -e
+# Call the GS Codgen 'update-knowledge-base/run' endpoint every 30 seconds
+* * * * * bash ../server/run_batch_server.sh "update-knowledge-base" > /dev/null 2>&1
+* * * * * sleep 30; bash ../server/run_batch_server.sh "update-knowledge-base" > /dev/null 2>&1
+```
+
+Method # 2
+
+```bash
+make kb-cron
 ```
 
 ## Usage
@@ -513,6 +527,11 @@ genericsuite-codegen/
 ├── package.json                   # Root workspace configuration
 └── Makefile                       # Main project commands
 ```
+
+## Kiro-Driven Development Approach
+
+* How we used Kiro to develop the project: [Kiro-Usage.md](./Kiro-Usage.md)
+* Kiro step-by-step process to develop the project: [Kiro-SDLC-Screenshots.md](./Kiro-SDLC-Screenshots.md).
 
 ## License
 

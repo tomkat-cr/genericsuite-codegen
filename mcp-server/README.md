@@ -46,12 +46,12 @@ MCP_API_KEY=your_api_key_here
 MCP_DEBUG=0
 
 # AI Agent Configuration
-LLM_API_KEY=your_openai_key
+OPENAI_API_KEY=your_openai_key
 LLM_PROVIDER=openai
-LLM_MODEL=gpt-4
+LLM_MODEL_NAME=gpt-4o-mini
 
 # Database Configuration
-MONGODB_URI=mongodb://localhost:27017/genericsuite_codegen
+APP_DB_URI=mongodb://localhost:27017/genericsuite_codegen
 ```
 
 ## Usage

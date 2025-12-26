@@ -7,23 +7,28 @@ fallback templates.
 """
 
 import json
-import logging
 from pathlib import Path
 from typing import Dict, Optional, Any
 from dataclasses import asdict
+
+from genericsuite_codegen.utilities.app_logger import (
+    log_debug,
+    log_warning,
+    log_error,
+)
 
 from .enhanced_search_types import (
     SearchTemplate,
     TemplateLoadError,
 )
 from .enhanced_search_logging import (
-    get_enhanced_search_logger,
+    # get_enhanced_search_logger,
     performance_tracking,
     log_performance,
     handle_enhanced_search_errors
 )
 
-logger = logging.getLogger(__name__)
+DEBUG = False
 
 
 class SearchTemplateManager:
@@ -113,7 +118,7 @@ class SearchTemplateManager:
                 else:
                     self._load_default_templates()
                     if self.config_path:
-                        logger.info(
+                        _ = DEBUG and log_debug(
                             f"Configuration file not found at"
                             f" {self.config_path}, "
                             f"using default templates")
@@ -121,15 +126,15 @@ class SearchTemplateManager:
                 # Already handled, just use defaults
                 self._load_default_templates()
             except Exception as e:
-                logger.error(f"Unexpected error loading templates: {e}")
+                log_error(f"Unexpected error loading templates: {e}")
                 # Log the error and use defaults
-                search_logger = get_enhanced_search_logger()
+                # search_logger = get_enhanced_search_logger()
                 template_error = TemplateLoadError(
                     f"Failed to load templates: {e}",
                     config_path=self.config_path,
                     original_exception=e
                 )
-                search_logger.log_error(template_error)
+                log_error(template_error)
                 self._load_default_templates()
 
     def _load_from_file(self) -> None:
@@ -218,13 +223,13 @@ class SearchTemplateManager:
                         loaded_templates[code_type] = template
                     else:
                         invalid_templates.append(code_type)
-                        logger.warning(
+                        log_warning(
                             f"Invalid template for {code_type}: "
                             "failed validation")
 
                 except Exception as e:
                     invalid_templates.append(code_type)
-                    logger.warning(
+                    log_warning(
                         f"Failed to create template for {code_type}: {e}")
                     continue
 
@@ -237,19 +242,19 @@ class SearchTemplateManager:
                 )
 
             self.templates = loaded_templates
-            logger.info(
+            _ = DEBUG and log_debug(
                 f"Loaded {len(self.templates)} templates from"
                 f" {self.config_path}")
 
             if invalid_templates:
-                logger.warning(
+                log_warning(
                     f"Skipped {len(invalid_templates)} invalid templates: "
                     f"{', '.join(invalid_templates)}")
 
         except TemplateLoadError:
             raise
         except Exception as e:
-            logger.error(f"Unexpected error loading templates from file: {e}")
+            log_error(f"Unexpected error loading templates from file: {e}")
             raise TemplateLoadError(
                 f"Failed to load templates from file: {e}",
                 config_path=self.config_path,
@@ -282,7 +287,8 @@ class SearchTemplateManager:
     def _load_default_templates(self) -> None:
         """Load default hardcoded templates."""
         self.templates = self.DEFAULT_TEMPLATES.copy()
-        logger.info(f"Loaded {len(self.templates)} default templates")
+        _ = DEBUG and log_debug(
+            f"Loaded {len(self.templates)} default templates")
 
     def get_template(self, code_type: str) -> str:
         """
@@ -301,7 +307,7 @@ class SearchTemplateManager:
         # Fallback to generic template
         generic_template = self.templates.get("generic")
         if generic_template:
-            logger.info(
+            _ = DEBUG and log_debug(
                 f"No specific template for {code_type}, "
                 f"using generic template")
             return generic_template.template
@@ -309,7 +315,7 @@ class SearchTemplateManager:
         # Ultimate fallback
         fallback_template = ("examples and rules for creating code "
                              "in Genericsuite")
-        logger.warning(f"No template found for {code_type}, using fallback")
+        log_warning(f"No template found for {code_type}, using fallback")
         return fallback_template
 
     def get_template_object(self, code_type: str) -> Optional[SearchTemplate]:
@@ -373,24 +379,25 @@ class SearchTemplateManager:
                 self._load_templates()
                 new_count = len(self.templates)
 
-                logger.info(f"Templates reloaded: {old_count} -> {new_count}")
+                _ = DEBUG and log_debug(
+                    f"Templates reloaded: {old_count} -> {new_count}")
 
             except Exception as e:
-                logger.error(f"Failed to reload templates: {e}")
+                log_error(f"Failed to reload templates: {e}")
                 # Restore previous templates on reload failure
                 if 'old_templates' in locals():
                     self.templates = old_templates
-                    logger.info(
+                    _ = DEBUG and log_debug(
                         "Restored previous templates after reload failure")
 
                 # Log the error
-                search_logger = get_enhanced_search_logger()
+                # search_logger = get_enhanced_search_logger()
                 template_error = TemplateLoadError(
                     f"Template reload failed: {e}",
                     config_path=self.config_path,
                     original_exception=e
                 )
-                search_logger.log_error(template_error)
+                log_error(template_error)
 
     def validate_template(self, template: SearchTemplate) -> bool:
         """
@@ -432,7 +439,7 @@ class SearchTemplateManager:
             return True
 
         except Exception as e:
-            logger.error(f"Error validating template: {e}")
+            log_error(f"Error validating template: {e}")
             return False
 
     def add_template(self, template: SearchTemplate) -> bool:
@@ -447,15 +454,16 @@ class SearchTemplateManager:
         """
         try:
             if not self.validate_template(template):
-                logger.error(f"Invalid template for {template.code_type}")
+                log_error(f"Invalid template for {template.code_type}")
                 return False
 
             self.templates[template.code_type] = template
-            logger.info(f"Added/updated template for {template.code_type}")
+            _ = DEBUG and log_debug(
+                f"Added/updated template for {template.code_type}")
             return True
 
         except Exception as e:
-            logger.error(f"Error adding template: {e}")
+            log_error(f"Error adding template: {e}")
             return False
 
     def remove_template(self, code_type: str) -> bool:
@@ -470,7 +478,7 @@ class SearchTemplateManager:
         """
         if code_type in self.templates:
             del self.templates[code_type]
-            logger.info(f"Removed template for {code_type}")
+            _ = DEBUG and log_debug(f"Removed template for {code_type}")
             return True
         return False
 
@@ -495,10 +503,10 @@ class SearchTemplateManager:
             with open(output_path, 'w', encoding='utf-8') as f:
                 json.dump(config_data, f, indent=2, ensure_ascii=False)
 
-            logger.info(
+            _ = DEBUG and log_debug(
                 f"Exported {len(self.templates)} templates to {output_path}")
             return True
 
         except Exception as e:
-            logger.error(f"Failed to export configuration: {e}")
+            log_error(f"Failed to export configuration: {e}")
             return False

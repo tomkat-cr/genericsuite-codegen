@@ -5,7 +5,6 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Optional
 
 from .config_loader import ConfigLoader
 from .config_validator import ConfigValidator, ValidationError
@@ -73,7 +72,8 @@ def load_config_command(args) -> int:
         else:
             # Load enhanced search config
             print(
-                f"Loading enhanced search configuration (environment: {args.environment})...")
+                f"Loading enhanced search configuration "
+                f"(environment: {args.environment})...")
             config = loader.load_enhanced_search_config(
                 config_file=args.file,
                 environment=args.environment
@@ -86,8 +86,10 @@ def load_config_command(args) -> int:
                     "max_context_length": config.max_context_length,
                     "fallback_enabled": config.fallback_enabled,
                     "dual_search_enabled": config.dual_search_enabled,
-                    "context_determination_enabled": config.context_determination_enabled,
-                    "document_retrieval_enabled": config.document_retrieval_enabled
+                    "context_determination_enabled":
+                    config.context_determination_enabled,
+                    "document_retrieval_enabled":
+                    config.document_retrieval_enabled
                 },
                 "local_storage": {
                     "local_repo_path": config.local_repo_path,
@@ -110,7 +112,8 @@ def load_config_command(args) -> int:
                     "level": config.log_level,
                     "log_search_queries": config.log_search_queries,
                     "log_document_retrieval": config.log_document_retrieval,
-                    "log_context_determination": config.log_context_determination,
+                    "log_context_determination":
+                    config.log_context_determination,
                     "log_performance_metrics": config.log_performance_metrics
                 }
             }
@@ -154,8 +157,10 @@ def create_config_command(args) -> int:
                     "max_context_length": config.max_context_length,
                     "fallback_enabled": config.fallback_enabled,
                     "dual_search_enabled": config.dual_search_enabled,
-                    "context_determination_enabled": config.context_determination_enabled,
-                    "document_retrieval_enabled": config.document_retrieval_enabled
+                    "context_determination_enabled":
+                    config.context_determination_enabled,
+                    "document_retrieval_enabled":
+                    config.document_retrieval_enabled
                 },
                 "local_storage": {
                     "local_repo_path": config.local_repo_path,
@@ -178,7 +183,8 @@ def create_config_command(args) -> int:
                     "level": config.log_level,
                     "log_search_queries": config.log_search_queries,
                     "log_document_retrieval": config.log_document_retrieval,
-                    "log_context_determination": config.log_context_determination,
+                    "log_context_determination":
+                    config.log_context_determination,
                     "log_performance_metrics": config.log_performance_metrics
                 }
             }
@@ -198,7 +204,8 @@ def create_config_command(args) -> int:
 def main():
     """Main configuration management CLI."""
     parser = argparse.ArgumentParser(
-        description="Configuration management for GenericSuite CodeGen enhanced search"
+        description="Configuration management for GenericSuite "
+        "CodeGen enhanced search"
     )
     subparsers = parser.add_subparsers(
         dest="command", help="Available commands")

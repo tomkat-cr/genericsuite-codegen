@@ -3,6 +3,7 @@ from enum import Enum
 
 class IngestionStatus(Enum):
     """Status of ingestion process."""
+    SCHEDULED = "scheduled"
     NOT_STARTED = "not_started"
     CLONING = "cloning"
     PROCESSING_FILES = "processing_files"

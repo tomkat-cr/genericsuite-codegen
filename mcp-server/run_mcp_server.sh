@@ -1,10 +1,10 @@
 #!/bin/bash
-
+# run_mcp_server.sh
 # GenericSuite CodeGen MCP Server Startup Script
+# 2025-09-15 | CR
 
 # Get the directory of this script
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-# cd $SCRIPT_DIR
 
 MCP_RUN_USING_POETRY=1
 MCP_SERVER_DIR="../server"
@@ -71,13 +71,14 @@ else
     INSTALLING_CMD="$PYTHON_CMD -m pip install --upgrade pip && $PYTHON_CMD -m pip install -r requirements.txt"
 fi
 
-
 if ! $CHECKING_CMD_PREFIX -c "import fastmcp" &> /dev/null; then
     echo "📥 Installing dependencies..."
     $INSTALLING_CMD
     if [ $? -ne 0 ]; then
         echo "❌ Failed to install dependencies. Please check requirements.txt"
-        deactivate
+        if [ "$MCP_RUN_USING_POETRY" != "1" ]; then
+            deactivate
+        fi
         exit 1
     fi
 fi

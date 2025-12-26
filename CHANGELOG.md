@@ -17,6 +17,37 @@ This project adheres to [Semantic Versioning](http://semver.org/) and [Keep a Ch
 ### Security
 
 
+## [1.4.0] - 2025-12-25
+
+### Added
+- CRON process to update the knowledge base.
+- Huggingface, Groq AI/ML API, Together.ai, OpenRouter, Nvidia, XAI, Ollama and Rhymes providers.
+- LLM_STOP environment variable to stop tokens.
+- AI provider specific variables: OPENAI_API_KEY, OPENAI_MODEL_NAME, HF_TOKEN, HF_MODEL_NAME, GROQ_API_KEY, GROQ_MODEL_NAME, TOGETHER_API_KEY, TOGETHER_MODEL_NAME, OPENROUTER_API_KEY, OPENROUTER_MODEL_NAME, NVIDIA_API_KEY, NVIDIA_MODEL_NAME, XAI_API_KEY, XAI_MODEL_NAME, RHYMES_API_KEY, RHYMES_MODEL_NAME, and OLLAMA_MODEL_NAME.
+- Logfire integration.
+- Script to start and stop the Logfire Telemetry container.
+
+### Changed
+- Rename "/knowledge-base/status" endpoint to "/update-knowledge-base/status".
+- Rename "/knowledge-base/progress" endpoint to "/update-knowledge-base/progress".
+- Rename MONGODB_URI and MONGODB_DB_NAME environment variables to APP_DB_URI and APP_DB_NAME.
+- Rename LLM_MODEL environment variable to LLM_MODEL_NAME.
+- All logging is now configurable centralized in app_logger.py.
+- "utilities.py" moved from "server/genericsuite_codegen/ai" to "server/genericsuite_codegen/utilities".
+- "model_api" added to AgentConfig model.
+- Reduce noise from external (pymongo) and internal libraries (debug messages on uvicorn).
+- UI: Timestamps are now displayed in local time.
+- UI: task_type, model_used and token_usage are now displayed in the chat interface when debugging is enabled.
+
+### Fixed
+- Logger debug set correctly when DEBUG variable is set to 1.
+- UI: API calls issue because of the additional "data" property in the response.
+
+### Removed
+- LLM_API_KEY environment variable, replaced by AI provider specific variables.
+- MONGODB_HOST_NAME, MONGODB_HOST_PORT, MONGODB_USER, MONGODB_PASSWORD environment variables from .env.example file.
+
+
 ## [1.3.0] - 2025-10-01
 
 ### Added

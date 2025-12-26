@@ -6,11 +6,16 @@ storage, enabling the agent to access full GenericSuite knowledge base
 articles for accurate code generation.
 """
 
-import logging
 from os import getenv
 from typing import List
 from datetime import datetime
 from pathlib import Path
+
+from genericsuite_codegen.utilities.app_logger import (
+    log_debug,
+    log_warning,
+    log_error,
+)
 
 from .enhanced_search_types import (
     DocumentContent,
@@ -24,11 +29,7 @@ from .enhanced_search_logging import (
     handle_enhanced_search_errors
 )
 
-DEBUG = True
-
-# Configure logging
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO if DEBUG else logging.WARNING)
+DEBUG = False
 
 
 class DocumentRetrievalTool:
@@ -49,17 +50,17 @@ class DocumentRetrievalTool:
         """
         self.local_repo_path = local_repo_path or getenv(
             "LOCAL_REPO_DIR", "./local_repo_files")
-        logger.info(
+        _ = DEBUG and log_debug(
             f"Initialized DocumentRetrievalTool with local repo path: "
             f"{self.local_repo_path}")
         self.base_path = Path(self.local_repo_path).resolve()
-        logger.info(
+        _ = DEBUG and log_debug(
             f"Initialized DocumentRetrievalTool with base path: "
             f"{self.base_path}")
 
         # Ensure the base path exists
         if not self.base_path.exists():
-            logger.warning(
+            log_warning(
                 f"Local repository path does not exist: {self.base_path}")
         elif not self.base_path.is_dir():
             raise DocumentRetrievalError(
@@ -155,7 +156,7 @@ class DocumentRetrievalTool:
                     with open(validated_path, 'r', encoding=encoding) as file:
                         content = file.read()
                 except UnicodeDecodeError as e:
-                    logger.warning(
+                    log_warning(
                         f"Unicode decode error for {document_path}, "
                         f"trying utf-8 with errors='replace': {e}")
                     try:
@@ -196,7 +197,7 @@ class DocumentRetrievalTool:
                     is_binary=is_binary
                 )
 
-                logger.info(
+                _ = DEBUG and log_debug(
                     f"Successfully retrieved document: {document_path} "
                     f"({file_size} bytes, {encoding} encoding)")
                 return document_content
@@ -205,7 +206,7 @@ class DocumentRetrievalTool:
                 # Re-raise DocumentRetrievalError as-is
                 raise
             except Exception as e:
-                logger.error(
+                log_error(
                     "Unexpected error retrieving document "
                     f"{document_path}: {e}")
                 raise DocumentRetrievalError(
@@ -243,20 +244,21 @@ class DocumentRetrievalTool:
         ) as metrics:
             try:
                 if not document_paths:
-                    logger.warning(
+                    log_warning(
                         "No document paths provided for batch retrieval")
                     return []
 
                 # Limit batch size to prevent resource exhaustion
                 max_batch_size = 50
                 if len(document_paths) > max_batch_size:
-                    logger.warning(
+                    log_warning(
                         f"Large batch size requested: {len(document_paths)}, "
                         f"limiting to {max_batch_size}"
                     )
                     document_paths = document_paths[:max_batch_size]
 
-                logger.info(f"Retrieving {len(document_paths)} documents")
+                _ = DEBUG and log_debug(
+                    f"Retrieving {len(document_paths)} documents")
 
                 for i, document_path in enumerate(document_paths):
                     try:
@@ -265,20 +267,20 @@ class DocumentRetrievalTool:
 
                         # Log progress for large batches
                         if len(document_paths) > 10 and (i + 1) % 10 == 0:
-                            logger.info(
+                            _ = DEBUG and log_debug(
                                 f"Retrieved {i + 1}/{len(document_paths)}"
                                 " documents")
 
                     except DocumentRetrievalError as e:
                         failed_retrievals += 1
-                        logger.warning(
+                        log_warning(
                             f"Failed to retrieve document "
                             f"{document_path}: {e}")
                         # Continue with other documents
                         continue
                     except Exception as e:
                         failed_retrievals += 1
-                        logger.error(
+                        log_error(
                             f"Unexpected error retrieving document "
                             f"{document_path}: {e}")
                         # Continue with other documents
@@ -293,7 +295,7 @@ class DocumentRetrievalTool:
                     success=True
                 )
 
-                logger.info(
+                _ = DEBUG and log_debug(
                     f"Batch retrieval completed: "
                     f"{len(retrieved_documents)} successful, "
                     f"{failed_retrievals} failed out of"
@@ -312,7 +314,7 @@ class DocumentRetrievalTool:
                     error_details={"message": str(e)}
                 )
 
-                logger.error(f"Batch document retrieval failed: {e}")
+                log_error(f"Batch document retrieval failed: {e}")
                 raise DocumentRetrievalError(
                     f"Batch document retrieval failed: {e}",
                     operation="retrieve_multiple_documents",
@@ -383,7 +385,7 @@ class DocumentRetrievalTool:
             )
 
         except Exception as e:
-            logger.error(f"Error getting metadata for {document_path}: {e}")
+            log_error(f"Error getting metadata for {document_path}: {e}")
             return DocumentMetadata(
                 path=document_path,
                 file_type="unknown",

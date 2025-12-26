@@ -36,7 +36,7 @@ elif [ "$ACTION" = "test" ]; then
     echo "Running tests..."
     export ALLOWED_HOSTS="*"
     export OPENAI_API_KEY="sk-proj-1234567890"
-    export LLM_API_KEY="sk-proj-1234567890"
+    export LLM_MODEL_NAME=gpt-4o-mini
     export LOCAL_REPO_DIR="../local_repo_files"
     poetry run pytest "${TEST_FILTER}"
 

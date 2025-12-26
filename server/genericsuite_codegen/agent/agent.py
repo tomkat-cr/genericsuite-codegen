@@ -7,7 +7,7 @@ LLM provider configuration for GenericSuite development assistance.
 """
 
 import os
-import logging
+import json
 from typing import Dict, Any, Optional, List, Tuple
 
 from pydantic_ai import Agent
@@ -18,15 +18,19 @@ from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.settings import ModelSettings
 
 from pydantic_ai.messages import (
-    # ModelMessage,
     ModelRequest,
     ModelResponse,
     TextPart,
     UserPromptPart,
 )
 
-from .types import AgentConfig, QueryRequest, AgentContext, AgentResponse
+from genericsuite_codegen.utilities.app_logger import (
+    log_debug,
+    log_warning,
+    log_error,
+)
 
+from .types import AgentConfig, QueryRequest, AgentContext, AgentResponse
 from .tools import (
     get_all_agent_tools,
     KnowledgeBaseTool,
@@ -37,23 +41,13 @@ from .tools import (
 from .enhanced_search_types import EnhancedSearchConfig
 from .search_templates import SearchTemplateManager
 from .prompts import get_prompt_manager
+from .patch_openai_service_tier import patch_openai_service_tier
+from .patch_tokenizers import patch_tokenizers
+from .logfire import configure_logfire
 
 
-DEBUG = False
+DEBUG = True
 DEBUG_DETAILED = False
-
-# Configure logging
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO if DEBUG else logging.WARNING)
-
-try:
-    import litellm
-    if DEBUG:
-        logging.info(f"LiteLLM loaded: {litellm}")
-    LITELLM_AVAILABLE = True
-except ImportError:
-    LITELLM_AVAILABLE = False
-    logging.warning("LiteLLM not available, using OpenAI only")
 
 
 class GenericSuiteAgent:
@@ -98,17 +92,21 @@ class GenericSuiteAgent:
             'enabled' if self.enhanced_search_config.fallback_enabled
             else 'disabled'
         )
-        logger.info(
-            f"Initialized GenericSuite agent with "
-            f"{self.config.model_provider} provider and enhanced search "
+        _ = DEBUG and log_debug(
+            f"Agent - Initialized GenericSuite agent with the "
+            f"'{self.config.model_provider}' provider and enhanced search "
             f"{enhanced_status}"
         )
+
+        if os.getenv("LOGFIRE_ENABLED", "false").lower() == "true":
+            configure_logfire()
 
     def _create_default_config(self) -> AgentConfig:
         """Create default configuration from environment variables."""
         config_args = {
+            "model_api": os.getenv("LLM_API", "openai"),
             "model_provider": os.getenv("LLM_PROVIDER", "openai"),
-            "model_name": os.getenv("LLM_MODEL", "gpt-4o-mini"),
+            "model_name": os.getenv("LLM_MODEL_NAME", "gpt-5-nano"),
             "temperature": float(os.getenv("LLM_TEMPERATURE", "0.5")),
             "max_tokens": (
                 int(os.getenv("LLM_MAX_TOKENS", "4000"))
@@ -116,14 +114,16 @@ class GenericSuiteAgent:
                 else None
             ),
             "timeout": int(os.getenv("LLM_TIMEOUT", "60")),
-            "api_key": os.getenv("LLM_API_KEY"),
+            "api_key": None,
         }
+
         base_url = os.getenv("LLM_BASE_URL")
         if base_url is not None and base_url != '':
             config_args["base_url"] = base_url
+
         agent_config = AgentConfig(**config_args)
-        logger.info(
-            f"Agent config: {agent_config}"
+        _ = DEBUG and log_debug(
+            f"Agent - Config: {agent_config}"
         )
         return agent_config
 
@@ -162,8 +162,8 @@ class GenericSuiteAgent:
                 )
             )
 
-            logger.info(
-                f"Enhanced search config: "
+            _ = DEBUG and log_debug(
+                f"Agent - Enhanced search config: "
                 f"local_repo_path={enhanced_config.local_repo_path}, "
                 f"fallback_enabled={enhanced_config.fallback_enabled}, "
                 f"document_retrieval="
@@ -173,7 +173,7 @@ class GenericSuiteAgent:
             return enhanced_config
 
         except Exception as e:
-            logger.warning(f"Failed to create enhanced search config: {e}")
+            log_warning(f"Failed to create enhanced search config: {e}")
             # Return minimal config with fallback enabled
             return EnhancedSearchConfig(
                 templates={},
@@ -192,28 +192,153 @@ class GenericSuiteAgent:
         Raises:
             ValueError: If model configuration is invalid.
         """
+        model_params = {
+            "api_key": os.getenv("OPENAI_API_KEY"),
+            "base_url": os.getenv("LLM_BASE_URL")
+        }
+        inference_params = {
+            "model_name": os.getenv("OPENAI_MODEL_NAME",
+                                    self.config.model_name),
+        }
+        if self.config.model_provider == "openai":
+            pass
+        elif self.config.model_provider == "huggingface":
+            model_params = {
+                "api_key": os.getenv("HF_TOKEN"),
+                "base_url": os.getenv("LLM_BASE_URL",
+                                      "https://router.huggingface.co/v1")
+            }
+            inference_params = {
+                "model_name": os.getenv("HF_MODEL_NAME",
+                                        self.config.model_name),
+            }
+        elif self.config.model_provider == "groq":
+            model_params = {
+                "api_key": os.getenv("GROQ_API_KEY"),
+                "base_url": os.getenv("LLM_BASE_URL",
+                                      "https://api.groq.com/openai/v1")
+            }
+            inference_params = {
+                "model_name": os.getenv("GROQ_MODEL_NAME",
+                                        self.config.model_name),
+            }
+        elif self.config.model_provider == "aimlapi":
+            model_params = {
+                "api_key": os.getenv("AIMLAPI_API_KEY"),
+                "base_url": os.getenv("LLM_BASE_URL",
+                                      "https://api.aimlapi.com/v1")
+            }
+            inference_params = {
+                "model_name": os.getenv("AIMLAPI_MODEL_NAME",
+                                        self.config.model_name),
+            }
+        elif self.config.model_provider == "openrouter":
+            model_params = {
+                "api_key": os.getenv("OPENROUTER_API_KEY"),
+                "base_url": os.getenv("LLM_BASE_URL",
+                                      "https://openrouter.ai/api/v1")
+            }
+            inference_params = {
+                "model_name": os.getenv("OPENROUTER_MODEL_NAME",
+                                        self.config.model_name),
+            }
+        elif self.config.model_provider == "together":
+            model_params = {
+                "api_key": os.getenv("TOGETHER_API_KEY"),
+                "base_url": os.getenv("LLM_BASE_URL",
+                                      "https://api.together.xyz/v1"),
+            }
+            inference_params = {
+                "model_name": os.getenv("TOGETHER_MODEL_NAME",
+                                        self.config.model_name),
+                "stop": json.loads(
+                    os.getenv("LLM_STOP",
+                              '["<|eot_id|>", "<|eom_id|>"]'))
+            }
+        elif self.config.model_provider == "nvidia":
+            model_params = {
+                "api_key": os.getenv("NVIDIA_API_KEY"),
+                "base_url": os.getenv(
+                    "LLM_BASE_URL",
+                    "https://integrate.api.nvidia.com/v1")
+            }
+            inference_params = {
+                "model_name": os.getenv("NVIDIA_MODEL_NAME",
+                                        self.config.model_name),
+            }
+        elif self.config.model_provider == "xai":
+            model_params = {
+                "api_key": os.getenv("XAI_API_KEY"),
+                "base_url": os.getenv("LLM_BASE_URL",
+                                      "https://api.x.ai/v1")
+            }
+            inference_params = {
+                "model_name": os.getenv("XAI_MODEL_NAME",
+                                        self.config.model_name),
+            }
+        elif self.config.model_provider == "rhymes":
+            model_params = {
+                "api_key": os.getenv("RHYMES_API_KEY"),
+                "base_url": os.getenv("LLM_BASE_URL",
+                                      "https://api.rhymes.ai/v1")
+            }
+            inference_params = {
+                "model_name": os.getenv("RHYMES_MODEL_NAME",
+                                        self.config.model_name),
+            }
+        elif self.config.model_provider == "ollama":
+            model_params = {
+                "base_url": os.getenv("LLM_BASE_URL",
+                                      "http://localhost:11434/v1")
+            }
+            inference_params = {
+                "model_name": os.getenv("OLLAMA_MODEL_NAME",
+                                        self.config.model_name),
+            }
+        else:
+            log_warning(
+                "Unsupported provider "
+                f"{self.config.model_provider}, falling back to OpenAI"
+            )
+
+        patch_tokenizers()
+        patch_openai_service_tier()
+
         try:
-            if self.config.model_provider == "openai":
-                return self._create_openai_model()
-            elif self.config.model_provider == "litellm" and LITELLM_AVAILABLE:
-                return self._create_litellm_model()
+            if self.config.model_api == "openai":
+                return self._create_openai_model(
+                    model_params, inference_params)
+            elif self.config.model_api == "litellm":
+                return self._create_litellm_model(
+                    model_params, inference_params)
             else:
-                logger.warning(
-                    "Unsupported provider "
-                    f"{self.config.model_provider}, falling back to OpenAI"
+                log_warning(
+                    "Unsupported API "
+                    f"{self.config.model_api}, falling back to OpenAI"
                 )
-                return self._create_openai_model()
+                return self._create_openai_model(model_params)
 
         except Exception as e:
-            logger.error(f"Failed to initialize model: {e}")
+            log_error(f"Failed to initialize model: {e}")
             raise ValueError(f"Model initialization failed: {e}")
 
-    def _create_openai_model(self) -> OpenAIChatModel:
+    def _create_openai_model(
+        self,
+        model_params: dict,
+        inference_params: dict
+    ) -> OpenAIChatModel:
         """Create OpenAI model configuration."""
+        if model_params is None:
+            model_params = {}
+        if inference_params is None:
+            inference_params = {}
+
         self.inference_args["temperature"] = self.config.temperature
         self.inference_args["timeout"] = self.config.timeout
         if self.config.max_tokens:
             self.inference_args["max_tokens"] = self.config.max_tokens
+        if self.config.stop:
+            self.inference_args["stop"] = self.config.stop
 
         model_kwargs = {}
 
@@ -225,19 +350,39 @@ class GenericSuiteAgent:
         else:
             model_kwargs["base_url"] = self.config.base_url
 
-        logger.info(f"Model kwargs: {model_kwargs}")
+        model_kwargs.update(model_params)
+        self.inference_args.update(inference_params)
+
+        self.config.model_name = self.inference_args["model_name"]
+        self.config.base_url = model_kwargs["base_url"]
+
+        _ = DEBUG and log_debug(f"Agent - Model kwargs: {model_kwargs}"
+                                + "\nInference Args: {self.inference_args}")
 
         return OpenAIChatModel(
             self.config.model_name,
             provider=OpenAIProvider(**model_kwargs)
         )
 
-    def _create_litellm_model(self) -> Model:
+    def _create_litellm_model(
+        self,
+        model_params: dict = None,
+        inference_params: dict = None
+    ) -> Model:
         """Create LiteLLM model configuration."""
         # TODO: Note: This would need to be implemented based on Pydantic AI's
         # LiteLLM support. For now, fall back to OpenAI
-        logger.warning("LiteLLM integration not yet implemented, using OpenAI")
-        return self._create_openai_model()
+        try:
+            # type: ignore[import]
+            import litellm
+            _ = DEBUG and log_debug(f"LiteLLM loaded: {litellm}")
+            # LITELLM_AVAILABLE = True
+        except ImportError:
+            # LITELLM_AVAILABLE = False
+            log_warning("LiteLLM not available, using OpenAI only")
+
+        log_warning("LiteLLM integration not yet implemented, using OpenAI")
+        return self._create_openai_model(model_params, inference_params)
 
     def _create_agent(self) -> Agent:
         """
@@ -258,7 +403,7 @@ class GenericSuiteAgent:
             "tools": tools,
             "model_settings": ModelSettings(**self.inference_args),
         }
-        _ = DEBUG_DETAILED and logger.info(f"Agent args: {agent_args}")
+        _ = DEBUG_DETAILED and log_debug(f"Agent args: {agent_args}")
         agent = Agent(**agent_args)
         return agent
 
@@ -287,7 +432,7 @@ class GenericSuiteAgent:
             if not validate_search_query(request.query):
                 raise ValueError("Invalid query: must be 3-1000 characters")
 
-            logger.info(
+            _ = DEBUG and log_debug(
                 f"Processing query: '{request.query}' "
                 f"(type: {request.task_type})"
             )
@@ -302,19 +447,21 @@ class GenericSuiteAgent:
             run_context = self._create_run_context(context, request)
 
         except ValueError as e:
-            logger.error(f"Query preparation validation error: {e}")
+            log_error(f"Query preparation validation error: {e}")
             raise
         except Exception as e:
-            logger.error(
+            log_error(
                 f"Query preparation failed for query: {request.query}: {e}")
             raise RuntimeError(f"Failed to process query: {e}")
 
         try:
             # Execute query
 
-            logger.info(f">> Running agent with System prompt: {prompt}")
-            logger.info(f">> Running agent with User prompt: {request.query}")
-            logger.info(f">> Run context: {run_context}")
+            _ = DEBUG and log_debug(
+                f">> Running agent with System prompt: {prompt}")
+            _ = DEBUG and log_debug(
+                f">> Running agent with User prompt: {request.query}")
+            _ = DEBUG and log_debug(f">> Run context: {run_context}")
 
             self.set_kb_tool_and_agent()
 
@@ -323,24 +470,27 @@ class GenericSuiteAgent:
                 message_history=run_context.get("history", [])
             )
 
-            logger.info(f">> Agent result: {result}")
+            _ = DEBUG and log_debug(f">> Agent result: {result}")
 
             # Format response
             response = self._format_response(
                 result, request, sources, kb_context)
 
-            logger.info(
+            _ = DEBUG and log_debug(
                 f"Generated response ({len(response.content)} chars) with "
                 f"{len(sources)} sources"
             )
             return response
 
         except ValueError as e:
-            logger.error(f"Query validation error: {e}")
+            log_error(f"Query validation error: {e}")
             raise
         except Exception as e:
-            logger.error(
-                f"Query processing failed for query: {request.query}: {e}")
+            log_error(
+                f"Query processing failed for Query: {request.query}"
+                + f"\n| Agent: {self.agent}"
+                + f"\n| Configuration: {self.config}"
+                + f"\n| Error: {e}")
             raise RuntimeError(f"Failed to process query: {e}")
 
     def set_kb_tool_and_agent(self) -> KnowledgeBaseTool:
@@ -361,7 +511,8 @@ class GenericSuiteAgent:
                 self.kb_tool.enhanced_search.update_config(
                     self.enhanced_search_config
                 )
-                logger.info("Enhanced search configured with custom settings")
+                _ = DEBUG and log_debug(
+                    "Enhanced search configured with custom settings")
 
         if self.agent is None:
             self.agent = self._create_agent()
@@ -382,14 +533,14 @@ class GenericSuiteAgent:
             file_type_filter = self._get_file_type_filter(request.task_type)
 
         except Exception as e:
-            logger.error(f"Failed to get file type filter: {e}")
+            log_error(f"Failed to get file type filter: {e}")
             raise
 
         try:
             self.set_kb_tool_and_agent()
 
         except Exception as e:
-            logger.error(f"Failed to set KB tool and agent: {e}")
+            log_error(f"Failed to set KB tool and agent: {e}")
             raise
 
         try:
@@ -404,7 +555,7 @@ class GenericSuiteAgent:
             return context, sources
 
         except Exception as e:
-            logger.warning(f"Failed to retrieve context: {e}")
+            log_warning(f"Failed to retrieve context: {e}")
             return "No context available due to retrieval error.", []
 
     def _get_file_type_filter(self, task_type: str) -> Optional[str]:
@@ -435,9 +586,10 @@ class GenericSuiteAgent:
             str: Formatted prompt for the agent.
         """
 
-        logger.info(f">> Creating task prompt for request: {request}")
-        logger.info(f">> Context: {context}")
-        logger.info(f">> Sources: {sources}")
+        _ = DEBUG and log_debug(
+            f">> Creating task prompt for request: {request}")
+        _ = DEBUG and log_debug(f">> Context: {context}")
+        _ = DEBUG and log_debug(f">> Sources: {sources}")
 
         if request.task_type in ["json", "python", "frontend", "backend"]:
             # Add framework-specific guidance for backend tasks
@@ -486,7 +638,8 @@ class GenericSuiteAgent:
                             TextPart(content=msg.get("content"))]))
             run_context["history"] = history
 
-        logger.info(f">> _create_run_context | Run context: {run_context}")
+        _ = DEBUG and log_debug(
+            f">> _create_run_context | Run context: {run_context}")
 
         return run_context
 
@@ -509,7 +662,7 @@ class GenericSuiteAgent:
             AgentResponse: Formatted response.
         """
         # Extract content from result
-        logger.info(f">> _format_response | result: {result}")
+        _ = DEBUG and log_debug(f">> _format_response | result: {result}")
         content = str(result.output) if hasattr(
             result, "output") else str(result)
 
@@ -518,9 +671,19 @@ class GenericSuiteAgent:
             source_attribution = format_sources_for_attribution(sources)
             content += f"\n\n---\n{source_attribution}"
 
+        model_used = self.config.model_name
+        if DEBUG:
+            # Add AI model and provider used
+            model_used = \
+                f"API: {self.config.model_api}" \
+                + f" | Provider: {self.config.model_provider}" \
+                + f" | Model: {self.config.model_name}"
+
         # Extract token usage if available
         token_usage = None
         if hasattr(result, "usage") and result.usage:
+            _ = DEBUG and log_debug(
+                f">> Agent | _format_response | Token usage: {result.usage}")
             token_usage = {
                 "prompt_tokens": getattr(result.usage, "prompt_tokens", 0),
                 "completion_tokens": getattr(
@@ -532,7 +695,7 @@ class GenericSuiteAgent:
             content=content,
             sources=sources,
             task_type=request.task_type,
-            model_used=self.config.model_name,
+            model_used=model_used,
             token_usage=token_usage,
         )
 
@@ -639,7 +802,7 @@ class GenericSuiteAgent:
         self.config = new_config
         self.model = self._initialize_model()
         self.agent = self._create_agent()
-        logger.info("Agent configuration updated")
+        _ = DEBUG and log_debug("Agent configuration updated")
 
     def update_enhanced_search_config(
         self, new_config: EnhancedSearchConfig
@@ -657,11 +820,11 @@ class GenericSuiteAgent:
             hasattr(self.kb_tool, 'enhanced_search') and
                 self.kb_tool.enhanced_search is not None):
             self.kb_tool.enhanced_search.update_config(new_config)
-            logger.info("Enhanced search configuration updated")
+            _ = DEBUG and log_debug("Enhanced search configuration updated")
         else:
             # Reset kb_tool to force re-initialization with new config
             self.kb_tool = None
-            logger.info(
+            _ = DEBUG and log_debug(
                 "Enhanced search configuration updated - "
                 "will apply on next use"
             )
@@ -703,12 +866,12 @@ class GenericSuiteAgent:
         if (self.kb_tool is not None and
                 hasattr(self.kb_tool, 'set_enhanced_search_enabled')):
             self.kb_tool.set_enhanced_search_enabled(enabled)
-            logger.info(
+            _ = DEBUG and log_debug(
                 f"Enhanced search {'enabled' if enabled else 'disabled'}")
         else:
             # Reset kb_tool to force re-initialization with new setting
             self.kb_tool = None
-            logger.info(
+            _ = DEBUG and log_debug(
                 f"Enhanced search {'enabled' if enabled else 'disabled'} - "
                 "will apply on next use"
             )
@@ -764,7 +927,7 @@ class GenericSuiteAgent:
             }
 
         except Exception as e:
-            logger.error(f"Agent health check failed: {e}")
+            log_error(f"Agent health check failed: {e}")
             return {
                 "status": "unhealthy",
                 "error": str(e),
@@ -814,7 +977,7 @@ def initialize_agent(
         GenericSuiteAgent: Initialized agent instance.
     """
     agent = get_agent(config, enhanced_search_config)
-    logger.info("GenericSuite AI agent initialized successfully")
+    _ = DEBUG and log_debug("GenericSuite AI agent initialized successfully")
     return agent
 
 
@@ -829,17 +992,18 @@ def create_agent_config_from_env() -> AgentConfig:
         AgentConfig: Configuration from environment.
     """
     return AgentConfig(
-        model_provider=os.getenv("GENERICSUITE_LLM_PROVIDER", "openai"),
-        model_name=os.getenv("GENERICSUITE_LLM_MODEL", "gpt-4"),
-        temperature=float(os.getenv("GENERICSUITE_LLM_TEMPERATURE", "0.1")),
+        model_api=os.getenv("LLM_API", "openai"),
+        model_provider=os.getenv("LLM_PROVIDER", "openai"),
+        model_name=os.getenv("LLM_MODEL_NAME", "gpt-4"),
+        temperature=float(os.getenv("LLM_TEMPERATURE", "0.1")),
         max_tokens=(
-            int(os.getenv("GENERICSUITE_LLM_MAX_TOKENS", "4000"))
-            if os.getenv("GENERICSUITE_LLM_MAX_TOKENS")
+            int(os.getenv("LLM_MAX_TOKENS", "4000"))
+            if os.getenv("LLM_MAX_TOKENS")
             else None
         ),
-        timeout=int(os.getenv("GENERICSUITE_LLM_TIMEOUT", "60")),
+        timeout=int(os.getenv("LLM_TIMEOUT", "60")),
         api_key=os.getenv("OPENAI_API_KEY"),
-        base_url=os.getenv("GENERICSUITE_LLM_BASE_URL"),
+        base_url=os.getenv("LLM_BASE_URL"),
     )
 
 
@@ -890,7 +1054,7 @@ def create_enhanced_search_config_from_env() -> EnhancedSearchConfig:
             )
         )
     except Exception as e:
-        logger.warning(
+        log_warning(
             f"Failed to create enhanced search config from environment: {e}"
         )
         # Return minimal config with fallback enabled

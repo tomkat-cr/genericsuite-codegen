@@ -2,10 +2,14 @@
 
 import json
 from pathlib import Path
-from typing import Dict, Any, List, Optional, Union
-import logging
+from typing import Dict, Any, List, Union
 
-logger = logging.getLogger(__name__)
+from genericsuite_codegen.utilities.app_logger import (
+    log_warning,
+    log_error,
+)
+
+DEBUG = False
 
 
 class ValidationError(Exception):
@@ -21,7 +25,8 @@ class ConfigValidator:
         self.errors: List[str] = []
         self.warnings: List[str] = []
 
-    def validate_enhanced_search_config(self, config_data: Dict[str, Any]) -> bool:
+    def validate_enhanced_search_config(self, config_data: Dict[str, Any]
+                                        ) -> bool:
         """Validate enhanced search configuration.
 
         Args:
@@ -53,18 +58,20 @@ class ConfigValidator:
                 raise ValidationError(error_msg)
 
             if self.warnings:
-                logger.warning(
-                    "Configuration validation warnings:\n" + "\n".join(self.warnings))
+                log_warning(
+                    "Configuration validation warnings:\n" + "\n".join(
+                        self.warnings))
 
             return True
 
         except Exception as e:
             if isinstance(e, ValidationError):
                 raise
-            logger.error(f"Unexpected error during validation: {e}")
+            log_error(f"Unexpected error during validation: {e}")
             raise ValidationError(f"Validation failed: {e}")
 
-    def validate_search_templates_config(self, templates_data: Dict[str, Any]) -> bool:
+    def validate_search_templates_config(self, templates_data: Dict[str, Any]
+                                         ) -> bool:
         """Validate search templates configuration.
 
         Args:
@@ -104,15 +111,16 @@ class ConfigValidator:
                 raise ValidationError(error_msg)
 
             if self.warnings:
-                logger.warning(
-                    "Templates validation warnings:\n" + "\n".join(self.warnings))
+                log_warning(
+                    "Templates validation warnings:\n" + "\n".join(
+                        self.warnings))
 
             return True
 
         except Exception as e:
             if isinstance(e, ValidationError):
                 raise
-            logger.error(f"Unexpected error during templates validation: {e}")
+            log_error(f"Unexpected error during templates validation: {e}")
             raise ValidationError(f"Templates validation failed: {e}")
 
     def validate_config_file(self, config_path: Union[str, Path]) -> bool:
@@ -147,7 +155,8 @@ class ConfigValidator:
         else:
             return self.validate_enhanced_search_config(config_data)
 
-    def _validate_enhanced_search_section(self, config: Dict[str, Any]) -> None:
+    def _validate_enhanced_search_section(self, config: Dict[str, Any]
+                                          ) -> None:
         """Validate enhanced search section."""
         if not config:
             self.warnings.append(
@@ -169,7 +178,8 @@ class ConfigValidator:
             max_length = config["max_context_length"]
             if not isinstance(max_length, int) or max_length < 1000:
                 self.errors.append(
-                    "enhanced_search.max_context_length must be an integer >= 1000")
+                    "enhanced_search.max_context_length must be an"
+                    " integer >= 1000")
 
     def _validate_local_storage_section(self, config: Dict[str, Any]) -> None:
         """Validate local storage section."""
@@ -197,9 +207,11 @@ class ConfigValidator:
             if not isinstance(extensions, list):
                 self.errors.append(
                     "local_storage.allowed_file_extensions must be a list")
-            elif not all(isinstance(ext, str) and ext.startswith('.') for ext in extensions):
+            elif not all(isinstance(ext, str) and ext.startswith('.')
+                         for ext in extensions):
                 self.errors.append(
-                    "local_storage.allowed_file_extensions must contain strings starting with '.'")
+                    "local_storage.allowed_file_extensions must contain"
+                    " strings starting with '.'")
 
         # Validate excluded_directories
         if "excluded_directories" in config:
@@ -207,11 +219,13 @@ class ConfigValidator:
             if not isinstance(directories, list):
                 self.errors.append(
                     "local_storage.excluded_directories must be a list")
-            elif not all(isinstance(dir_name, str) for dir_name in directories):
+            elif not all(isinstance(dir_name, str)
+                         for dir_name in directories):
                 self.errors.append(
                     "local_storage.excluded_directories must contain strings")
 
-    def _validate_search_performance_section(self, config: Dict[str, Any]) -> None:
+    def _validate_search_performance_section(self, config: Dict[str, Any]
+                                             ) -> None:
         """Validate search performance section."""
         if not config:
             self.warnings.append(
@@ -223,14 +237,16 @@ class ConfigValidator:
             max_searches = config["max_concurrent_searches"]
             if not isinstance(max_searches, int) or max_searches < 1:
                 self.errors.append(
-                    "search_performance.max_concurrent_searches must be a positive integer")
+                    "search_performance.max_concurrent_searches must be"
+                    " a positive integer")
 
         # Validate search_timeout_seconds
         if "search_timeout_seconds" in config:
             timeout = config["search_timeout_seconds"]
             if not isinstance(timeout, (int, float)) or timeout <= 0:
                 self.errors.append(
-                    "search_performance.search_timeout_seconds must be a positive number")
+                    "search_performance.search_timeout_seconds must be"
+                    " a positive number")
 
         # Validate boolean fields
         bool_fields = ["cache_enabled"]
@@ -244,9 +260,11 @@ class ConfigValidator:
             ttl = config["cache_ttl_seconds"]
             if not isinstance(ttl, int) or ttl < 0:
                 self.errors.append(
-                    "search_performance.cache_ttl_seconds must be a non-negative integer")
+                    "search_performance.cache_ttl_seconds must be"
+                    " a non-negative integer")
 
-    def _validate_context_determination_section(self, config: Dict[str, Any]) -> None:
+    def _validate_context_determination_section(self, config: Dict[str, Any]
+                                                ) -> None:
         """Validate context determination section."""
         if not config:
             self.warnings.append(
@@ -256,9 +274,11 @@ class ConfigValidator:
         # Validate confidence_threshold
         if "confidence_threshold" in config:
             threshold = config["confidence_threshold"]
-            if not isinstance(threshold, (int, float)) or not (0.0 <= threshold <= 1.0):
+            if not isinstance(threshold, (int, float)) or \
+                    not (0.0 <= threshold <= 1.0):
                 self.errors.append(
-                    "context_determination.confidence_threshold must be a number between 0.0 and 1.0")
+                    "context_determination.confidence_threshold must be"
+                    " a number between 0.0 and 1.0")
 
         # Validate default_context
         if "default_context" in config:
@@ -271,15 +291,19 @@ class ConfigValidator:
             keywords = config["context_keywords"]
             if not isinstance(keywords, dict):
                 self.errors.append(
-                    "context_determination.context_keywords must be a dictionary")
+                    "context_determination.context_keywords must be"
+                    " a dictionary")
             else:
                 for context_type, keyword_list in keywords.items():
                     if not isinstance(keyword_list, list):
                         self.errors.append(
-                            f"context_determination.context_keywords.{context_type} must be a list")
-                    elif not all(isinstance(keyword, str) for keyword in keyword_list):
+                            "context_determination.context_keywords"
+                            f".{context_type} must be a list")
+                    elif not all(isinstance(keyword, str)
+                                 for keyword in keyword_list):
                         self.errors.append(
-                            f"context_determination.context_keywords.{context_type} must contain strings")
+                            "context_determination.context_keywords."
+                            f"{context_type} must contain strings")
 
     def _validate_logging_section(self, config: Dict[str, Any]) -> None:
         """Validate logging section."""
@@ -304,7 +328,8 @@ class ConfigValidator:
             if field in config and not isinstance(config[field], bool):
                 self.errors.append(f"logging.{field} must be a boolean")
 
-    def _validate_template_config(self, template_name: str, template_config: Dict[str, Any]) -> None:
+    def _validate_template_config(self, template_name: str,
+                                  template_config: Dict[str, Any]) -> None:
         """Validate individual template configuration."""
         if not isinstance(template_config, dict):
             self.errors.append(
@@ -314,31 +339,37 @@ class ConfigValidator:
         # Validate required fields
         if "template" not in template_config:
             self.errors.append(
-                f"Template '{template_name}' missing required 'template' field")
+                f"Template '{template_name}' missing required"
+                " 'template' field")
         elif not isinstance(template_config["template"], str):
             self.errors.append(
-                f"Template '{template_name}' 'template' field must be a string")
+                f"Template '{template_name}' 'template' field must be"
+                " a string")
 
         # Validate optional fields
         if "file_type_filter" in template_config:
             filter_value = template_config["file_type_filter"]
             if filter_value is not None and not isinstance(filter_value, str):
                 self.errors.append(
-                    f"Template '{template_name}' 'file_type_filter' must be a string or null")
+                    f"Template '{template_name}' 'file_type_filter' must be"
+                    " a string or null")
 
         if "priority" in template_config:
             priority = template_config["priority"]
             if not isinstance(priority, int):
                 self.errors.append(
-                    f"Template '{template_name}' 'priority' must be an integer")
+                    f"Template '{template_name}' 'priority' must be"
+                    " an integer")
 
         if "description" in template_config:
             description = template_config["description"]
             if not isinstance(description, str):
                 self.errors.append(
-                    f"Template '{template_name}' 'description' must be a string")
+                    f"Template '{template_name}' 'description' must be"
+                    " a string")
 
-    def _validate_template_groups(self, groups: Dict[str, List[str]], templates: Dict[str, Any]) -> None:
+    def _validate_template_groups(self, groups: Dict[str, List[str]],
+                                  templates: Dict[str, Any]) -> None:
         """Validate template groups."""
         if not isinstance(groups, dict):
             self.errors.append("'template_groups' must be a dictionary")
@@ -358,4 +389,5 @@ class ConfigValidator:
                         f"Template group '{group_name}' must contain strings")
                 elif template_name not in template_names:
                     self.warnings.append(
-                        f"Template group '{group_name}' references unknown template '{template_name}'")
+                        f"Template group '{group_name}' references"
+                        " unknown template '{template_name}'")

@@ -18,7 +18,7 @@ interface KnowledgeBaseStats {
   lastUpdated: string
   repositoryUrl: string
   repositoryBranch: string
-  status: 'healthy' | 'updating' | 'error'
+  status: 'healthy' | 'updating' | 'error' | 'scheduled'
 }
 
 interface UpdateProgress {
@@ -28,6 +28,7 @@ interface UpdateProgress {
 }
 
 const IngestionStatus = {
+    scheduled: "Scheduled",
     not_started: "Not started",
     cloning: "Cloning",
     processing_files: "Processing files",
@@ -65,7 +66,7 @@ export function KnowledgeBasePage() {
 
   const getProgress = async () => {
     // if (!isUpdating) return
-    const response = await fetch(`${baseUrl}/knowledge-base/progress`)
+    const response = await fetch(`${baseUrl}/update-knowledge-base/progress`)
     const result = await response.json()
     const resultData = result.data
     if (debug) console.log('getProgress | result', resultData)
@@ -78,19 +79,17 @@ export function KnowledgeBasePage() {
       ...prev,
       documentCount: resultData.total_files ?? prev.documentCount,
       lastUpdated: new Date().toLocaleString(),
-      status: ['completed', 'not_started'].indexOf(resultData.status) !== -1 ? 'healthy' : resultData.status.includes('failed') ? 'error' : 'updating'
+      status: resultData.status === 'completed' ? 'healthy' : resultData.status === 'failed' ? 'error' : ['not_started', 'scheduled'].indexOf(resultData.status) !== -1 ? 'scheduled' : 'updating'
     }))
     if (stats.status === 'updating' && !isUpdating) {
       setIsUpdating(true)
     }
-    if (resultData.status.includes('completed')) {
-      setUpdateProgress(null)
+    if (resultData.status === 'completed' && isUpdating) {
       setIsUpdating(false)
-      if (updateProgress !== null) {
-        addAlert('success', 'Knowledge base updated successfully!')
-      }
+      setUpdateProgress(null)
+      addAlert('success', 'Knowledge base updated successfully!')
     }
-    if (resultData.status.includes('failed')) {
+    if (resultData.status === 'failed' && isUpdating) {
       setIsUpdating(false)
       setUpdateProgress(null)
       addAlert('error', 'Failed to update knowledge base. Please try again. Error: ' + resultData.error_message)
@@ -123,22 +122,7 @@ export function KnowledgeBasePage() {
     setStats(prev => ({ ...prev, status: 'updating' }))
     
     try {
-      // Simulate progress updates
-      // const stages = [
-      //   { stage: 'Cloning repository', progress: 20, message: 'Downloading latest documentation...' },
-      //   { stage: 'Processing documents', progress: 50, message: 'Extracting text from files...' },
-      //   { stage: 'Generating embeddings', progress: 80, message: 'Creating vector embeddings...' },
-      //   { stage: 'Updating database', progress: 100, message: 'Storing in knowledge base...' }
-      // ]
-
-      // for (const stage of stages) {
-      //   setUpdateProgress(stage)
-      //   await new Promise(resolve => setTimeout(resolve, 1500))
-      // }
-
       const forceRefresh = false
-
-      // Make actual API call
       const response = await fetch(`${baseUrl}/update-knowledge-base`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -318,7 +302,7 @@ export function KnowledgeBasePage() {
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
                 <span>{updateProgress.stage}</span>
-                <span>{updateProgress.progress}%</span>
+                <span>{updateProgress.progress.toFixed(2)}%</span>
               </div>
               <Progress value={updateProgress.progress} />
               <p className="text-sm text-muted-foreground">{updateProgress.message}</p>

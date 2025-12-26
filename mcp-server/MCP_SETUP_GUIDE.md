@@ -160,7 +160,7 @@ Common environment variables you can set in the `env` section:
 - `MCP_DEBUG`: Set to "1" for debug logging
 - `MCP_SERVER_PORT`: Port for HTTP transport (default: 8070)
 - `OPENAI_API_KEY`: OpenAI API key for AI functionality
-- `LLM_MODEL`: LLM model to use (default: gpt-4o-mini)
+- `LLM_MODEL_NAME`: LLM model to use (default: gpt-4o-mini)
 
 ## Next Steps
 

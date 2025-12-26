@@ -92,3 +92,10 @@ py-env-remove:
 
 rebuild-ui:
 	cd ui && make build && cd .. && docker restart gscodegen-client
+
+kb-cron:
+	bash ./scripts/kb_cron.sh
+
+run-telemetry:
+	bash ./scripts/telemetry_manager.sh run
+

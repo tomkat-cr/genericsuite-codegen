@@ -7,7 +7,6 @@ collections.
 """
 
 import os
-import logging
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 import asyncio
@@ -24,13 +23,14 @@ from pymongo.errors import (
 )
 from pymongo.operations import SearchIndexModel
 
+from genericsuite_codegen.utilities.app_logger import (
+    log_debug,
+    log_warning,
+    log_error,
+)
 from genericsuite_codegen.document_processing.types import EmbeddedChunk
 
-DEBUG = True
-
-# Configure logging
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO if DEBUG else logging.WARNING)
+DEBUG = False
 
 
 @dataclass
@@ -71,11 +71,11 @@ class DatabaseManager:
             from environment.
         """
         self.mongodb_uri = mongodb_uri or os.getenv(
-            "MONGODB_URI", "mongodb://localhost:27017/"
+            "APP_DB_URI", "mongodb://localhost:27017/"
         )
         self.client: Optional[MongoClient] = None
         self.database: Optional[Database] = None
-        self.db_name = os.getenv("MONGODB_DB_NAME", "genericsuite_codegen")
+        self.db_name = os.getenv("APP_DB_NAME", "genericsuite_codegen")
 
         # Collection names
         self.knowledge_base_collection = "knowledge_base"
@@ -100,7 +100,8 @@ class DatabaseManager:
             DatabaseConnectionError: If connection fails after retries.
         """
         try:
-            logger.info(f"Connecting to MongoDB at {self.mongodb_uri}")
+            _ = DEBUG and log_debug(
+                f"Connecting to MongoDB at {self.mongodb_uri}")
 
             self.client = MongoClient(
                 self.mongodb_uri,
@@ -116,13 +117,13 @@ class DatabaseManager:
             self.client.admin.command("ping")
             self.database = self.client[self.db_name]
 
-            logger.info("Successfully connected to MongoDB")
+            _ = DEBUG and log_debug("Successfully connected to MongoDB")
 
         except (ConnectionFailure, ServerSelectionTimeoutError) as e:
-            logger.error(f"Failed to connect to MongoDB: {e}")
+            log_error(f"Failed to connect to MongoDB: {e}")
             raise DatabaseConnectionError(f"Database connection failed: {e}")
         except Exception as e:
-            logger.error(f"Unexpected error connecting to MongoDB: {e}")
+            log_error(f"Unexpected error connecting to MongoDB: {e}")
             raise DatabaseConnectionError(f"Unexpected database error: {e}")
 
     def disconnect(self) -> None:
@@ -131,7 +132,7 @@ class DatabaseManager:
             self.client.close()
             self.client = None
             self.database = None
-            logger.info("Disconnected from MongoDB")
+            _ = DEBUG and log_debug("Disconnected from MongoDB")
 
     @asynccontextmanager
     async def get_connection(self):
@@ -147,7 +148,7 @@ class DatabaseManager:
         try:
             yield self.database
         except Exception as e:
-            logger.error(f"Database operation error: {e}")
+            log_error(f"Database operation error: {e}")
             raise
 
     def collection_exists(self, collection_name: str) -> bool:
@@ -158,7 +159,7 @@ class DatabaseManager:
                        ) -> None:
         """Create indexes for a collection."""
         for index in indexes:
-            logger.info(
+            _ = DEBUG and log_debug(
                 f"Creating index: {index} for the "
                 f"{collection.name} collection")
             if isinstance(index, tuple) and len(index) == 2 and \
@@ -180,15 +181,17 @@ class DatabaseManager:
             idx.get("name") == name for idx in existing_indexes
         )
         if not vector_index_exists:
-            logger.info(f"Creating vector search index: {name} for the"
-                        f" {collection.name} collection")
+            _ = DEBUG and log_debug(
+                f"Creating vector search index: {name} for the"
+                f" {collection.name} collection")
 
             # https://www.mongodb.com/docs/atlas/atlas-vector-search/create-embeddings/?embedding-model=voyage&data-source=new&language-no-interface=python#create-the-vector-search-index.
             search_index_model = SearchIndexModel(**index_structure)
 
             collection.create_search_index(model=search_index_model)
-            logger.info(f"Created vector search index {name} for the"
-                        f" {collection.name} collection")
+            _ = DEBUG and log_debug(
+                f"Created vector search index {name} for the"
+                f" {collection.name} collection")
 
     def initialize_schema(self) -> None:
         """
@@ -203,7 +206,7 @@ class DatabaseManager:
             self.connect()
 
         try:
-            logger.info("Initializing database schema...")
+            _ = DEBUG and log_debug("Initializing database schema...")
 
             # Initialize knowledge_base collection
             self._initialize_knowledge_base_collection()
@@ -214,20 +217,20 @@ class DatabaseManager:
             # Initialize users collection
             self._initialize_users_collection()
 
-            logger.info("Database schema initialization completed"
-                        " successfully")
+            _ = DEBUG and log_debug("Database schema initialization completed"
+                                    " successfully")
 
         except Exception as e:
-            logger.error(f"Schema initialization failed: {e}")
+            log_error(f"Schema initialization failed: {e}")
             raise DatabaseConnectionError(f"Schema initialization error: {e}")
 
     def _initialize_knowledge_base_collection(self) -> None:
         """Initialize knowledge_base collection with vector search index."""
         if self.collection_exists(self.knowledge_base_collection):
-            logger.info("Knowledge_base collection already exists")
+            _ = DEBUG and log_debug("Knowledge_base collection already exists")
             return
 
-        logger.info("Initializing knowledge_base collection")
+        _ = DEBUG and log_debug("Initializing knowledge_base collection")
         collection = self.database[self.knowledge_base_collection]
 
         # Create indexes for efficient querying
@@ -266,24 +269,27 @@ class DatabaseManager:
             self.create_vector_index(
                 collection, "vector_index", index_structure)
 
-            logger.info("Created vector search index for knowledge_base"
-                        " collection")
+            _ = DEBUG and log_debug(
+                "Created vector search index for knowledge_base"
+                " collection")
 
         except Exception as e:
-            logger.warning("Vector search index creation failed "
-                           f"(may not be supported): {e}")
+            log_warning("Vector search index creation failed "
+                        f"(may not be supported): {e}")
             # Continue without vector search index - will use alternative
             # search methods
 
-        logger.info("Initialized knowledge_base collection")
+        _ = DEBUG and log_debug("Initialized knowledge_base collection")
 
     def _initialize_conversations_collection(self) -> None:
         """Initialize ai_chatbot_conversations collection."""
         if self.collection_exists(self.conversations_collection):
-            logger.info("ai_chatbot_conversations collection already exists")
+            _ = DEBUG and log_debug(
+                "ai_chatbot_conversations collection already exists")
             return
 
-        logger.info("Initializing ai_chatbot_conversations collection")
+        _ = DEBUG and log_debug(
+            "Initializing ai_chatbot_conversations collection")
         collection = self.database[self.conversations_collection]
 
         # Create indexes
@@ -296,15 +302,16 @@ class DatabaseManager:
 
         self.create_indexes(collection, indexes)
 
-        logger.info("Initialized ai_chatbot_conversations collection")
+        _ = DEBUG and log_debug(
+            "Initialized ai_chatbot_conversations collection")
 
     def _initialize_users_collection(self) -> None:
         """Initialize users collection."""
         if self.collection_exists(self.users_collection):
-            logger.info("users collection already exists")
+            _ = DEBUG and log_debug("users collection already exists")
             return
 
-        logger.info("Initializing users collection")
+        _ = DEBUG and log_debug("Initializing users collection")
         collection = self.database[self.users_collection]
 
         # Create indexes
@@ -317,7 +324,7 @@ class DatabaseManager:
 
         self.create_indexes(collection, indexes)
 
-        logger.info("Initialized users collection")
+        _ = DEBUG and log_debug("Initialized users collection")
 
     # Vector Database Operations
 
@@ -371,22 +378,23 @@ class DatabaseManager:
             if documents:
                 try:
                     result = collection.insert_many(documents, ordered=False)
-                    logger.info("Successfully stored "
-                                f"{len(result.inserted_ids)} embeddings")
+                    _ = DEBUG and log_debug(
+                        "Successfully stored "
+                        f"{len(result.inserted_ids)} embeddings")
                     return True
                 except DuplicateKeyError as e:
                     # Handle duplicate keys by updating existing documents
-                    logger.warning("Duplicate keys found, updating existing"
-                                   f" documents: {e}")
+                    log_warning("Duplicate keys found, updating existing"
+                                f" documents: {e}")
                     return self._update_existing_embeddings(documents)
 
             return True
 
         except PyMongoError as e:
-            logger.error(f"Failed to store embeddings: {e}")
+            log_error(f"Failed to store embeddings: {e}")
             raise VectorSearchError(f"Embedding storage failed: {e}")
         except Exception as e:
-            logger.error(f"Unexpected error storing embeddings: {e}")
+            log_error(f"Unexpected error storing embeddings: {e}")
             raise VectorSearchError(f"Unexpected storage error: {e}")
 
     def _update_existing_embeddings(self, documents: List[Dict[str, Any]]
@@ -398,11 +406,12 @@ class DatabaseManager:
             for doc in documents:
                 collection.replace_one({"_id": doc["_id"]}, doc, upsert=True)
 
-            logger.info(f"Updated {len(documents)} existing embeddings")
+            _ = DEBUG and log_debug(
+                f"Updated {len(documents)} existing embeddings")
             return True
 
         except Exception as e:
-            logger.error(f"Failed to update existing embeddings: {e}")
+            log_error(f"Failed to update existing embeddings: {e}")
             return False
 
     def search_similar(
@@ -439,24 +448,24 @@ class DatabaseManager:
                 if results:  # If vector search returns results, use them
                     return results
                 else:
-                    logger.info(
+                    _ = DEBUG and log_debug(
                         "Vector search returned no results, falling back"
                         " to cosine similarity")
                     return self._cosine_similarity_search(
                         collection, query_embedding, limit, file_type_filter
                     )
             except Exception as e:
-                logger.warning("Vector search failed, falling back to"
-                               f" cosine similarity: {e}")
+                log_warning("Vector search failed, falling back to"
+                            f" cosine similarity: {e}")
                 return self._cosine_similarity_search(
                     collection, query_embedding, limit, file_type_filter
                 )
 
         except PyMongoError as e:
-            logger.error(f"Search operation failed: {e}")
+            log_error(f"Search operation failed: {e}")
             raise VectorSearchError(f"Search failed: {e}")
         except Exception as e:
-            logger.error(f"Unexpected search error: {e}")
+            log_error(f"Unexpected search error: {e}")
             raise VectorSearchError(f"Unexpected search error: {e}")
 
     def _vector_search(
@@ -560,7 +569,7 @@ class DatabaseManager:
                 results.append(result)
 
         except Exception as e:
-            logger.error(f"Cosine similarity search failed: {e}")
+            log_error(f"Cosine similarity search failed: {e}")
             # Return empty results instead of raising exception
             return []
 
@@ -584,14 +593,14 @@ class DatabaseManager:
                                     result.append(float(sub_item))
                                 except (ValueError, TypeError):
                                     item_type = type(sub_item).__name__
-                                    logger.warning(
+                                    log_warning(
                                         "Skipping non-numeric value in "
                                         " nestedlist "
                                         f"({item_type}): {sub_item}")
                         else:
                             result.append(float(item))
                     except (ValueError, TypeError):
-                        logger.warning(
+                        log_warning(
                             f"Skipping non-numeric value in vector "
                             f"({type(item).__name__}): {item}")
                         continue
@@ -621,7 +630,7 @@ class DatabaseManager:
             return dot_product / (mag1 * mag2)
 
         except Exception as e:
-            logger.error(f"Error calculating cosine similarity: {e}")
+            log_error(f"Error calculating cosine similarity: {e}")
             return 0.0
 
     def delete_all_vectors(self) -> bool:
@@ -638,15 +647,15 @@ class DatabaseManager:
             collection = self.database[self.knowledge_base_collection]
             result = collection.delete_many({})
 
-            logger.info(f"Deleted {result.deleted_count} vectors"
-                        " from knowledge base")
+            _ = DEBUG and log_debug(f"Deleted {result.deleted_count} vectors"
+                                    " from knowledge base")
             return True
 
         except PyMongoError as e:
-            logger.error(f"Failed to delete vectors: {e}")
+            log_error(f"Failed to delete vectors: {e}")
             return False
         except Exception as e:
-            logger.error(f"Unexpected error deleting vectors: {e}")
+            log_error(f"Unexpected error deleting vectors: {e}")
             return False
 
     def delete_vectors_by_path(self, document_path: str) -> bool:
@@ -666,19 +675,19 @@ class DatabaseManager:
             collection = self.database[self.knowledge_base_collection]
             _ = collection.delete_many({"path": document_path})
 
-            logger.info(
+            _ = DEBUG and log_debug(
                 "Deleted {result.deleted_count} vectors for "
                 f"path: {document_path}"
             )
             return True
 
         except PyMongoError as e:
-            logger.error("Failed to delete vectors for path"
-                         f" {document_path}: {e}")
+            log_error("Failed to delete vectors for path"
+                      f" {document_path}: {e}")
             return False
         except Exception as e:
-            logger.error("Unexpected error deleting vectors for"
-                         f" path {document_path}: {e}")
+            log_error("Unexpected error deleting vectors for"
+                      f" path {document_path}: {e}")
             return False
 
     def get_document_count(self) -> int:
@@ -696,10 +705,10 @@ class DatabaseManager:
             return collection.count_documents({})
 
         except PyMongoError as e:
-            logger.error(f"Failed to get document count: {e}")
+            log_error(f"Failed to get document count: {e}")
             return 0
         except Exception as e:
-            logger.error(f"Unexpected error getting document count: {e}")
+            log_error(f"Unexpected error getting document count: {e}")
             return 0
 
     def get_knowledge_base_stats(self) -> Dict[str, Any]:
@@ -738,10 +747,10 @@ class DatabaseManager:
             }
 
         except PyMongoError as e:
-            logger.error(f"Failed to get knowledge base stats: {e}")
+            log_error(f"Failed to get knowledge base stats: {e}")
             return {"error": str(e)}
         except Exception as e:
-            logger.error(f"Unexpected error getting knowledge base stats: {e}")
+            log_error(f"Unexpected error getting knowledge base stats: {e}")
             return {"error": str(e)}
 
 
@@ -808,7 +817,7 @@ async def health_check() -> Dict[str, Any]:
         }
 
     except Exception as e:
-        logger.error(f"Database health check failed: {e}")
+        log_error(f"Database health check failed: {e}")
         return {"status": "unhealthy", "connected": False, "error": str(e)}
 
 
@@ -901,7 +910,7 @@ async def test_database_connection(db: DatabaseManager) -> bool:
         return True
 
     except Exception as e:
-        logger.error(f"Database health check failed: {e}")
+        log_error(f"Database health check failed: {e}")
         return False
 
 

@@ -6,7 +6,6 @@ separated from the route definitions for better organization and testing.
 """
 
 import os
-import logging
 import uuid
 from typing import Dict, Any, List, Optional
 
@@ -39,7 +38,7 @@ from genericsuite_codegen.api.types import (
     SystemStatistics,
 )
 
-from .utilities import (
+from genericsuite_codegen.utilities import (
     std_error_response,
     std_response,
     sanitize_filename,
@@ -50,21 +49,30 @@ from .utilities import (
     get_utcnow_fmt,
     get_utcnow,
 )
+from genericsuite_codegen.utilities.app_logger import (
+    log_debug,
+    log_warning,
+    log_error,
+)
 from genericsuite_codegen.agent.agent import (
     get_agent,
     QueryRequest as AgentQueryRequest
 )
 from genericsuite_codegen.database.setup import (
     get_database_connection,
-    # initialize_database,
     test_database_connection,
 )
 
-DEBUG = True
+from genericsuite_codegen.document_processing.ingestion import (
+    IngestionResult,
+    IngestionStatistics,
+    IngestionProgress,
+    IngestionStatus,
+    save_progress_to_file,
+    load_progress_from_file,
+)
 
-# Configure logging
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO if DEBUG else logging.WARNING)
+DEBUG = False
 
 
 class EndpointMethods:
@@ -78,7 +86,6 @@ class EndpointMethods:
     def __init__(self):
         """Initialize endpoint methods."""
         self.db = get_database_connection()
-        # self.db = initialize_database()
         self.agent = get_agent()
 
     # Agent Query Methods
@@ -103,7 +110,7 @@ class EndpointMethods:
             HTTPException: If query processing fails.
         """
         try:
-            logger.info(
+            _ = DEBUG and log_debug(
                 "Processing agent query "
                 f"[{correlation_id}]: {request.query[:100]}...")
 
@@ -130,13 +137,13 @@ class EndpointMethods:
                 create_result = await self.create_conversation(
                     create_request, user_id)
                 if create_result.error:
-                    logger.error(
+                    log_error(
                         "Failed to create conversation:"
                         f" {create_result.error_message}")
                     return create_result
 
                 conversation_id = create_result.result.id
-                logger.info(
+                _ = DEBUG and log_debug(
                     f"Created new conversation {conversation_id} for query")
 
             # Convert API request to agent request
@@ -160,7 +167,7 @@ class EndpointMethods:
             agent_response = await self.agent.query(agent_request,
                                                     context=agent_context)
 
-            logger.info(f">>> Agent response: {agent_response}")
+            _ = DEBUG and log_debug(f">>> Agent response: {agent_response}")
 
             sources = ([local_path_to_url(source)
                        for source in agent_response.sources]
@@ -186,6 +193,8 @@ class EndpointMethods:
                     request.query,
                     content,
                     sources,
+                    request.task_type,
+                    agent_response.model_used,
                     agent_response.token_usage
                 )
             else:
@@ -198,11 +207,12 @@ class EndpointMethods:
                     agent_response.token_usage
                 )
 
-            logger.info(f"Query processed successfully [{correlation_id}]")
+            _ = DEBUG and log_debug(
+                f"Query processed successfully [{correlation_id}]")
             return std_response(result=response)
 
         except Exception as e:
-            logger.error(f"Query processing failed [{correlation_id}]: {e}")
+            log_error(f"Query processing failed [{correlation_id}]: {e}")
             return std_error_response(
                 status_code=500,
                 detail=f"Query processing failed: {str(e)}"
@@ -224,8 +234,9 @@ class EndpointMethods:
             str: Streaming response chunks.
         """
         try:
-            logger.info(f"Starting streaming query [{correlation_id}]:"
-                        f" {request.query[:100]}...")
+            _ = DEBUG and log_debug(
+                f"Starting streaming query [{correlation_id}]:"
+                f" {request.query[:100]}...")
 
             # For now, we'll implement basic streaming by yielding the full
             # response.
@@ -248,7 +259,7 @@ class EndpointMethods:
             yield "data: [DONE]\n\n"
 
         except Exception as e:
-            logger.error(f"Streaming query failed [{correlation_id}]: {e}")
+            log_error(f"Streaming query failed [{correlation_id}]: {e}")
             yield f"data: ERROR: {str(e)}\n\n"
 
     # Conversation Management Methods
@@ -321,14 +332,14 @@ class EndpointMethods:
             created_conversation = self._convert_conversation_document(
                 conversation_data)
 
-            logger.info(
+            _ = DEBUG and log_debug(
                 f"Created conversation {result.inserted_id} for user"
                 f" {user_id}")
 
             return std_response(result=created_conversation)
 
         except Exception as e:
-            logger.error(f"Failed to create conversation: {e}")
+            log_error(f"Failed to create conversation: {e}")
             return std_error_response(
                 status_code=500,
                 detail=f"Failed to create conversation: {str(e)}"
@@ -400,7 +411,7 @@ class EndpointMethods:
                 ))
 
         except Exception as e:
-            logger.error(f"Failed to get conversations: {e}")
+            log_error(f"Failed to get conversations: {e}")
             return std_error_response(
                 status_code=500,
                 detail=f"Failed to get conversations: {str(e)}"
@@ -454,7 +465,7 @@ class EndpointMethods:
                 result=self._convert_conversation_document(conversation_doc))
 
         except Exception as e:
-            logger.error(f"Failed to get conversation: {e}")
+            log_error(f"Failed to get conversation: {e}")
             return std_error_response(
                 status_code=500,
                 detail=f"Failed to get conversation: {str(e)}"
@@ -548,12 +559,12 @@ class EndpointMethods:
             if updated_result.error:
                 return updated_result
 
-            logger.info(
+            _ = DEBUG and log_debug(
                 f"Updated conversation {conversation_id} for user {user_id}")
             return std_response(result=updated_result.result)
 
         except Exception as e:
-            logger.error(f"Failed to update conversation: {e}")
+            log_error(f"Failed to update conversation: {e}")
             return std_error_response(
                 status_code=500,
                 detail=f"Failed to update conversation: {str(e)}"
@@ -615,13 +626,13 @@ class EndpointMethods:
                     detail="Failed to delete conversation"
                 )
 
-            logger.info(
+            _ = DEBUG and log_debug(
                 f"Deleted conversation {conversation_id} for user {user_id}")
             return std_response(result={
                 "message": "Conversation deleted successfully"})
 
         except Exception as e:
-            logger.error(f"Failed to delete conversation: {e}")
+            log_error(f"Failed to delete conversation: {e}")
             return std_error_response(
                 status_code=500,
                 detail=f"Failed to delete conversation: {str(e)}"
@@ -629,16 +640,63 @@ class EndpointMethods:
 
     # Knowledge Base Management Methods
 
-    async def update_knowledge_base(
+    async def schedule_update_knowledge_base(
         self,
         request: KnowledgeBaseUpdate,
+    ) -> Dict[str, str]:
+        progress = IngestionProgress(
+            status=IngestionStatus.SCHEDULED,
+            current_step="Knowledge base update scheduled",
+            total_steps=6,  # clone, process, chunk, embed, store, complete
+            completed_steps=0,
+            repository_url=request.repository_url,
+            force_refresh=request.force_refresh
+        )
+        save_progress_to_file(progress)
+        return std_response(
+            result=IngestionResult(
+                success=True,
+                status="Knowledge base update scheduled",
+                statistics=IngestionStatistics(
+                    total_documents=0,
+                    total_chunks=0,
+                    total_embeddings=0,
+                    duration_seconds=0,
+                ),
+                progress=IngestionProgress(
+                    status=IngestionStatus.CLONING,
+                    current_step="Knowledge base update scheduled",
+                    total_steps=1,
+                    completed_steps=0,
+                )
+            ).to_dict(),
+        )
+
+    async def update_knowledge_base(self) -> Dict[str, str]:
+        """
+        Verify if update is scheduled.
+
+        Args:
+            request: Update request.
+        """
+        progress = load_progress_from_file()
+        _ = DEBUG and log_debug(f"Knowledge base update progress: {progress}")
+        _ = DEBUG and log_debug(f"Progress status: {progress.status}")
+        _ = DEBUG and log_debug(
+            f"IngestionStatus.SCHEDULED: {IngestionStatus.SCHEDULED.value}")
+        if not progress or progress.status != IngestionStatus.SCHEDULED.value:
+            return std_response(result=None)
+        return await self.update_knowledge_base_run(progress)
+
+    async def update_knowledge_base_run(
+        self,
+        progress: IngestionProgress,
     ) -> Dict[str, str]:
         """
         Trigger knowledge base update.
 
         Args:
-            request: Update request.
-            background_tasks: FastAPI background tasks.
+            progress: Ingestion progress.
 
         Returns:
             Dict[str, str]: Update initiation response.
@@ -646,16 +704,16 @@ class EndpointMethods:
         try:
             # Start background update task
             operation_id = f"kb_update_{get_utcnow_fmt()}"
-            logger.info(f"Knowledge base update started [{operation_id}]"
-                        " in BACKGROUND...")
+            _ = DEBUG and log_debug(
+                f"Knowledge base update started [{operation_id}]"
+                " in BACKGROUND...")
             return std_response(
                 result=await self._update_knowledge_base_background(
-                    operation_id,
-                    request
+                    operation_id, progress
                 ))
 
         except Exception as e:
-            logger.error(f"Failed to start knowledge base update: {e}")
+            log_error(f"Failed to start knowledge base update: {e}")
             return std_error_response(
                 status_code=500,
                 detail=f"Failed to start update: {str(e)}"
@@ -667,16 +725,6 @@ class EndpointMethods:
         """Get operation progress."""
         from genericsuite_codegen.document_processing.ingestion import \
             get_ingestion_progress
-        # working_data = self._get_working_data(None)
-        # if working_data.error:
-        #     return working_data
-        # repo_url = working_data.result["repository_url"]
-        # local_dir = working_data.result["local_dir"]
-        # result = get_ingestion_progress(
-        #     repo_url=repo_url,
-        #     local_dir=local_dir,
-        #     database_manager=self.db,
-        # )
         result = get_ingestion_progress()
         return std_response(result=result)
 
@@ -722,7 +770,7 @@ class EndpointMethods:
             )
 
         except Exception as e:
-            logger.error(f"Failed to get knowledge base status: {e}")
+            log_error(f"Failed to get knowledge base status: {e}")
             return std_error_response(
                 status_code=500,
                 detail=f"Failed to get status: {str(e)}"
@@ -761,12 +809,12 @@ class EndpointMethods:
                 chunk_count=1  # Placeholder
             )
 
-            logger.info(f"Document uploaded: {file.filename}"
-                        f" ({len(content)} bytes)")
+            _ = DEBUG and log_debug(f"Document uploaded: {file.filename}"
+                                    f" ({len(content)} bytes)")
             return std_response(result=document_info)
 
         except Exception as e:
-            logger.error(f"Failed to upload document: {e}")
+            log_error(f"Failed to upload document: {e}")
             return std_error_response(
                 status_code=500,
                 detail=f"Failed to upload document: {str(e)}"
@@ -791,7 +839,8 @@ class EndpointMethods:
         try:
             # Validate content based on file type
             if request.file_type == "json":
-                from .utilities import validate_json_content
+                from genericsuite_codegen.utilities import \
+                    validate_json_content
                 is_valid, error = validate_json_content(request.content)
                 if not is_valid:
                     return std_error_response(
@@ -811,7 +860,7 @@ class EndpointMethods:
         except Exception as e:
             # if isinstance(e, HTTPException):
             #     raise
-            logger.error(f"Failed to generate file: {e}")
+            log_error(f"Failed to generate file: {e}")
             return std_error_response(
                 status_code=500,
                 detail=f"Failed to generate file: {str(e)}"
@@ -843,7 +892,7 @@ class EndpointMethods:
             return std_response(result=package)
 
         except Exception as e:
-            logger.error(f"Failed to create file package: {e}")
+            log_error(f"Failed to create file package: {e}")
             return std_error_response(
                 status_code=500,
                 detail=f"Failed to create package: {str(e)}"
@@ -893,7 +942,7 @@ class EndpointMethods:
                 ))
 
         except Exception as e:
-            logger.error(f"Knowledge base search failed: {e}")
+            log_error(f"Knowledge base search failed: {e}")
             return std_error_response(
                 status_code=500,
                 detail=f"Search failed: {str(e)}"
@@ -907,25 +956,25 @@ class EndpointMethods:
             Dict[str, str]: Cleanup confirmation.
         """
         try:
-            logger.info("Cleaning knowledge base...")
+            _ = DEBUG and log_debug("Cleaning knowledge base...")
 
             # Delete all vectors
             success = self.db.delete_all_vectors()
 
             if success:
-                logger.info("Knowledge base cleaned successfully")
+                _ = DEBUG and log_debug("Knowledge base cleaned successfully")
                 return std_response(
                     result={"message": "Knowledge base cleaned successfully"}
                 )
             else:
-                logger.error("Failed to clean knowledge base")
+                log_error("Failed to clean knowledge base")
                 return std_error_response(
                     status_code=500,
                     detail="Failed to clean knowledge base"
                 )
 
         except Exception as e:
-            logger.error(f"Knowledge base cleanup failed: {e}")
+            log_error(f"Knowledge base cleanup failed: {e}")
             return std_error_response(
                 status_code=500,
                 detail=f"Cleanup failed: {str(e)}"
@@ -987,7 +1036,7 @@ class EndpointMethods:
             return std_response(result=stats)
 
         except Exception as e:
-            logger.error(f"Failed to get statistics: {e}")
+            log_error(f"Failed to get statistics: {e}")
             return std_error_response(
                 status_code=500,
                 detail=f"Failed to get statistics: {str(e)}"
@@ -1013,6 +1062,8 @@ class EndpointMethods:
                 content=msg_data["content"],
                 timestamp=msg_data["timestamp"],
                 sources=msg_data.get("sources"),
+                task_type=msg_data.get("task_type"),
+                model_used=msg_data.get("model_used"),
                 token_usage=msg_data.get("token_usage")
             ))
 
@@ -1062,7 +1113,7 @@ class EndpointMethods:
                     return f"{base_title} ({int(time.time())})"
 
         except Exception as e:
-            logger.error(f"Error ensuring unique title: {e}")
+            log_error(f"Error ensuring unique title: {e}")
             # Fallback to timestamp-based title
             import time
             return f"{base_title} ({int(time.time())})"
@@ -1080,7 +1131,7 @@ class EndpointMethods:
 
             # Validate conversation_id
             if not conversation_id or not conversation_id.strip():
-                logger.error("Invalid conversation_id provided")
+                log_error("Invalid conversation_id provided")
                 return
 
             conversations = self.db.database.ai_chatbot_conversations
@@ -1089,7 +1140,7 @@ class EndpointMethods:
             conversation_exists = conversations.find_one(
                 {"_id": ObjectId(conversation_id)})
             if not conversation_exists:
-                logger.error(f"Conversation {conversation_id} not found")
+                log_error(f"Conversation {conversation_id} not found")
                 return
 
             # Generate unique ID for assistant message
@@ -1114,16 +1165,16 @@ class EndpointMethods:
             )
 
             if result.modified_count == 0:
-                logger.error(
+                log_error(
                     "Failed to add assistant message to conversation"
                     f" {conversation_id}")
             else:
-                logger.info(
+                _ = DEBUG and log_debug(
                     "Added assistant message to conversation"
                     f" {conversation_id}")
 
         except Exception as e:
-            logger.error(
+            log_error(
                 f"Failed to add assistant message to conversation: {e}")
 
     async def _get_conversation_context(
@@ -1145,7 +1196,7 @@ class EndpointMethods:
 
             # Validate conversation_id
             if not conversation_id or not conversation_id.strip():
-                logger.warning("Invalid conversation_id provided for context")
+                log_warning("Invalid conversation_id provided for context")
                 return None
 
             conversations = self.db.database.ai_chatbot_conversations
@@ -1156,7 +1207,7 @@ class EndpointMethods:
             )
 
             if not conversation_doc:
-                logger.warning(
+                log_warning(
                     f"Conversation {conversation_id} not found for context")
                 return None
 
@@ -1187,13 +1238,13 @@ class EndpointMethods:
                 preferences={}
             )
 
-            logger.info(
+            _ = DEBUG and log_debug(
                 f"Retrieved context for conversation {conversation_id} "
                 f"with {len(conversation_history)} messages")
             return agent_context
 
         except Exception as e:
-            logger.error(
+            log_error(
                 "Failed to get conversation context for"
                 f" {conversation_id}: {e}")
             return None
@@ -1204,6 +1255,8 @@ class EndpointMethods:
         user_message: str,
         assistant_message: str,
         sources: Optional[List[str]],
+        task_type: Optional[str],
+        model_used: Optional[str],
         token_usage: Optional[Dict[str, int]]
     ) -> None:
         """
@@ -1216,7 +1269,7 @@ class EndpointMethods:
 
             # Validate conversation_id
             if not conversation_id or not conversation_id.strip():
-                logger.error("Invalid conversation_id provided")
+                log_error("Invalid conversation_id provided")
                 return
 
             conversations = self.db.database.ai_chatbot_conversations
@@ -1225,7 +1278,7 @@ class EndpointMethods:
             conversation_exists = conversations.find_one(
                 {"_id": ObjectId(conversation_id)})
             if not conversation_exists:
-                logger.error(f"Conversation {conversation_id} not found")
+                log_error(f"Conversation {conversation_id} not found")
                 return
 
             # Generate unique IDs for messages
@@ -1239,6 +1292,8 @@ class EndpointMethods:
                     "content": user_message,
                     "timestamp": get_utcnow(),
                     "sources": None,
+                    "task_type": "chat",
+                    "model_used": "",
                     "token_usage": None
                 },
                 {
@@ -1247,6 +1302,8 @@ class EndpointMethods:
                     "content": assistant_message,
                     "timestamp": get_utcnow(),
                     "sources": sources or [],
+                    "task_type": task_type,
+                    "model_used": model_used,
                     "token_usage": token_usage
                 }
             ]
@@ -1261,15 +1318,15 @@ class EndpointMethods:
             )
 
             if result.modified_count == 0:
-                logger.error(
+                log_error(
                     "Failed to add messages to conversation"
                     f" {conversation_id}")
             else:
-                logger.info(
+                _ = DEBUG and log_debug(
                     f"Added 2 messages to conversation {conversation_id}")
 
         except Exception as e:
-            logger.error(f"Failed to add messages to conversation: {e}")
+            log_error(f"Failed to add messages to conversation: {e}")
             # Don't raise exception here as it's not critical to the
             # main operation
 
@@ -1292,17 +1349,18 @@ class EndpointMethods:
     async def _update_knowledge_base_background(
         self,
         operation_id: str,
-        request: KnowledgeBaseUpdate
+        progress: IngestionProgress
     ) -> None:
         """Background task for knowledge base update."""
         try:
-            logger.info(f"Starting knowledge base update [{operation_id}]")
+            _ = DEBUG and log_debug(
+                f"Starting knowledge base update [{operation_id}]")
 
             from genericsuite_codegen.document_processing.ingestion import \
                 run_ingestion
 
             # Process repository
-            working_data = self._get_working_data(request.repository_url)
+            working_data = self._get_working_data(progress.repository_url)
             if working_data.error:
                 return working_data
             repo_url = working_data.result["repository_url"]
@@ -1312,15 +1370,16 @@ class EndpointMethods:
                 repo_url=repo_url,
                 repo_branch=repo_branch,
                 local_dir=local_dir,
-                force_refresh=request.force_refresh or True,
+                force_refresh=progress.force_refresh or True,
                 database_manager=self.db,
             )
 
-            logger.info(f"Knowledge base update completed [{operation_id}]")
+            _ = DEBUG and log_debug(
+                f"Knowledge base update completed [{operation_id}]")
             return std_response(result=result)
 
         except Exception as e:
-            logger.error(f"Knowledge base update failed [{operation_id}]: {e}")
+            log_error(f"Knowledge base update failed [{operation_id}]: {e}")
             return std_error_response(
                 status_code=500,
                 detail=f"Failed to update knowledge base: {str(e)}"
@@ -1362,7 +1421,7 @@ class EndpointMethods:
             )
 
         except Exception as e:
-            logger.error(f"Health check failed: {e}")
+            log_error(f"Health check failed: {e}")
             return HealthResponse(
                 status="unhealthy",
                 version=get_app_info().version,
@@ -1412,7 +1471,7 @@ class EndpointMethods:
             })
 
         except Exception as e:
-            logger.error(f"Status check failed: {e}")
+            log_error(f"Status check failed: {e}")
             return std_error_response(
                 status_code=500, detail=f"Status check failed: {e}")
 
@@ -1517,7 +1576,7 @@ class EndpointMethods:
             )
 
             # Extract JSON from response content
-            from .utilities import extract_code_blocks
+            from genericsuite_codegen.utilities import extract_code_blocks
 
             code_blocks = extract_code_blocks(response.content, "json")
 
@@ -1549,7 +1608,7 @@ class EndpointMethods:
             return result
 
         except Exception as e:
-            logger.error(f"JSON config generation failed: {e}")
+            log_error(f"JSON config generation failed: {e}")
             return std_error_response(
                 status_code=500,
                 detail=f"Failed to generate JSON config: {str(e)}"
@@ -1610,7 +1669,7 @@ class EndpointMethods:
             )
 
         except Exception as e:
-            logger.error(f"Python code generation failed: {e}")
+            log_error(f"Python code generation failed: {e}")
             return std_error_response(
                 status_code=500,
                 detail=f"Failed to generate Python code: {str(e)}"
@@ -1676,7 +1735,7 @@ class EndpointMethods:
                 files=generated_files))
 
         except Exception as e:
-            logger.error(f"Frontend code generation failed: {e}")
+            log_error(f"Frontend code generation failed: {e}")
             return std_error_response(
                 status_code=500,
                 detail=f"Failed to generate frontend code: {str(e)}"
@@ -1714,7 +1773,7 @@ class EndpointMethods:
                 requirements, framework)
 
             # Extract Python code blocks from response
-            from .utilities import extract_code_blocks
+            from genericsuite_codegen.utilities import extract_code_blocks
 
             code_blocks = extract_code_blocks(response.content, "python")
 
@@ -1751,7 +1810,7 @@ class EndpointMethods:
                 files=generated_files))
 
         except Exception as e:
-            logger.error(f"Backend code generation failed: {e}")
+            log_error(f"Backend code generation failed: {e}")
             return std_error_response(
                 status_code=500,
                 detail=f"Failed to generate backend code: {str(e)}"

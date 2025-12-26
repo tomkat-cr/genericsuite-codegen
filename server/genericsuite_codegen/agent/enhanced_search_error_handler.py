@@ -6,11 +6,15 @@ for the enhanced vector search system, ensuring graceful fallback to
 original search behavior when enhanced features fail.
 """
 
-import logging
 from typing import Any, Optional, Dict, Callable
 from functools import wraps
 
 from genericsuite_codegen.database.setup import SearchResult
+from genericsuite_codegen.utilities.app_logger import (
+    log_debug,
+    log_warning,
+    log_error,
+)
 
 from .enhanced_search_types import (
     EnhancedSearchError,
@@ -25,11 +29,11 @@ from .enhanced_search_types import (
     DualSearchResult
 )
 from .enhanced_search_logging import (
-    get_enhanced_search_logger,
+    # get_enhanced_search_logger,
     get_performance_monitor
 )
 
-logger = logging.getLogger(__name__)
+DEBUG = False
 
 
 class EnhancedSearchErrorHandler:
@@ -43,7 +47,7 @@ class EnhancedSearchErrorHandler:
             fallback_enabled: Whether to enable fallback to original behavior
         """
         self.fallback_enabled = fallback_enabled
-        self.search_logger = get_enhanced_search_logger()
+        # self.search_logger = get_enhanced_search_logger()
         self.performance_monitor = get_performance_monitor()
 
         # Error recovery strategies
@@ -78,7 +82,7 @@ class EnhancedSearchErrorHandler:
         """
         # Log the error
         if isinstance(error, EnhancedSearchError):
-            self.search_logger.log_error(error, operation_context)
+            log_error(error, operation_context)
         else:
             # Convert to EnhancedSearchError for consistent handling
             enhanced_error = EnhancedSearchError(
@@ -86,7 +90,7 @@ class EnhancedSearchErrorHandler:
                 error_code="UNEXPECTED_ERROR",
                 original_exception=error
             )
-            self.search_logger.log_error(enhanced_error, operation_context)
+            log_error(enhanced_error, operation_context)
             error = enhanced_error
 
         # Try specific recovery strategy
@@ -97,11 +101,11 @@ class EnhancedSearchErrorHandler:
                     error, operation_context, fallback_value
                 )
             except Exception as recovery_error:
-                logger.error(f"Recovery strategy failed: {recovery_error}")
+                log_error(f"Recovery strategy failed: {recovery_error}")
 
         # Generic fallback if enabled
         if self.fallback_enabled and fallback_value is not None:
-            logger.warning(
+            log_warning(
                 f"Using generic fallback for {error_type.__name__}: {error}"
             )
             return fallback_value
@@ -119,7 +123,7 @@ class EnhancedSearchErrorHandler:
         if not self.fallback_enabled:
             raise error
 
-        logger.warning(
+        log_warning(
             f"Dual search failed, attempting single search fallback: {error}")
 
         # Try to extract user query from error details
@@ -158,12 +162,13 @@ class EnhancedSearchErrorHandler:
                     sources=[]
                 )
 
-                logger.info(
-                    f"Single search fallback successful: {len(results)} results")
+                _ = DEBUG and log_debug(
+                    "Single search fallback successful: "
+                    f"{len(results)} results")
                 return fallback_result
 
             except Exception as fallback_error:
-                logger.error(
+                log_error(
                     f"Single search fallback failed: {fallback_error}")
 
         return fallback_value
@@ -174,11 +179,13 @@ class EnhancedSearchErrorHandler:
         context: Optional[Dict[str, Any]],
         fallback_value: Any
     ) -> Any:
-        """Handle context determination errors with generic context fallback."""
+        """
+        Handle context determination errors with generic context fallback
+        """
         if not self.fallback_enabled:
             raise error
 
-        logger.warning(
+        log_warning(
             f"Context determination failed, using generic context: {error}")
 
         # Return generic context as fallback
@@ -201,7 +208,7 @@ class EnhancedSearchErrorHandler:
         if not self.fallback_enabled:
             raise error
 
-        logger.warning(
+        log_warning(
             f"Document retrieval failed, using empty results: {error}")
 
         # Return empty list as fallback for document retrieval
@@ -217,11 +224,12 @@ class EnhancedSearchErrorHandler:
         if not self.fallback_enabled:
             raise error
 
-        logger.warning(
+        log_warning(
             f"Template loading failed, using default templates: {error}")
 
         # Default template fallback
-        default_template = "examples and rules for creating code in Genericsuite"
+        default_template = \
+            "examples and rules for creating code in Genericsuite"
         return default_template if fallback_value is None else fallback_value
 
     def _handle_search_merge_error(
@@ -234,7 +242,7 @@ class EnhancedSearchErrorHandler:
         if not self.fallback_enabled:
             raise error
 
-        logger.warning(
+        log_warning(
             f"Search merge failed, using user results only: {error}")
 
         # Try to return user results if available in error details
@@ -255,7 +263,7 @@ class EnhancedSearchErrorHandler:
         if not self.fallback_enabled:
             raise error
 
-        logger.warning(f"Configuration error, using defaults: {error}")
+        log_warning(f"Configuration error, using defaults: {error}")
 
         # Return default configuration or fallback value
         return fallback_value
@@ -267,7 +275,7 @@ class EnhancedSearchErrorHandler:
         fallback_value: Any
     ) -> Any:
         """Handle performance errors with timeout fallback."""
-        logger.warning(f"Performance threshold exceeded: {error}")
+        log_warning(f"Performance threshold exceeded: {error}")
 
         # Performance errors are warnings, not failures
         # Continue with the operation but log the performance issue

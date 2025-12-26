@@ -9,9 +9,12 @@ import re
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 from datetime import datetime
-import logging
 
-logger = logging.getLogger(__name__)
+from genericsuite_codegen.utilities.app_logger import (
+    log_debug,
+)
+
+DEBUG = False
 
 
 @dataclass
@@ -430,7 +433,7 @@ class DocumentChunker:
 
             document_chunks.append(document_chunk)
 
-        logger.debug(
+        _ = DEBUG and log_debug(
             f"Chunked document {document.path} into "
             f"{len(document_chunks)} chunks")
         return document_chunks

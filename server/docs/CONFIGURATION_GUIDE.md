@@ -258,7 +258,7 @@ SEARCH_RESULT_CACHE_TTL=1800
 
 ```bash
 # MongoDB Configuration for Vector Search
-MONGODB_URI=mongodb://localhost:27017/genericsuite_codegen
+APP_DB_URI=mongodb://localhost:27017/genericsuite_codegen
 MONGODB_VECTOR_COLLECTION=documents
 MONGODB_VECTOR_INDEX=vector_index
 MONGODB_MAX_POOL_SIZE=10
@@ -584,7 +584,7 @@ ENHANCED_SEARCH_DEBUG=true
 LOCAL_REPO_PATH=test_data/repo_files
 DOCUMENT_RETRIEVAL_CACHE_ENABLED=false
 SEARCH_TEMPLATES_CONFIG_PATH=test_data/test_templates.json
-MONGODB_URI=mongodb://localhost:27017/test_genericsuite_codegen
+APP_DB_URI=mongodb://localhost:27017/test_genericsuite_codegen
 ```
 
 ## Configuration Validation

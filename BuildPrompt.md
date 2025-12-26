@@ -69,7 +69,7 @@ The system combines document ingestion, vector search, AI agent capabilities, an
 - **AI Framework**: Pydantic AI for agent implementation
 - **Database**: MongoDB Vector Search with `pymongo` Python dependency
 - **Embeddings**: OpenAI embeddings API and HuggingFace `sentence-transformers` (configurable by EMBEDDINGS_PROVIDER and EMBEDDINGS_MODEL envvars)
-- **LLM Provider**: OpenAI API and LiteLLM for LLM integration (configurable LLM_API, LLM_PROVIDER, and LLM_MODEL envvars)
+- **LLM Provider**: OpenAI API and LiteLLM for LLM integration (configurable LLM_API, LLM_PROVIDER, and LLM_MODEL_NAME envvars)
 - **UI**: ReactJS, ShadCn, Vite
 - **Document Processing**: Simple text processing with PyPDF2 for PDF extraction
 
@@ -182,7 +182,7 @@ Create a `.env.example` file with the following variables:
 - APP_DOMAIN_NAME: The domain name for the application. Defaults to `localhost`
 - APP_NAME: The name of the application. Defaults to `GenericSuite CodeGen`
 
-- MONGODB_URI: The MongoDB connection string. Defaults to `mongodb://root:example@mongo:27017/`
+- APP_DB_URI: The MongoDB connection string. Defaults to `mongodb://root:example@mongo:27017/`
 - REMOTE_REPO_URL: remote repository URL to be git-cloned. Defaults to `https://github.com/tomkat-cr/genericsuite-basecamp.git`
 - LOCAL_REPO_DIR: The local directory where the repository will be cloned. Defaults to "/code/local_repo_files"
 
@@ -191,7 +191,7 @@ Create a `.env.example` file with the following variables:
 
 - LLM_API: The LLM API provider (e.g., "openai", "litellm"). Defaults to "litellm"
 - LLM_PROVIDER: The LLM provider (e.g., "openai", "ollama", "anthropic", "vertexai", "bedrock"). Defaults to "ollama"
-- LLM_MODEL: The LLM model (e.g., "gpt-5-nano"). Defaults to "gpt-oss-20b"
+- LLM_MODEL_NAME: The LLM model (e.g., "gpt-5-nano"). Defaults to "gpt-oss-20b"
 - LLM_TEMPERATURE: The llm temperature. Defaults to 0.5
 - LLM_MAX_TOKENS: The llm max_tokens. Defaults to 2024
 - LLM_TOP_P: The llm top_p. Defaults to 1.0
@@ -821,15 +821,15 @@ services:
       - APP_DOMAIN_NAME=${APP_DOMAIN_NAME}
       - APP_NAME=${APP_NAME}
       - SERVER_DEBUG=${SERVER_DEBUG}
-      - MONGODB_URI=${MONGODB_URI}
+      - APP_DB_URI=${APP_DB_URI}
       - REMOTE_REPO_URL=${REMOTE_REPO_URL}
       - LOCAL_REPO_DIR=${LOCAL_REPO_DIR}
       - HF_TOKEN=${HF_TOKEN}
       - OPENAI_BASE_URL=${OPENAI_BASE_URL}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - LLM_API=${LLM_MODEL}
-      - LLM_PROVIDER=${LLM_MODEL}
-      - LLM_MODEL=${LLM_MODEL}
+      - LLM_API=${LLM_MODEL_NAME}
+      - LLM_PROVIDER=${LLM_MODEL_NAME}
+      - LLM_MODEL_NAME=${LLM_MODEL_NAME}
       - LLM_TEMPERATURE=${LLM_TEMPERATURE}
       - LLM_MAX_TOKENS=${LLM_MAX_TOKENS}
       - LLM_TOP_P=${LLM_TOP_P}

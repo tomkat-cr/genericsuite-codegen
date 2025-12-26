@@ -6,9 +6,7 @@ as standardized MCP tools and resources for integration with external tools.
 """
 import os
 import json
-import sys
 import asyncio
-import logging
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
@@ -20,35 +18,21 @@ except ImportError:
         "Install it with: pip install fastmcp"
     )
 
-from ..agent.agent import GenericSuiteAgent
-from ..database.setup import DatabaseManager
-from ..api.utilities import local_path_to_url
-from ..api.endpoint_methods import get_endpoint_methods
-from ..agent.tools import KnowledgeBaseTool
+from genericsuite_codegen.agent.agent import GenericSuiteAgent
+from genericsuite_codegen.agent.tools import KnowledgeBaseTool
+from genericsuite_codegen.api.endpoint_methods import get_endpoint_methods
+from genericsuite_codegen.database.setup import DatabaseManager
+from genericsuite_codegen.utilities import local_path_to_url
+from genericsuite_codegen.utilities.app_logger import (
+    log_debug,
+    log_warning,
+    log_error,
+)
 
 
 DEBUG = True
 
 DEFAULT_MCP_TRANSPORT = "http"
-
-
-def configure_logging(log_file_path: str = "./mcp_server.log",
-                      debug: bool = DEBUG):
-    """
-    Configure logging for the MCP server.
-    """
-    logging.basicConfig(
-        level=logging.INFO if debug else logging.DEBUG,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.StreamHandler(sys.stdout),
-            logging.FileHandler(log_file_path)
-        ]
-    )
-
-
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO if DEBUG else logging.DEBUG)
 
 
 @dataclass
@@ -94,10 +78,12 @@ class GenericSuiteMCPServer:
             # Initialize knowledge base tool
             self.kb_tool = KnowledgeBaseTool()
 
-            logger.info("MCP server components initialized successfully")
+            _ = DEBUG and log_debug(
+                "MCP server components initialized successfully")
 
         except Exception as e:
-            logger.error(f"Failed to initialize MCP server components: {e}")
+            log_error(
+                f"Failed to initialize MCP server components: {e}")
             raise
 
     def _setup_authentication(self):
@@ -105,14 +91,17 @@ class GenericSuiteMCPServer:
         try:
             # Add authentication middleware if API key is provided
             if self.config.api_key:
-                logger.info("MCP authentication enabled with API key")
+                _ = DEBUG and log_debug(
+                    "MCP authentication enabled with API key")
                 # Note: FastMCP handles authentication through the protocol
                 # The API key will be validated in tool calls
             else:
-                logger.warning("MCP server running without authentication")
+                log_warning(
+                    "MCP server running without authentication")
 
         except Exception as e:
-            logger.error(f"Failed to setup MCP authentication: {e}")
+            log_error(
+                f"Failed to setup MCP authentication: {e}")
             raise
 
     def _validate_request(self, request_data: Dict[str, Any]) -> bool:
@@ -128,15 +117,15 @@ class GenericSuiteMCPServer:
             return True
 
         except Exception as e:
-            logger.error(f"Request validation failed: {e}")
+            log_error(f"Request validation failed: {e}")
             return False
 
     def _handle_error(self, error: Exception, context: str) -> Dict[str, Any]:
         """Centralized error handling for MCP operations."""
         error_id = f"mcp_error_{hash(str(error)) % 10000:04d}"
 
-        logger.error(f"MCP Error [{error_id}] in {context}: {error}",
-                     exc_info=True)
+        log_error(
+            f"MCP Error [{error_id}] in {context}: {error}")
 
         return {
             "success": False,
@@ -176,7 +165,8 @@ class GenericSuiteMCPServer:
                 # Use the agent's knowledge base search capability
                 results = await self._search_knowledge_base_async(query, limit)
 
-                logger.info(f">>> Search knowledge base results: {results}")
+                _ = DEBUG and log_debug(
+                    f">>> Search knowledge base results: {results}")
 
                 final_result = {
                     "success": results["success"],
@@ -188,7 +178,7 @@ class GenericSuiteMCPServer:
                     "error": results["error"],
                 }
 
-                logger.info(
+                _ = DEBUG and log_debug(
                     f">>> Search knowledge base final result: {final_result}")
 
                 return final_result
@@ -538,7 +528,7 @@ class GenericSuiteMCPServer:
                 self.kb_tool.get_context_for_generation(
                     query, limit=limit)
 
-            logger.info(
+            _ = DEBUG and log_debug(
                 ">>> _search_knowledge_base_async"
                 f"\n | final_context: {final_context}"
                 f"\n | search_results: {search_results}"
@@ -564,7 +554,7 @@ class GenericSuiteMCPServer:
 
         except Exception as e:
             # Get error source and line number if possible
-            logger.error(
+            log_error(
                 f"Knowledge base search failed [SKBA-010]: {e}"
             )
             # Return empty results on error
@@ -579,13 +569,15 @@ class GenericSuiteMCPServer:
             "host": self.config.host,
             "port": self.config.port,
         }
-        logger.info(f">>>> MCP server run arguments: {mcp_run_args}")
+        _ = DEBUG and log_debug(
+            f">>>> MCP server run arguments: {mcp_run_args}")
         return mcp_run_args
 
     def run(self):
         """Run the MCP server synchronously."""
         try:
-            logger.info(f"Starting MCP server on {self.config.transport}")
+            _ = DEBUG and log_debug(
+                f"Starting MCP server on {self.config.transport}")
             # FastMCP typically runs on stdio for MCP protocol
             mcp_run_args = self.get_mcp_run_args()
             if self.config.transport == "http":
@@ -593,13 +585,13 @@ class GenericSuiteMCPServer:
             else:
                 asyncio.run(self.mcp.run_stdio_async())
         except Exception as e:
-            logger.error(f"MCP server failed to start: {e}")
+            log_error(f"MCP server failed to start: {e}")
             raise
 
     async def run_async(self):
         """Run the MCP server asynchronously."""
         try:
-            logger.info(
+            _ = DEBUG and log_debug(
                 f"Starting MCP server (async) on {self.config.transport}")
             # FastMCP typically runs on stdio for MCP protocol
             mcp_run_args = self.get_mcp_run_args()
@@ -608,7 +600,7 @@ class GenericSuiteMCPServer:
             else:
                 await self.mcp.run_stdio_async()
         except Exception as e:
-            logger.error(f"MCP server failed to start: {e}")
+            log_error(f"MCP server failed to start: {e}")
             raise
 
 
@@ -637,13 +629,13 @@ def load_environment(current_dir: str):
 
         if env_file.exists():
             load_dotenv(env_file)
-            logger.info(f"Loaded environment from {env_file}")
+            _ = DEBUG and log_debug(f"Loaded environment from {env_file}")
         else:
-            logger.warning(
+            log_warning(
                 "No .env file found, using system environment variables")
 
     except ImportError:
-        logger.warning(
+        log_warning(
             "python-dotenv not available, using system environment variables")
 
 
@@ -664,18 +656,18 @@ def validate_environment():
             missing_vars.append(var)
 
     if missing_vars:
-        logger.error(f"Missing required environment variables: {missing_vars}")
+        log_error(f"Missing required environment variables: {missing_vars}")
         return False
 
     # Log optional variables
     for var, default in optional_vars.items():
         value = os.getenv(var, default)
-        logger.info(f"{var}: {value}")
+        _ = DEBUG and log_debug(f"{var}: {value}")
 
     return True
 
 
-def get_mcp_config():
+def get_mcp_config() -> MCPConfig:
     """Get MCP server configuration from environment variables."""
     return MCPConfig(
         server_name=os.getenv("MCP_SERVER_NAME", "genericsuite-codegen"),
@@ -684,20 +676,21 @@ def get_mcp_config():
         host=os.getenv("MCP_SERVER_HOST", "0.0.0.0"),
         port=int(os.getenv("MCP_SERVER_PORT", "8070")),
         debug=os.getenv("MCP_DEBUG", "0") == "1",
-        transport=os.getenv("MCP_TRANSPORT", DEFAULT_MCP_TRANSPORT)
+        transport=os.getenv("MCP_TRANSPORT", DEFAULT_MCP_TRANSPORT),
     )
 
 
 def report_mcp_config(config: MCPConfig):
     """Report MCP server configuration."""
-    logger.info("Server configuration:")
-    logger.info(f"  Name: {config.server_name}")
-    logger.info(f"  Version: {config.server_version}")
-    logger.info(f"  Host: {config.host}")
-    logger.info(f"  Port: {config.port}")
-    logger.info(f"  Debug: {config.debug}")
-    logger.info(f"  API Key: {'Set' if config.api_key else 'Not set'}")
-    logger.info(f"  Transport: {config.transport}")
+    _ = DEBUG and log_debug("Server configuration:")
+    _ = DEBUG and log_debug(f"  Name: {config.server_name}")
+    _ = DEBUG and log_debug(f"  Version: {config.server_version}")
+    _ = DEBUG and log_debug(f"  Host: {config.host}")
+    _ = DEBUG and log_debug(f"  Port: {config.port}")
+    _ = DEBUG and log_debug(f"  Debug: {config.debug}")
+    _ = DEBUG and log_debug(
+        f"  API Key: {'Set' if config.api_key else 'Not set'}")
+    _ = DEBUG and log_debug(f"  Transport: {config.transport}")
 
 
 def print_output(message: str):

@@ -36,7 +36,7 @@ MCP_DEBUG=0
 # AI Agent Configuration (if available)
 OPENAI_API_KEY=your_openai_key
 LLM_PROVIDER=openai
-LLM_MODEL=gpt-4
+LLM_MODEL_NAME=gpt-4
 ```
 
 ## Available MCP Tools

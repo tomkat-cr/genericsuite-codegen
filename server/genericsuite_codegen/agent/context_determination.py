@@ -7,9 +7,13 @@ rule searches and templates.
 """
 
 import re
-import logging
 from typing import Dict, List, Optional
 from dataclasses import dataclass
+
+from genericsuite_codegen.utilities.app_logger import (
+    log_debug,
+    log_error,
+)
 
 from .enhanced_search_types import (
     CodeGenerationContext,
@@ -25,7 +29,8 @@ from .enhanced_search_logging import (
     handle_enhanced_search_errors
 )
 
-logger = logging.getLogger(__name__)
+
+DEBUG = False
 
 
 @dataclass
@@ -146,7 +151,7 @@ class ContextDeterminationService:
                     success=True
                 )
 
-                logger.info(
+                _ = DEBUG and log_debug(
                     f"Determined context: {code_type} "
                     f"(framework: {framework}, confidence: {confidence:.2f})"
                 )
@@ -180,7 +185,7 @@ class ContextDeterminationService:
                     error_details=context_error.to_dict()
                 )
 
-                logger.error(f"Context determination failed: {e}")
+                log_error(f"Context determination failed: {e}")
                 raise context_error
 
     @log_performance("contextual_query_generation")
@@ -223,7 +228,8 @@ class ContextDeterminationService:
                         "examples and rules for creating code in Genericsuite"
                     )
                 )
-                logger.info(f"Using default template for {context.code_type}")
+                _ = DEBUG and log_debug(
+                    f"Using default template for {context.code_type}")
 
             # Enhance template with framework-specific information if available
             if (context.framework and
@@ -231,14 +237,14 @@ class ContextDeterminationService:
                 enhanced_template = self._enhance_template_with_framework(
                     template, context.framework
                 )
-                logger.debug(
+                _ = DEBUG and log_debug(
                     f"Enhanced template with framework: {context.framework}")
                 return enhanced_template
 
             return template
 
         except Exception as e:
-            logger.error(f"Failed to get contextual search query: {e}")
+            log_error(f"Failed to get contextual search query: {e}")
             raise ContextDeterminationError(
                 f"Failed to generate contextual search query: {e}",
                 analysis_data={
@@ -508,7 +514,7 @@ class ContextDeterminationService:
             }
 
         except Exception as e:
-            logger.error(f"Failed to analyze query details: {e}")
+            log_error(f"Failed to analyze query details: {e}")
             return {
                 "error": str(e),
                 "original_query": user_query

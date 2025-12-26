@@ -5,8 +5,6 @@ This module provides comprehensive logging, error handling, and performance
 monitoring for the enhanced vector search system.
 """
 
-import time
-import logging
 import functools
 from typing import Dict, Any, Optional, Callable, List
 from datetime import datetime, timedelta
@@ -14,15 +12,20 @@ from dataclasses import dataclass, field
 from contextlib import contextmanager
 from collections import defaultdict, deque
 
+from genericsuite_codegen.utilities.app_logger import (
+    log_debug,
+    log_warning,
+    log_error,
+)
+
 from .enhanced_search_types import (
     EnhancedSearchError,
-    PerformanceError,
     CodeGenerationContext,
     DualSearchResult
 )
 
-# Configure logger
-logger = logging.getLogger(__name__)
+
+DEBUG = False
 
 
 @dataclass
@@ -36,7 +39,8 @@ class PerformanceMetrics:
     error_message: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
 
-    def complete(self, success: bool = True, error_message: Optional[str] = None):
+    def complete(self, success: bool = True,
+                 error_message: Optional[str] = None):
         """Mark the operation as complete."""
         self.end_time = datetime.now()
         self.duration = (self.end_time - self.start_time).total_seconds()
@@ -121,7 +125,8 @@ class PerformanceMonitor:
             "template_load": 1.0
         }
 
-    def start_operation(self, operation_name: str, **metadata) -> PerformanceMetrics:
+    def start_operation(self, operation_name: str, **metadata
+                        ) -> PerformanceMetrics:
         """Start tracking a new operation."""
         metrics = PerformanceMetrics(
             operation_name=operation_name,
@@ -129,7 +134,7 @@ class PerformanceMonitor:
             metadata=metadata
         )
 
-        logger.debug(f"Started operation: {operation_name}")
+        _ = DEBUG and log_debug(f"Started operation: {operation_name}")
         return metrics
 
     def complete_operation(
@@ -166,20 +171,24 @@ class PerformanceMonitor:
         # Check performance thresholds
         threshold = self.performance_thresholds.get(metrics.operation_name)
         if threshold and metrics.duration > threshold:
-            logger.logger.warning(
-                f"Performance threshold exceeded for {metrics.operation_name}: "
+            log_warning(
+                "Performance threshold exceeded for "
+                f"{metrics.operation_name}: "
                 f"{metrics.duration:.2f}s > {threshold}s"
             )
 
         # Log completion
-        log_level = logging.INFO if success else logging.ERROR
-        logger.log(
-            log_level,
-            f"Completed operation: {metrics.operation_name} "
-            f"(duration: {metrics.duration:.2f}s, success: {success})"
-        )
+        msg = f"Completed operation: {metrics.operation_name} " \
+            + f"(duration: {metrics.duration:.2f}s, "
+        if success:
+            msg += f"success: {success})"
+            _ = DEBUG and log_debug(msg)
+        else:
+            msg += f"ERROR: {error_message})"
+            log_error(msg)
 
-    def get_operation_stats(self, operation_name: Optional[str] = None) -> Dict[str, Any]:
+    def get_operation_stats(self, operation_name: Optional[str] = None
+                            ) -> Dict[str, Any]:
         """Get statistics for operations."""
         if operation_name:
             return dict(self.operation_stats.get(operation_name, {}))
@@ -194,13 +203,16 @@ class PerformanceMonitor:
         """Reset all statistics."""
         self.metrics_history.clear()
         self.operation_stats.clear()
-        logger.info("Performance statistics reset")
+        _ = DEBUG and log_debug("Performance statistics reset")
 
 
 class EnhancedSearchLogger:
     """Comprehensive logging system for enhanced search operations."""
 
-    def __init__(self, performance_monitor: Optional[PerformanceMonitor] = None):
+    def __init__(
+        self,
+        performance_monitor: Optional[PerformanceMonitor] = None
+    ):
         """
         Initialize the enhanced search logger.
 
@@ -211,17 +223,18 @@ class EnhancedSearchLogger:
         self.operation_logs: deque = deque(maxlen=1000)
 
         # Configure structured logging
-        self.logger = logging.getLogger("enhanced_search")
+        # self.logger = get_logger("enhanced_search")
 
-        # Ensure logger has appropriate handlers
-        if not self.logger.handlers:
-            handler = logging.StreamHandler()
-            formatter = logging.Formatter(
-                '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-            )
-            handler.setFormatter(formatter)
-            self.logger.addHandler(handler)
-            self.logger.setLevel(logging.INFO)
+        # self.logger = logging.getLogger("enhanced_search")
+        # # Ensure logger has appropriate handlers
+        # if not self.logger.handlers:
+        #     handler = logging.StreamHandler()
+        #     formatter = logging.Formatter(
+        #         '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        #     )
+        #     handler.setFormatter(formatter)
+        #     self.logger.addHandler(handler)
+        #     self.logger.setLevel(logging.INFO)
 
     def log_dual_search_operation(
         self,
@@ -250,7 +263,8 @@ class EnhancedSearchLogger:
             error_details=error_details,
             performance_metrics={
                 "user_results": len(result.user_results) if result else 0,
-                "context_results": len(result.context_results) if result else 0,
+                "context_results": len(result.context_results)
+                if result else 0,
                 "merged_results": len(result.merged_results) if result else 0
             }
         )
@@ -259,16 +273,18 @@ class EnhancedSearchLogger:
 
         # Log to standard logger
         if success:
-            self.logger.info(
+            _ = DEBUG and log_debug(
                 f"Dual search completed: query='{user_query[:50]}...', "
-                f"context={code_context.code_type if code_context else 'none'}, "
+                f"context={code_context.code_type if code_context
+                           else 'none'}, "
                 f"results={len(result.merged_results) if result else 0}, "
                 f"duration={duration:.2f}s"
             )
         else:
-            self.logger.error(
+            log_error(
                 f"Dual search failed: query='{user_query[:50]}...', "
-                f"error={error_details.get('message', 'Unknown') if error_details else 'Unknown'}, "
+                f"error={error_details.get('message', 'Unknown')
+                         if error_details else 'Unknown'}, "
                 f"duration={duration:.2f}s"
             )
 
@@ -300,16 +316,17 @@ class EnhancedSearchLogger:
 
         # Log to standard logger
         if success and determined_context:
-            self.logger.info(
+            _ = DEBUG and log_debug(
                 f"Context determined: query='{user_query[:50]}...', "
                 f"type={determined_context.code_type}, "
                 f"confidence={determined_context.confidence:.2f}, "
                 f"duration={duration:.2f}s"
             )
         else:
-            self.logger.error(
+            log_error(
                 f"Context determination failed: query='{user_query[:50]}...', "
-                f"error={error_details.get('message', 'Unknown') if error_details else 'Unknown'}, "
+                f"error={error_details.get('message', 'Unknown')
+                         if error_details else 'Unknown'}, "
                 f"duration={duration:.2f}s"
             )
 
@@ -334,7 +351,8 @@ class EnhancedSearchLogger:
                 "total_requested": len(document_paths),
                 "successful_retrievals": successful_retrievals,
                 "failed_retrievals": failed_retrievals,
-                "success_rate": successful_retrievals / len(document_paths) if document_paths else 0
+                "success_rate": successful_retrievals / len(document_paths)
+                if document_paths else 0
             }
         )
 
@@ -342,7 +360,7 @@ class EnhancedSearchLogger:
 
         # Log to standard logger
         if success:
-            self.logger.info(
+            _ = DEBUG and log_debug(
                 f"Document retrieval completed: "
                 f"requested={len(document_paths)}, "
                 f"successful={successful_retrievals}, "
@@ -350,10 +368,11 @@ class EnhancedSearchLogger:
                 f"duration={duration:.2f}s"
             )
         else:
-            self.logger.error(
+            log_error(
                 f"Document retrieval failed: "
                 f"requested={len(document_paths)}, "
-                f"error={error_details.get('message', 'Unknown') if error_details else 'Unknown'}, "
+                f"error={error_details.get('message', 'Unknown')
+                         if error_details else 'Unknown'}, "
                 f"duration={duration:.2f}s"
             )
 
@@ -370,7 +389,7 @@ class EnhancedSearchLogger:
             error_dict["operation_context"] = operation_context
 
         # Log structured error
-        self.logger.error(
+        log_error(
             f"Enhanced search error: {error.__class__.__name__} - {error}",
             extra={"error_details": error_dict}
         )
@@ -393,7 +412,8 @@ class EnhancedSearchLogger:
         logs = list(self.operation_logs)
 
         if operation_type:
-            logs = [log for log in logs if log.operation_type == operation_type]
+            logs = [log for log in logs
+                    if log.operation_type == operation_type]
 
         # Get most recent logs
         recent_logs = logs[-limit:]
@@ -421,7 +441,8 @@ class EnhancedSearchLogger:
             error_details[error_type].append({
                 "timestamp": log.timestamp.isoformat(),
                 "operation_type": log.operation_type,
-                "message": log.error_details.get("message", "Unknown") if log.error_details else "Unknown"
+                "message": log.error_details.get("message", "Unknown")
+                if log.error_details else "Unknown"
             })
 
         return {
@@ -486,11 +507,11 @@ def handle_enhanced_search_errors(
                 return func(*args, **kwargs)
             except EnhancedSearchError as e:
                 if log_errors:
-                    logger = get_enhanced_search_logger()
-                    logger.log_error(e, {"function": func.__name__})
+                    # logger = get_enhanced_search_logger()
+                    log_error(e, {"function": func.__name__})
 
                 if fallback_enabled:
-                    logger.logger.warning(
+                    log_warning(
                         f"Enhanced search error in {func.__name__}, "
                         f"using fallback: {e}"
                     )
@@ -500,19 +521,19 @@ def handle_enhanced_search_errors(
             except Exception as e:
                 # Convert unexpected exceptions to EnhancedSearchError
                 enhanced_error = EnhancedSearchError(
-                    f"Unexpected error in {func.__name__}: {e}",
+                    f"[1] Unexpected error in {func.__name__}: {e}",
                     error_code="UNEXPECTED_ERROR",
                     original_exception=e
                 )
 
                 if log_errors:
-                    logger = get_enhanced_search_logger()
-                    logger.log_error(enhanced_error, {
-                                     "function": func.__name__})
+                    # logger = get_enhanced_search_logger()
+                    log_error(enhanced_error, {
+                        "function": func.__name__})
 
                 if fallback_enabled:
-                    logger.logger.warning(
-                        f"Unexpected error in {func.__name__}, "
+                    log_warning(
+                        f"[2] Unexpected error in {func.__name__}, "
                         f"using fallback: {e}"
                     )
                     return fallback_value

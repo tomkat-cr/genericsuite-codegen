@@ -111,8 +111,8 @@ if [ "$USE_LOCAL_MONGODB" != "0" ]; then
     export MONGODB_HOST_PORT=27017
     # export MONGODB_USER=root
     # export MONGODB_PASSWORD=example
-    # export MONGODB_URI=mongodb://$MONGODB_USER:$MONGODB_PASSWORD@$MONGODB_HOST_NAME:$MONGODB_HOST_PORT
-    export MONGODB_URI=mongodb://$MONGODB_HOST_NAME:$MONGODB_HOST_PORT/?directConnection=true
+    # export APP_DB_URI=mongodb://$MONGODB_USER:$MONGODB_PASSWORD@$MONGODB_HOST_NAME:$MONGODB_HOST_PORT
+    export APP_DB_URI=mongodb://$MONGODB_HOST_NAME:$MONGODB_HOST_PORT/?directConnection=true
 fi
 
 # Override environment variables for Deployment

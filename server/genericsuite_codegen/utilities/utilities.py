@@ -6,7 +6,6 @@ request handling, and other shared functionality across the API.
 """
 
 import os
-import logging
 import uuid
 import time
 from typing import Dict, Any, Optional
@@ -14,19 +13,19 @@ import datetime
 import json
 import re
 
-from .types import (
+from genericsuite_codegen.api.types import (
     AppInfo,
     ErrorResponse,
     SuccessResponse,
     StandardGsErrorResponse,
     StandardGsResponse,
 )
+from genericsuite_codegen.utilities.rate_limiter import RateLimiter
+from genericsuite_codegen.utilities.app_logger import (
+    log_debug,
+)
 
-DEBUG = True
-
-# Configure logging
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO if DEBUG else logging.WARNING)
+DEBUG = False
 
 BASE_LOCAL_PATH = os.getenv("BASE_LOCAL_PATH", '')
 ALT_BASE_LOCAL_PATH = os.getenv("ALT_BASE_LOCAL_PATH", '')
@@ -58,39 +57,6 @@ def std_error_response(
         error_message=detail,
         status_code=status_code,
     )
-
-
-def setup_logging() -> None:
-    """
-    Setup application logging configuration.
-    """
-    # Get log level from environment
-    log_level = os.getenv("LOG_LEVEL", "INFO").upper()
-    debug_mode = os.getenv("SERVER_DEBUG", "0") == "1"
-
-    # Configure logging format
-    log_format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-
-    if debug_mode:
-        log_format = "%(asctime)s - %(name)s - %(levelname)s - " + \
-                     "%(filename)s:%(lineno)d - %(message)s"
-
-    # Setup basic logging
-    logging.basicConfig(
-        level=getattr(logging, log_level, logging.INFO),
-        format=log_format,
-        datefmt="%Y-%m-%d %H:%M:%S"
-    )
-
-    # Set specific logger levels
-    logging.getLogger("uvicorn").setLevel(logging.INFO)
-    logging.getLogger("fastapi").setLevel(logging.INFO)
-
-    if not debug_mode:
-        # Reduce noise from external libraries in production
-        logging.getLogger("httpx").setLevel(logging.WARNING)
-        logging.getLogger("openai").setLevel(logging.WARNING)
-        logging.getLogger("pymongo").setLevel(logging.WARNING)
 
 
 def get_app_info() -> AppInfo:
@@ -141,8 +107,6 @@ def log_request_response(
         duration: Request duration in seconds (for responses).
         user_id: User ID if available.
     """
-    logger = logging.getLogger("api.requests")
-
     log_data = {
         "correlation_id": correlation_id,
         "method": method,
@@ -160,7 +124,7 @@ def log_request_response(
     if user_id:
         log_data["user_id"] = user_id
 
-    logger.info(json.dumps(log_data))
+    _ = DEBUG and log_debug(json.dumps(log_data))
 
 
 def validate_environment() -> Dict[str, Any]:
@@ -171,14 +135,14 @@ def validate_environment() -> Dict[str, Any]:
         Dict[str, Any]: Validation results with missing variables and warnings.
     """
     required_vars = [
-        "MONGODB_URI",
+        "APP_DB_URI",
         "OPENAI_API_KEY"
     ]
 
     optional_vars = [
         "HF_TOKEN",
         "LLM_PROVIDER",
-        "LLM_MODEL",
+        "LLM_MODEL_NAME",
         "EMBEDDINGS_PROVIDER",
         "EMBEDDINGS_MODEL"
     ]
@@ -210,7 +174,7 @@ def get_database_config() -> Dict[str, Any]:
         Dict[str, Any]: Database configuration.
     """
     return {
-        "uri": os.getenv("MONGODB_URI", "mongodb://localhost:27017/"),
+        "uri": os.getenv("APP_DB_URI", "mongodb://localhost:27017/"),
         "database_name": os.getenv("DATABASE_NAME", "genericsuite_codegen"),
         "connection_timeout": int(os.getenv("DB_CONNECTION_TIMEOUT", "10")),
         "server_selection_timeout":
@@ -227,7 +191,7 @@ def get_agent_config() -> Dict[str, Any]:
     """
     return {
         "provider": os.getenv("LLM_PROVIDER", "openai"),
-        "model": os.getenv("LLM_MODEL", "gpt-4"),
+        "model": os.getenv("LLM_MODEL_NAME", "gpt-4"),
         "temperature": float(os.getenv("LLM_TEMPERATURE", "0.1")),
         "max_tokens": (
             int(os.getenv("LLM_MAX_TOKENS", "4000"))
@@ -423,8 +387,7 @@ def measure_execution_time(func):
         result = func(*args, **kwargs)
         end_time = time.time()
 
-        logger = logging.getLogger("performance")
-        logger.info(
+        _ = DEBUG and log_debug(
             f"{func.__name__} executed in {end_time - start_time:.3f} seconds")
 
         return result
@@ -447,8 +410,7 @@ async def async_measure_execution_time(func):
         result = await func(*args, **kwargs)
         end_time = time.time()
 
-        logger = logging.getLogger("performance")
-        logger.info(
+        _ = DEBUG and log_debug(
             f"{func.__name__} executed in {end_time - start_time:.3f} seconds")
 
         return result
@@ -662,74 +624,6 @@ def get_utcnow() -> datetime:
     return datetime.datetime.now(datetime.UTC)
 
 
-class RateLimiter:
-    """Simple in-memory rate limiter."""
-
-    def __init__(self, max_requests: int = 100, window_seconds: int = 60):
-        """
-        Initialize rate limiter.
-
-        Args:
-            max_requests: Maximum requests per window.
-            window_seconds: Time window in seconds.
-        """
-        self.max_requests = max_requests
-        self.window_seconds = window_seconds
-        self.requests = {}
-
-    def is_allowed(self, client_id: str) -> bool:
-        """
-        Check if request is allowed for client.
-
-        Args:
-            client_id: Client identifier.
-
-        Returns:
-            bool: True if request is allowed.
-        """
-        now = time.time()
-        window_start = now - self.window_seconds
-
-        # Clean old entries
-        if client_id in self.requests:
-            self.requests[client_id] = [
-                req_time for req_time in self.requests[client_id]
-                if req_time > window_start
-            ]
-        else:
-            self.requests[client_id] = []
-
-        # Check if under limit
-        if len(self.requests[client_id]) < self.max_requests:
-            self.requests[client_id].append(now)
-            return True
-
-        return False
-
-    def get_reset_time(self, client_id: str) -> Optional[float]:
-        """
-        Get time when rate limit resets for client.
-
-        Args:
-            client_id: Client identifier.
-
-        Returns:
-            Optional[float]: Reset time as timestamp, None if no limit.
-        """
-        if client_id not in self.requests or not self.requests[client_id]:
-            return None
-
-        oldest_request = min(self.requests[client_id])
-        return oldest_request + self.window_seconds
-
-
-# Global rate limiter instance
-rate_limiter = RateLimiter(
-    max_requests=int(os.getenv("RATE_LIMIT_REQUESTS", "100")),
-    window_seconds=int(os.getenv("RATE_LIMIT_WINDOW", "60"))
-)
-
-
 def local_path_to_url(source: str, is_url: bool = True) -> str:
     """
     Convert local path to web URL.
@@ -752,3 +646,10 @@ def local_path_to_url(source: str, is_url: bool = True) -> str:
         content = re.sub(r'^' + re.escape(BASE_WEB_URL) +
                          r'(/.*?)\.md$', BASE_WEB_URL + r'\1.html', content)
     return content
+
+
+# Global rate limiter instance
+rate_limiter = RateLimiter(
+    max_requests=int(os.getenv("RATE_LIMIT_REQUESTS", "100")),
+    window_seconds=int(os.getenv("RATE_LIMIT_WINDOW", "60"))
+)

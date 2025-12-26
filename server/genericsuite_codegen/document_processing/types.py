@@ -22,6 +22,8 @@ class IngestionProgress:
     error_message: Optional[str] = None
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
+    repository_url: Optional[str] = None
+    force_refresh: Optional[bool] = False
 
     @property
     def progress_percentage(self) -> float:
@@ -57,8 +59,13 @@ class IngestionProgress:
             'processed_chunks': self.processed_chunks,
             'error_message': self.error_message,
             'started_at': str(self.started_at),
-            'completed_at': str(self.completed_at)
+            'completed_at': str(self.completed_at),
+            'repository_url': self.repository_url,
+            'force_refresh': self.force_refresh,
         }
+
+    def model_dump(self) -> Dict[str, Any]:
+        return self.to_dict()
 
 
 class EmbeddingModel(BaseModel):

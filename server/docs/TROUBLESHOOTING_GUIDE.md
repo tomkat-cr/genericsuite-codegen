@@ -292,12 +292,12 @@ brew services start mongodb-community
 sudo systemctl start mongod
 
 # Check connection string
-echo $MONGODB_URI
+echo $APP_DB_URI
 ```
 
 2. **Update Connection String:**
 ```bash
-echo "MONGODB_URI=mongodb://localhost:27017/genericsuite_codegen" >> .env
+echo "APP_DB_URI=mongodb://localhost:27017/genericsuite_codegen" >> .env
 ```
 
 3. **Verify Collection Setup:**

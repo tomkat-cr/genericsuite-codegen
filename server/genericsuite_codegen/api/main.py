@@ -6,72 +6,57 @@ and all API endpoints for the GenericSuite CodeGen RAG system.
 """
 
 import os
-import logging
 from contextlib import asynccontextmanager
 from typing import List, Optional, Union
 
 from fastapi import FastAPI, HTTPException, Request, \
-    UploadFile, BackgroundTasks, Body
+    UploadFile, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import StreamingResponse, Response
 
-# from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 import uvicorn
 
 from .types import (
-    # HealthResponse,
     ErrorResponse,
-    # AppInfo,
     QueryRequest,
-    # QueryResponse,
     ConversationCreate,
     ConversationUpdate,
-    # Conversation,
-    # ConversationList,
     KnowledgeBaseUpdate,
-    # KnowledgeBaseStatus,
-    # DocumentInfo,
-    # ProgressUpdate,
-    # Statistics,
     SearchQuery,
-    # SearchResponse,
     FileGenerationRequest,
     GeneratedFile,
-    # GeneratedFilesResponse,
-    # FilePackage,
     StandardGsResponse,
     StandardGsErrorResponse,
     GenerationRequest,
 )
-from genericsuite_codegen.document_processing.types import (
-    IngestionProgress,
-    IngestionResult,
-    IngestionStatistics,
-    IngestionStatus,
-    # IngestionRepositoryInfo,
-)
+# from genericsuite_codegen.document_processing.types import (
+#     IngestionProgress,
+#     IngestionResult,
+#     IngestionStatistics,
+#     IngestionStatus,
+#     # IngestionRepositoryInfo,
+# )
 
-from .utilities import (
-    setup_logging,
+from genericsuite_codegen.utilities import (
     get_app_info,
     create_correlation_id,
     log_request_response,
 )
+from genericsuite_codegen.utilities.app_logger import (
+    log_debug,
+    log_warning,
+    log_error,
+    log_info,
+)
 from genericsuite_codegen.document_processing.ingestion import RepositoryCloner
 from genericsuite_codegen.database.setup import (
-    # get_database_connection,
     initialize_database,
     test_database_connection,
 )
 
-DEBUG = True
-
-# Configure logging
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO if DEBUG else logging.WARNING)
-
+DEBUG = False
 
 EP_PREFIX = '/v1'
 PERFORM_AGENT_HEALT_CHECK = os.getenv("PERFORM_AGENT_HEALT_CHECK", "0") == "1"
@@ -86,14 +71,14 @@ async def lifespan(app: FastAPI):
         app: FastAPI application instance.
     """
     # Startup
-    logger.info("Starting GenericSuite CodeGen API server...")
+    log_info("Starting GenericSuite CodeGen API server...")
 
     try:
         # Initialize database connection
         # db = get_database_connection()
         db = initialize_database()
         if not await test_database_connection(db):
-            logger.error("Database connection failed during startup")
+            log_error("Database connection failed during startup")
             raise RuntimeError("Database connection failed")
 
         # Initialize AI agent
@@ -102,18 +87,18 @@ async def lifespan(app: FastAPI):
             agent = initialize_agent()
             health = await agent.health_check()
             if health["status"] != "healthy":
-                logger.warning(f"Agent health check failed: {health}")
+                log_warning(f"Agent health check failed: {health}")
 
-        logger.info("API server startup completed successfully")
+        log_info("API server startup completed successfully")
 
     except Exception as e:
-        logger.error(f"Startup failed: {e}")
+        log_error(f"Startup failed: {e}")
         raise
 
     yield
 
     # Shutdown
-    logger.info("Shutting down GenericSuite CodeGen API server...")
+    log_info("Shutting down GenericSuite CodeGen API server...")
 
 
 def create_app() -> FastAPI:
@@ -123,9 +108,6 @@ def create_app() -> FastAPI:
     Returns:
         FastAPI: Configured application instance.
     """
-    # Setup logging
-    setup_logging()
-
     # Get application info
     app_info = get_app_info()
 
@@ -187,10 +169,6 @@ def setup_middleware(app: FastAPI) -> None:
         correlation_id = create_correlation_id()
         request.state.correlation_id = correlation_id
 
-        if DEBUG:
-            api_requests_logger = logging.getLogger("api.requests")
-            api_requests_logger.setLevel(logging.INFO)
-
         # Log request
         log_request_response(
             method=request.method,
@@ -199,7 +177,8 @@ def setup_middleware(app: FastAPI) -> None:
             event_type="request",
         )
 
-        logger.info(f"request_logging_middleware | Request: {request}")
+        _ = DEBUG and log_debug(
+            f"request_logging_middleware | Request: {request}")
 
         # Process request
         response = await call_next(request)
@@ -242,10 +221,8 @@ def setup_exception_handlers(app: FastAPI) -> None:
             correlation_id=correlation_id,
         )
 
-        logger.error(f"Validation error [{correlation_id}]: {exc.errors()}")
+        log_error(f"Validation error [{correlation_id}]: {exc.errors()}")
 
-        # return JSONResponse(status_code=422,
-        #                     content=error_response.model_dump())
         return Response(status_code=422, content=str(error_response))
 
     @app.exception_handler(HTTPException)
@@ -261,14 +238,11 @@ def setup_exception_handlers(app: FastAPI) -> None:
             correlation_id=correlation_id
         )
 
-        logger.error(
+        log_error(
             f"HTTP error [{correlation_id}]: {exc.status_code}"
             f" - {exc.detail}"
         )
 
-        # return JSONResponse(
-        #     status_code=exc.status_code, content=error_response.model_dump()
-        # )
         return Response(status_code=exc.status_code,
                         content=str(error_response))
 
@@ -290,11 +264,9 @@ def setup_exception_handlers(app: FastAPI) -> None:
             correlation_id=correlation_id,
         )
 
-        logger.error(
-            f"Internal error [{correlation_id}]: {exc}", exc_info=True)
+        log_error(
+            f"Internal error [{correlation_id}]: {exc}")
 
-        # return JSONResponse(status_code=500,
-        #                     content=error_response.model_dump())
         return Response(status_code=500, content=str(error_response))
 
 
@@ -406,8 +378,8 @@ def setup_routes(app: FastAPI) -> None:
         result = result_wrapper(
             await methods.query_agent(request, correlation_id,
                                       translate_path=True))
-        logger.info(f"/query | query_agent | result.result: {result}")
-        logger.info(f"dict(result.result): {dict(result.result)}")
+        _ = DEBUG and log_debug(
+            f"/query | query_agent | result.result: {result}")
         return result
 
     @app.post(
@@ -572,8 +544,7 @@ def setup_routes(app: FastAPI) -> None:
         # response_model=IngestionResult,
         tags=["Knowledge Base"]
     )
-    async def update_knowledge_base(
-        background_tasks: BackgroundTasks,
+    async def schedule_update_knowledge_base(
         request: Optional[KnowledgeBaseUpdate] = Body(default=None),
     ):
         """
@@ -590,36 +561,33 @@ def setup_routes(app: FastAPI) -> None:
         if request is None:
             request = KnowledgeBaseUpdate()
 
-        logger.info(f"Received update request: {request}")
-
-        background_tasks.add_task(
-            methods.update_knowledge_base,
-            request,
-        )
-
+        _ = DEBUG and log_debug(f"Received update request: {request}")
         return result_wrapper(
-            StandardGsResponse(
-                result=IngestionResult(
-                    success=True,
-                    status="Knowledge base update started",
-                    statistics=IngestionStatistics(
-                        total_documents=0,
-                        total_chunks=0,
-                        total_embeddings=0,
-                        duration_seconds=0,
-                    ),
-                    progress=IngestionProgress(
-                        status=IngestionStatus.CLONING,
-                        current_step="Knowledge base update started",
-                        total_steps=1,
-                        completed_steps=0,
-                    )
-                ).to_dict(),
-            )
+            await methods.schedule_update_knowledge_base(request)
         )
 
     @app.get(
-        EP_PREFIX + "/knowledge-base/status",
+        EP_PREFIX + "/update-knowledge-base",
+        tags=["Knowledge Base"]
+    )
+    async def update_knowledge_base(
+        # request: Optional[KnowledgeBaseUpdate] = Body(default=None),
+    ):
+        """
+        Trigger knowledge base update.
+
+        Args:
+            request: Update request parameters.
+
+        Returns:
+            Dict[str, str]: Update initiation response.
+        """
+        return result_wrapper(
+            await methods.update_knowledge_base()
+        )
+
+    @app.get(
+        EP_PREFIX + "/update-knowledge-base/status",
         # response_model=KnowledgeBaseStatus,
         tags=["Knowledge Base"],
     )
@@ -631,6 +599,52 @@ def setup_routes(app: FastAPI) -> None:
             KnowledgeBaseStatus: Current knowledge base status.
         """
         return result_wrapper(await methods.get_knowledge_base_status())
+
+    @app.get(
+        EP_PREFIX + "/update-knowledge-base/progress",
+        # response_model=IngestionProgress,
+        tags=["Knowledge Base"],
+    )
+    async def get_operation_progress():
+        """
+        Get progress of a long-running operation.
+
+        Args:
+            operation_id: Operation identifier.
+
+        Returns:
+            # ProgressUpdate: Operation progress information.
+            IngestionProgress: Operation progress information.
+        """
+        return result_wrapper(
+            await methods.get_operation_progress())
+
+    @app.get(
+        EP_PREFIX + "/knowledge-base/statistics",
+        # response_model=Statistics,
+        tags=["Knowledge Base"],
+    )
+    async def get_knowledge_base_statistics():
+        """
+        Get knowledge base statistics.
+
+        Returns:
+            Statistics: Knowledge base and system statistics.
+        """
+        return result_wrapper(await methods.get_statistics())
+
+    @app.post(
+        EP_PREFIX + "/knowledge-base/clean",
+        tags=["Knowledge Base"]
+    )
+    async def clean_knowledge_base():
+        """
+        Clean all vectors from the knowledge base.
+
+        Returns:
+            Dict[str, str]: Cleanup confirmation.
+        """
+        return result_wrapper(await methods.clean_knowledge_base())
 
     @app.post(
         EP_PREFIX + "/upload-document",
@@ -653,51 +667,6 @@ def setup_routes(app: FastAPI) -> None:
             await methods.upload_document(file,
                                           description))
 
-    @app.get(
-        EP_PREFIX + "/knowledge-base/progress",
-        # # response_model=ProgressUpdate,
-        # response_model=IngestionProgress,
-        tags=["Knowledge Base"],
-    )
-    async def get_operation_progress():
-        """
-        Get progress of a long-running operation.
-
-        Args:
-            operation_id: Operation identifier.
-
-        Returns:
-            # ProgressUpdate: Operation progress information.
-            IngestionProgress: Operation progress information.
-        """
-        return result_wrapper(
-            await methods.get_operation_progress())
-
-        # TODO:
-        # This would be implemented with a proper progress tracking system
-        # For now, return a placeholder response
-        # return ProgressUpdate(
-        #     operation_id=operation_id,
-        #     status="completed",
-        #     progress=1.0,
-        #     message="Operation completed",
-        #     started_at=datetime.datetime.now(datetime.UTC),
-        # )
-
-    @app.get(
-        EP_PREFIX + "/knowledge-base/statistics",
-        # response_model=Statistics,
-        tags=["Knowledge Base"],
-    )
-    async def get_knowledge_base_statistics():
-        """
-        Get knowledge base statistics.
-
-        Returns:
-            Statistics: Knowledge base and system statistics.
-        """
-        return result_wrapper(await methods.get_statistics())
-
     @app.post(
         EP_PREFIX + "/search",
         # response_model=SearchResponse,
@@ -715,21 +684,8 @@ def setup_routes(app: FastAPI) -> None:
         """
         result = result_wrapper(await methods.search_knowledge_base(
             query, translate_path=True))
-        logger.info(f"API /search | result: {result}")
+        _ = DEBUG and log_debug(f"API /search | result: {result}")
         return result
-
-    @app.post(
-        EP_PREFIX + "/knowledge-base/clean",
-        tags=["Knowledge Base"]
-    )
-    async def clean_knowledge_base():
-        """
-        Clean all vectors from the knowledge base.
-
-        Returns:
-            Dict[str, str]: Cleanup confirmation.
-        """
-        return result_wrapper(await methods.clean_knowledge_base())
 
     # File Generation and Download Endpoints
 
@@ -839,14 +795,14 @@ def setup_routes(app: FastAPI) -> None:
         Returns:
             GeneratedFile: Generated JSON configuration file.
         """
-        logger.info(
+        _ = DEBUG and log_debug(
             f"ENDPOINT >> generate_json_config | Received request: {request}")
         result = await methods.generate_json_config_endpoint(
             request.requirements,
             request.table_name,
             request.config_type,
         )
-        logger.info(
+        _ = DEBUG and log_debug(
             f"ENDPOINT >> generate_json_config | Result: {result}")
         result = result_wrapper(result)
         return result

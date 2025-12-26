@@ -5,9 +5,14 @@ import os
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 from dataclasses import dataclass, field
-import logging
 
-logger = logging.getLogger(__name__)
+from genericsuite_codegen.utilities.app_logger import (
+    log_debug,
+    log_warning,
+    log_error,
+)
+
+DEBUG = False
 
 
 @dataclass
@@ -84,7 +89,8 @@ class ConfigLoader:
 
         Args:
             config_file: Specific config file to load
-            environment: Environment-specific config (development, production, docker)
+            environment: Environment-specific config (development,
+                production, docker)
 
         Returns:
             EnhancedSearchConfig instance
@@ -107,8 +113,8 @@ class ConfigLoader:
             return self._create_config_object(merged_config)
 
         except Exception as e:
-            logger.warning(f"Failed to load enhanced search config: {e}")
-            logger.info("Using default enhanced search configuration")
+            log_warning(f"Failed to load enhanced search config: {e}"
+                        + "\nUsing default enhanced search configuration")
             return EnhancedSearchConfig()
 
     def load_search_templates(
@@ -130,8 +136,8 @@ class ConfigLoader:
             return self._load_config_file(templates_file)
 
         except Exception as e:
-            logger.warning(f"Failed to load search templates: {e}")
-            logger.info("Using default search templates")
+            log_warning(f"Failed to load search templates: {e}"
+                        + "\nUsing default search templates")
             return self._get_default_templates()
 
     def _get_config_filename(self, environment: Optional[str]) -> str:
@@ -159,7 +165,7 @@ class ConfigLoader:
         config_path = self.config_dir / filename
 
         if not config_path.exists():
-            logger.warning(f"Config file not found: {config_path}")
+            log_warning(f"Config file not found: {config_path}")
             return {}
 
         try:
@@ -167,14 +173,15 @@ class ConfigLoader:
                 config_data = json.load(f)
 
             self._config_cache[cache_key] = config_data
-            logger.info(f"Loaded configuration from: {config_path}")
+            _ = DEBUG and log_debug(
+                f"Loaded configuration from: {config_path}")
             return config_data
 
         except json.JSONDecodeError as e:
-            logger.error(f"Invalid JSON in config file {config_path}: {e}")
+            log_error(f"Invalid JSON in config file {config_path}: {e}")
             return {}
         except Exception as e:
-            logger.error(f"Error loading config file {config_path}: {e}")
+            log_error(f"Error loading config file {config_path}: {e}")
             return {}
 
     def _load_from_environment(self) -> Dict[str, Any]:
@@ -183,17 +190,20 @@ class ConfigLoader:
 
         # Enhanced search settings
         if os.getenv("ENHANCED_SEARCH_ENABLED"):
-            env_config.setdefault("enhanced_search", {})["enabled"] = (
+            env_config.setdefault(
+                "enhanced_search", {})["enabled"] = (
                 os.getenv("ENHANCED_SEARCH_ENABLED", "true").lower() == "true"
             )
 
         if os.getenv("ENHANCED_SEARCH_MAX_CONTEXT_LENGTH"):
-            env_config.setdefault("enhanced_search", {})["max_context_length"] = int(
+            env_config.setdefault(
+                "enhanced_search", {})["max_context_length"] = int(
                 os.getenv("ENHANCED_SEARCH_MAX_CONTEXT_LENGTH", "10000")
             )
 
         if os.getenv("ENHANCED_SEARCH_FALLBACK_ENABLED"):
-            env_config.setdefault("enhanced_search", {})["fallback_enabled"] = (
+            env_config.setdefault(
+                "enhanced_search", {})["fallback_enabled"] = (
                 os.getenv("ENHANCED_SEARCH_FALLBACK_ENABLED",
                           "true").lower() == "true"
             )
@@ -205,24 +215,28 @@ class ConfigLoader:
             )
 
         if os.getenv("DOCUMENT_RETRIEVAL_MAX_FILE_SIZE_MB"):
-            env_config.setdefault("local_storage", {})["max_file_size_mb"] = int(
+            env_config.setdefault(
+                "local_storage", {})["max_file_size_mb"] = int(
                 os.getenv("DOCUMENT_RETRIEVAL_MAX_FILE_SIZE_MB", "10")
             )
 
         # Performance settings
         if os.getenv("SEARCH_MAX_CONCURRENT_SEARCHES"):
-            env_config.setdefault("search_performance", {})["max_concurrent_searches"] = int(
+            env_config.setdefault(
+                "search_performance", {})["max_concurrent_searches"] = int(
                 os.getenv("SEARCH_MAX_CONCURRENT_SEARCHES", "5")
             )
 
         if os.getenv("SEARCH_TIMEOUT_SECONDS"):
-            env_config.setdefault("search_performance", {})["search_timeout_seconds"] = int(
+            env_config.setdefault(
+                "search_performance", {})["search_timeout_seconds"] = int(
                 os.getenv("SEARCH_TIMEOUT_SECONDS", "30")
             )
 
         # Context determination settings
         if os.getenv("CONTEXT_DETERMINATION_CONFIDENCE_THRESHOLD"):
-            env_config.setdefault("context_determination", {})["confidence_threshold"] = float(
+            env_config.setdefault(
+                "context_determination", {})["confidence_threshold"] = float(
                 os.getenv("CONTEXT_DETERMINATION_CONFIDENCE_THRESHOLD", "0.6")
             )
 
@@ -234,7 +248,8 @@ class ConfigLoader:
 
         return env_config
 
-    def _merge_configs(self, file_config: Dict[str, Any], env_config: Dict[str, Any]) -> Dict[str, Any]:
+    def _merge_configs(self, file_config: Dict[str, Any],
+                       env_config: Dict[str, Any]) -> Dict[str, Any]:
         """Merge file and environment configurations."""
         merged = file_config.copy()
 
@@ -246,7 +261,8 @@ class ConfigLoader:
 
         return merged
 
-    def _create_config_object(self, config_data: Dict[str, Any]) -> EnhancedSearchConfig:
+    def _create_config_object(self, config_data: Dict[str, Any]
+                              ) -> EnhancedSearchConfig:
         """Create EnhancedSearchConfig object from configuration data."""
         config = EnhancedSearchConfig()
 
@@ -261,9 +277,11 @@ class ConfigLoader:
             config.dual_search_enabled = es_config.get(
                 "dual_search_enabled", config.dual_search_enabled)
             config.context_determination_enabled = es_config.get(
-                "context_determination_enabled", config.context_determination_enabled)
+                "context_determination_enabled",
+                config.context_determination_enabled)
             config.document_retrieval_enabled = es_config.get(
-                "document_retrieval_enabled", config.document_retrieval_enabled)
+                "document_retrieval_enabled",
+                config.document_retrieval_enabled)
 
         # Local storage settings
         if "local_storage" in config_data:
@@ -319,32 +337,38 @@ class ConfigLoader:
         return {
             "templates": {
                 "json": {
-                    "template": "examples of how to create a JSON table configuration files in Genericsuite",
+                    "template": "examples of how to create a JSON table"
+                    + " configuration files in Genericsuite",
                     "file_type_filter": "json",
                     "priority": 1
                 },
                 "langchain": {
-                    "template": "examples of how to create a Python Langchain Tool in Genericsuite",
+                    "template": "examples of how to create a Python Langchain"
+                    + " Tool in Genericsuite",
                     "file_type_filter": "py",
                     "priority": 1
                 },
                 "mcp": {
-                    "template": "examples of how to create a MCP server tool in Genericsuite",
+                    "template": "examples of how to create a MCP server"
+                    + "tool in Genericsuite",
                     "file_type_filter": "py",
                     "priority": 1
                 },
                 "frontend": {
-                    "template": "examples of how to create frontend code in Genericsuite",
+                    "template": "examples of how to create frontend code"
+                    + " in Genericsuite",
                     "file_type_filter": "jsx",
                     "priority": 1
                 },
                 "backend": {
-                    "template": "examples of how to create backend code in Genericsuite",
+                    "template": "examples of how to create backend code"
+                    + " in Genericsuite",
                     "file_type_filter": "py",
                     "priority": 1
                 },
                 "generic": {
-                    "template": "examples and rules for creating code in Genericsuite",
+                    "template": "examples and rules for creating code"
+                    + " in Genericsuite",
                     "file_type_filter": None,
                     "priority": 0
                 }
@@ -354,4 +378,4 @@ class ConfigLoader:
     def reload_config(self) -> None:
         """Clear configuration cache to force reload."""
         self._config_cache.clear()
-        logger.info("Configuration cache cleared")
+        _ = DEBUG and log_debug("Configuration cache cleared")
