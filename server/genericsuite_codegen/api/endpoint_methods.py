@@ -24,7 +24,7 @@ from .types import (
     GeneratedFilesResponse,
     FilePackage,
     SearchQuery,
-    SearchResponse,
+    # SearchResponse,
     Statistics,
     HealthResponse,
 )
@@ -912,18 +912,19 @@ class EndpointMethods:
             query: Search query.
 
         Returns:
-            Dict[str, str]: Search results as result=SearchResponse().
+            Dict[str, str]: Search results as
+                result=KnowledgeBaseSearchResults().
         """
         try:
-            import time
-            start_time = time.time()
+            # import time
+            # start_time = time.time()
 
             # Use the knowledge base tool for search
             from genericsuite_codegen.agent.tools import KnowledgeBaseTool
             kb_tool = KnowledgeBaseTool()
 
             # Perform search
-            results = await kb_tool.search_similar_documents(
+            results = kb_tool.search_similar_documents(
                 query.query,
                 limit=query.limit,
                 file_type_filter=query.file_type_filter,
@@ -931,15 +932,16 @@ class EndpointMethods:
                 translate_path=translate_path
             )
 
-            execution_time = time.time() - start_time
+            return std_response(result=results)
 
-            return std_response(
-                result=SearchResponse(
-                    results=results,
-                    total_results=len(results),
-                    query=query.query,
-                    execution_time=execution_time
-                ))
+            # execution_time = time.time() - start_time
+            # return std_response(
+            #     result=SearchResponse(
+            #         results=results,
+            #         total_results=results.total_results,
+            #         query=query.query,
+            #         execution_time=execution_time
+            #     ))
 
         except Exception as e:
             log_error(f"Knowledge base search failed: {e}")

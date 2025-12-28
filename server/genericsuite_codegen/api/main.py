@@ -669,7 +669,7 @@ def setup_routes(app: FastAPI) -> None:
 
     @app.post(
         EP_PREFIX + "/search",
-        # response_model=SearchResponse,
+        # response_model=KnowledgeBaseSearchResults,
         tags=["Knowledge Base"]
     )
     async def search_knowledge_base(query: SearchQuery):
@@ -680,7 +680,7 @@ def setup_routes(app: FastAPI) -> None:
             query: Search query parameters.
 
         Returns:
-            SearchResponse: Search results.
+            KnowledgeBaseSearchResults: Search results.
         """
         result = result_wrapper(await methods.search_knowledge_base(
             query, translate_path=True))

@@ -3,7 +3,7 @@
 # 2025-12-24 | CR
 
 print_debug() {
-    if [ "${BATCH_SERVER_DEBUG}" = "1" ]; then
+    if [ "${BATCH_SERVER_SCRIPT_DEBUG}" = "1" ]; then
         echo "$1"
     fi
 }
@@ -19,6 +19,7 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 cd "${SCRIPT_DIR}"
 
 export BATCH_SERVER_DEBUG=0
+export BATCH_SERVER_SCRIPT_DEBUG=0
 BATCH_RUN_USING_POETRY=1
 
 # .env file read
@@ -26,7 +27,7 @@ if [ -f "${SCRIPT_DIR}/../.env" ]; then
     print_debug "🔍 Reading .env file..."
     set -o allexport; . "${SCRIPT_DIR}/../.env"; set +o allexport ;
 else
-    print_debug "❌ .env file not found. Please create one."
+    echo "❌ .env file not found. Please create one."
     exit 1
 fi
 

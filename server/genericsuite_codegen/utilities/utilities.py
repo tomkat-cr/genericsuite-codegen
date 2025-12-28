@@ -24,12 +24,18 @@ from genericsuite_codegen.utilities.rate_limiter import RateLimiter
 from genericsuite_codegen.utilities.app_logger import (
     log_debug,
 )
+from genericsuite_codegen.document_processing.embeddings import (
+    EMBEDDINGS_PROVIDER,
+    EMBEDDINGS_MODEL,
+    get_embeddings_dimension,
+)
 
 DEBUG = False
 
 BASE_LOCAL_PATH = os.getenv("BASE_LOCAL_PATH", '')
 ALT_BASE_LOCAL_PATH = os.getenv("ALT_BASE_LOCAL_PATH", '')
 BASE_WEB_URL = os.getenv("BASE_WEB_URL", '')
+TEMP_BASE_WEB_URL = os.getenv("TEMP_BASE_WEB_URL")
 
 
 def std_response(
@@ -209,14 +215,19 @@ def get_embedding_config() -> Dict[str, Any]:
     Returns:
         Dict[str, Any]: Embedding configuration.
     """
+    dimension = get_embeddings_dimension()
+    log_debug(
+        ">> utilities.py | get_embedding_config | "
+        + f"Provider: {EMBEDDINGS_PROVIDER} | Model: {EMBEDDINGS_MODEL}"
+        + f" | Dimension: {dimension}")
     return {
-        "provider": os.getenv("EMBEDDINGS_PROVIDER", "openai"),
-        "model": os.getenv("EMBEDDINGS_MODEL", "text-embedding-ada-002"),
+        "provider": EMBEDDINGS_PROVIDER,
+        "model": EMBEDDINGS_MODEL,
         "api_key": (
             os.getenv("OPENAI_API_KEY")
             if os.getenv("EMBEDDINGS_PROVIDER", "openai") == "openai"
             else os.getenv("HF_TOKEN")),
-        "dimension": int(os.getenv("EMBEDDINGS_DIMENSION", "1536"))
+        "dimension": dimension
     }
 
 
@@ -635,16 +646,22 @@ def local_path_to_url(source: str, is_url: bool = True) -> str:
     Returns:
         str: Web URL.
     """
-    content = source.replace(BASE_LOCAL_PATH, BASE_WEB_URL)
-    content = content.replace(ALT_BASE_LOCAL_PATH, BASE_WEB_URL)
+    new_base_web_url = TEMP_BASE_WEB_URL if TEMP_BASE_WEB_URL else BASE_WEB_URL
+    content = source.replace(BASE_LOCAL_PATH, new_base_web_url)
+    content = content.replace(ALT_BASE_LOCAL_PATH, new_base_web_url)
     if is_url:
+        if content.endswith('/index.md'):
+            content = content.replace('/index.md', '')
+        if content.endswith('/README.md'):
+            content = content.replace('/README.md', '')
         if content.endswith('.md'):
-            content = content.replace('.md', '.html')
+            content = content.replace('.md', '')
     else:
         # Replace all that starts with BASE_WEB_URL, ends with .md and has
         # a "/" before the .md
-        content = re.sub(r'^' + re.escape(BASE_WEB_URL) +
-                         r'(/.*?)\.md$', BASE_WEB_URL + r'\1.html', content)
+        content = re.sub(r'^' + re.escape(new_base_web_url) +
+                         r'(/.*?)\.md$', new_base_web_url + r'\1.html',
+                         content)
     return content
 
 

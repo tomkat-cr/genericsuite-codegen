@@ -67,6 +67,9 @@ start:
 dev:
 	npm run dev
 
+dev-local-basecamp:
+	TEMP_BASE_WEB_URL="http://127.0.0.1:8015" make dev
+
 clean:
 	npm run clean
 	@echo ""

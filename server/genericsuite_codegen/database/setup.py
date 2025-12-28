@@ -29,8 +29,23 @@ from genericsuite_codegen.utilities.app_logger import (
     log_error,
 )
 from genericsuite_codegen.document_processing.types import EmbeddedChunk
+from genericsuite_codegen.document_processing.embeddings \
+    import get_embeddings_dimension
 
 DEBUG = False
+
+
+APP_DB_URI = os.getenv("APP_DB_URI", "mongodb://localhost:27017/")
+APP_DB_NAME = os.getenv("APP_DB_NAME", "genericsuite_codegen")
+
+MONGODB_MAX_POOL_SIZE = int(os.getenv("MONGODB_MAX_POOL_SIZE", "10"))
+MONGODB_MIN_POOL_SIZE = int(os.getenv("MONGODB_MIN_POOL_SIZE", "1"))
+MONGODB_MAX_IDLE_TIME_MS = int(os.getenv("MONGODB_MAX_IDLE_TIME_MS", "30000"))
+MONGODB_SERVER_SELECTION_TIMEOUT_MS = int(
+    os.getenv("MONGODB_SERVER_SELECTION_TIMEOUT_MS", "5000"))
+
+SEARCH_SIMILAR_LIMIT = int(os.getenv("SEARCH_SIMILAR_LIMIT", "5"))
+KB_STATS_RECENT_DOCS_LIMIT = int(os.getenv("KB_STATS_RECENT_DOCS_LIMIT", "5"))
 
 
 @dataclass
@@ -70,12 +85,11 @@ class DatabaseManager:
             mongodb_uri: MongoDB connection URI. If None, reads
             from environment.
         """
-        self.mongodb_uri = mongodb_uri or os.getenv(
-            "APP_DB_URI", "mongodb://localhost:27017/"
-        )
+        self.mongodb_uri = APP_DB_URI
+        self.db_name = APP_DB_NAME
+
         self.client: Optional[MongoClient] = None
         self.database: Optional[Database] = None
-        self.db_name = os.getenv("APP_DB_NAME", "genericsuite_codegen")
 
         # Collection names
         self.knowledge_base_collection = "knowledge_base"
@@ -83,13 +97,10 @@ class DatabaseManager:
         self.users_collection = "users"
 
         # Connection pool settings
-        self.max_pool_size = int(os.getenv("MONGODB_MAX_POOL_SIZE", "10"))
-        self.min_pool_size = int(os.getenv("MONGODB_MIN_POOL_SIZE", "1"))
-        self.max_idle_time_ms = int(os.getenv("MONGODB_MAX_IDLE_TIME_MS",
-                                              "30000"))
-        self.server_selection_timeout_ms = int(
-            os.getenv("MONGODB_SERVER_SELECTION_TIMEOUT_MS", "5000")
-        )
+        self.max_pool_size = MONGODB_MAX_POOL_SIZE
+        self.min_pool_size = MONGODB_MIN_POOL_SIZE
+        self.max_idle_time_ms = MONGODB_MAX_IDLE_TIME_MS
+        self.server_selection_timeout_ms = MONGODB_SERVER_SELECTION_TIMEOUT_MS
 
     def connect(self) -> None:
         """
@@ -245,6 +256,11 @@ class DatabaseManager:
 
         self.create_indexes(collection, indexes)
 
+        dimension = get_embeddings_dimension()
+        _ = DEBUG and log_debug(
+            ">> setup.py | _initialize_knowledge_base_collection | "
+            + f"Embeddings dimension: {dimension}")
+
         # Create vector search index for embeddings
         # Note: This requires MongoDB Atlas or MongoDB 6.0+ with vector search
         # enabled
@@ -257,8 +273,7 @@ class DatabaseManager:
                         {
                             "type": "vector",
                             "path": "embedding",
-                            "numDimensions": 384,  # Default for
-                                                   # gte-small model
+                            "numDimensions": dimension,
                             "similarity": "cosine",
                         }
                     ]
@@ -417,7 +432,7 @@ class DatabaseManager:
     def search_similar(
         self,
         query_embedding: List[float],
-        limit: int = 5,
+        limit: int = SEARCH_SIMILAR_LIMIT,
         file_type_filter: Optional[str] = None,
     ) -> List[SearchResult]:
         """
@@ -736,7 +751,8 @@ class DatabaseManager:
             file_types = list(collection.aggregate(file_type_pipeline))
 
             # Get recent documents
-            recent_docs = collection.find().sort("created_at", -1).limit(5)
+            recent_docs = collection.find().sort("created_at", -1).limit(
+                KB_STATS_RECENT_DOCS_LIMIT)
             recent_paths = [doc["path"] for doc in recent_docs]
 
             return {

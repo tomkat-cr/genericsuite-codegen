@@ -10,5 +10,6 @@ class IngestionStatus(Enum):
     CHUNKING = "chunking"
     GENERATING_EMBEDDINGS = "generating_embeddings"
     STORING_VECTORS = "storing_vectors"
+    COPYING_FILES = "copying_files"
     COMPLETED = "completed"
     FAILED = "failed"

@@ -36,8 +36,9 @@ from .types import (
     IngestionRepositoryInfoLastCommit,
 )
 
-DEBUG = False
+DEBUG = True
 
+BASE_LOCAL_PATH = os.getenv("BASE_LOCAL_PATH", '')
 PROGRESS_FILE_DIR = os.getenv("SERVER_PROGRESS_FILE_DIR",
                               os.getenv("LOCAL_REPO_DIR", "/tmp"))
 PROGRESS_FILE_PATH = PROGRESS_FILE_DIR + "/ingestion_progress.json"
@@ -207,7 +208,7 @@ class DocumentIngestionOrchestrator:
         self.progress = IngestionProgress(
             status=IngestionStatus.NOT_STARTED,
             current_step="Initializing",
-            total_steps=6,  # clone, process, chunk, embed, store, complete
+            total_steps=7,  # clone, process, chunk, embed, store, copy, complete  # noqa: E501
             completed_steps=0
         )
 
@@ -305,12 +306,20 @@ class DocumentIngestionOrchestrator:
             documents = []
             files_to_process = self.processor_manager.get_all_files()
 
+            _ = DEBUG and log_debug(
+                "DocumentIngestionOrchestrator | process_files"
+                f" | BASE_LOCAL_PATH: {BASE_LOCAL_PATH}")
+
             for i, file_path in enumerate(files_to_process):
                 self._update_progress(
                     current_file=str(file_path),
                     processed_files=i
                 )
-
+                if not f"{file_path}".startswith(BASE_LOCAL_PATH):
+                    _ = DEBUG and log_debug(
+                        "DocumentIngestionOrchestrator | process_files"
+                        f" | Skipping file: {file_path}")
+                    continue
                 try:
                     document = self.processor_manager.process_file(file_path)
                     if document:
@@ -447,6 +456,74 @@ class DocumentIngestionOrchestrator:
             )
             return False
 
+    def copy_files_to_destination(self) -> bool:
+        """Copy files to destination directories."""
+        self._update_progress(
+            status=IngestionStatus.COPYING_FILES,
+            current_step="Copying files to destination"
+        )
+
+        try:
+            project_base_path = os.path.dirname(
+                os.path.dirname(
+                    os.path.dirname(
+                        os.path.dirname(
+                            os.path.abspath(__file__)))))
+
+            _ = DEBUG and log_debug(
+                "copy_files_to_destination | Copying files from"
+                f" '{self.local_dir}' to '{project_base_path}'")
+
+            # Process files
+            files_to_process = [
+                {
+                    "source": "Configuration-Guide/CrudEditorConfigInterface.ts",  # noqa: E501
+                    "destination": "ui/public/CrudEditorConfigInterface.ts"
+                },
+                {
+                    "source": "Configuration-Guide/crud_editor_config_classes.py",  # noqa: E501
+                    "destination": "server/genericsuite_codegen/agent/crud_editor_config_classes.py"  # noqa: E501
+                },
+            ]
+
+            # Get file statistics
+            self._update_progress(
+                total_files=len(files_to_process)
+            )
+
+            for i, src_dest in enumerate(files_to_process):
+                self._update_progress(
+                    current_file=str(src_dest['source']),
+                    processed_files=i
+                )
+
+                try:
+                    # Copy file
+                    src_path = BASE_LOCAL_PATH + "/" + src_dest['source']
+                    dest_path = project_base_path + \
+                        "/" + src_dest['destination']
+                    shutil.copyfile(src_path, dest_path)
+                except Exception as e:
+                    log_warning(
+                        f"Error copying file {src_path} to {dest_path}: {e}")
+
+            self._update_progress(
+                processed_files=len(files_to_process),
+                increment_completed=True
+            )
+
+            _ = DEBUG and log_debug(
+                f"Copied {len(files_to_process)} files")
+            return True
+
+        except Exception as e:
+            log_error(f"Error processing files: {e}")
+            self._update_progress(
+                status=IngestionStatus.FAILED,
+                error_message=f"Error processing files: {e}"
+            )
+            return []
+
     def run_full_ingestion(self, force_refresh: bool = True) -> Dict[str, Any]:
         """
         Run the complete ingestion workflow.
@@ -464,7 +541,7 @@ class DocumentIngestionOrchestrator:
             # Step 1: Clean up existing vectors if force refresh
             if force_refresh:
                 _ = DEBUG and log_debug(
-                    "run_full_ingestion | Step 1/6: Cleaning up existing"
+                    "run_full_ingestion | Step 1/7: Cleaning up existing"
                     " vectors...")
                 if not self.cleanup_existing_vectors():
                     return self._get_failure_result(
@@ -472,40 +549,48 @@ class DocumentIngestionOrchestrator:
 
             # Step 2: Clone repository
             _ = DEBUG and log_debug(
-                "run_full_ingestion | Step 2/6: Cloning repository...")
+                "run_full_ingestion | Step 2/7: Cloning repository...")
             if not self.clone_repository(force_refresh):
                 return self._get_failure_result("Failed to clone repository")
 
             # Step 3: Process files
             _ = DEBUG and log_debug(
-                "run_full_ingestion | Step 3/6: Processing files...")
+                "run_full_ingestion | Step 3/7: Processing files...")
             documents = self.process_files()
             if not documents:
                 return self._get_failure_result("No documents processed")
 
             # Step 4: Chunk documents
             _ = DEBUG and log_debug(
-                "run_full_ingestion | Step 4/6: Chunking documents...")
+                "run_full_ingestion | Step 4/7: Chunking documents...")
             chunks = self.chunk_documents(documents)
             if not chunks:
                 return self._get_failure_result("No chunks created")
 
             # Step 5: Generate embeddings
             _ = DEBUG and log_debug(
-                "run_full_ingestion | Step 5/6: Generating embeddings...")
+                "run_full_ingestion | Step 5/7: Generating embeddings...")
             embedded_chunks = self.generate_embeddings(chunks)
             if not embedded_chunks:
                 return self._get_failure_result("No embeddings generated")
 
             # Step 6: Store vectors
             _ = DEBUG and log_debug(
-                "run_full_ingestion | Step 6/6: Storing vectors...")
+                "run_full_ingestion | Step 6/7: Storing vectors...")
             if not self.store_vectors(embedded_chunks):
                 return self._get_failure_result("Failed to store vectors")
 
+            # Bonus task: Copy files to destination
+            _ = DEBUG and log_debug(
+                "run_full_ingestion | "
+                "Step 7/7: Copying files to destination...")
+            if not self.copy_files_to_destination():
+                return self._get_failure_result(
+                    "Failed to copy files to destination")
+
             # Complete
             _ = DEBUG and log_debug(
-                "run_full_ingestion | Step 7: Ingestion completed "
+                "run_full_ingestion | Step 8: Ingestion completed "
                 "successfully")
             self.progress.completed_at = datetime.now()
             self._update_progress(

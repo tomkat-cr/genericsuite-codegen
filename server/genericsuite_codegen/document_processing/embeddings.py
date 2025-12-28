@@ -34,7 +34,10 @@ from .types import (
     EmbeddedChunk,
 )
 
-DEBUG = False
+DEBUG = True
+
+EMBEDDINGS_PROVIDER = os.getenv('EMBEDDINGS_PROVIDER', 'openai')
+EMBEDDINGS_MODEL = os.getenv('EMBEDDINGS_MODEL', 'text-embedding-3-small')
 
 
 class EmbeddingProvider(ABC):
@@ -237,7 +240,7 @@ class HuggingFaceEmbeddingProvider(EmbeddingProvider):
         self.model_name = model
         _ = DEBUG and log_debug(
             "Initializing HuggingFace embedding provider with "
-            f"model: {model}")
+            f"model: '{model}'")
 
         # Determine device
         if device is None:
@@ -371,8 +374,8 @@ class EmbeddingGenerator:
             raise ValueError(f"Unknown embedding provider: {provider}")
 
         _ = DEBUG and log_debug(
-            f"Initialized {provider} embedding provider with "
-            f"model {model}")
+            f"Initialized '{provider}' embedding provider with "
+            f"model: '{model}'")
 
     def generate_embeddings_for_chunks(self, chunks) -> List[EmbeddedChunk]:
         """
@@ -490,15 +493,12 @@ def create_embedding_generator(
 def get_available_providers() -> Dict[str, List[str]]:
     """Get available embedding providers and their models."""
     providers = {}
-
     if openai is not None:
         providers['openai'] = list(
             OpenAIEmbeddingProvider.MODEL_CONFIGS.keys())
-
     if SentenceTransformer is not None:
         providers['huggingface'] = list(
             HuggingFaceEmbeddingProvider.MODEL_CONFIGS.keys())
-
     return providers
 
 
@@ -531,3 +531,24 @@ async def generate_embeddings_async(
         return generator.generate_embeddings_for_chunks(chunks)
 
     return await loop.run_in_executor(None, _generate)
+
+
+def get_embeddings_model_dimension(provider: str, model: str) -> int:
+    """Get the dimension of embeddings for a specific provider and model."""
+    generator = EmbeddingGenerator(provider=provider, model=model)
+    return generator.get_embedding_dimension()
+
+
+def get_embeddings_dimension() -> int:
+    """
+    Get the dimension of embeddings for the configured provider
+    and model.
+    """
+    provider = EMBEDDINGS_PROVIDER
+    model = EMBEDDINGS_MODEL
+    dimension = get_embeddings_model_dimension(provider, model)
+    _ = DEBUG and log_debug(
+        ">> embeddings.py | get_embeddings_dimension "
+        + f"| Provider: {provider} | Model: {model} | Dimension: {dimension}"
+    )
+    return dimension

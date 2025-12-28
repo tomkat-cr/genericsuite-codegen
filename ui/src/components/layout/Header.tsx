@@ -1,6 +1,6 @@
+import { Code2, Menu, X } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Menu, X, Code2 } from 'lucide-react'
 
 export function Header() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
@@ -43,6 +43,12 @@ export function Header() {
             className="text-sm font-medium transition-colors hover:text-primary"
           >
             Code Generation
+          </Link>
+          <Link 
+            to="/config-validator" 
+            className="text-sm font-medium transition-colors hover:text-primary"
+          >
+            Config Validator
           </Link>
         </nav>
 
@@ -91,6 +97,13 @@ export function Header() {
               onClick={() => setIsMobileMenuOpen(false)}
             >
               Code Generation
+            </Link>
+            <Link 
+              to="/config-validator" 
+              className="px-3 py-2 text-sm font-medium rounded-md hover:bg-accent transition-colors"
+              onClick={() => setIsMobileMenuOpen(false)}
+            >
+              Config Validator
             </Link>
           </nav>
         </div>

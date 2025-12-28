@@ -442,13 +442,13 @@ class SearchResult(BaseModel):
         default_factory=dict, description="Additional metadata")
 
 
-class SearchResponse(BaseResponse):
-    """Search response model."""
-    results: List[SearchResult] = Field(description="Search results")
-    total_results: int = Field(description="Total number of results found")
-    query: str = Field(description="Original search query")
-    execution_time: float = Field(
-        description="Query execution time in seconds")
+# class SearchResponse(BaseResponse):
+#     """Search response model."""
+#     results: List[SearchResult] = Field(description="Search results")
+#     total_results: int = Field(description="Total number of results found")
+#     query: str = Field(description="Original search query")
+#     execution_time: float = Field(
+#         description="Query execution time in seconds")
 
 
 class KnowledgeBaseStatistics(BaseModel):

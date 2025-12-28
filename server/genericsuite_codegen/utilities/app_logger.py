@@ -15,7 +15,7 @@ app_logs: Union[logging.Logger, None] = None
 
 def is_local_service() -> bool:
     """Check if the service is running locally"""
-    return os.getenv("APP_ENV", "development") == "development"
+    return os.getenv("APP_STAGE", "dev") == "dev"
 
 
 def log_config(
@@ -53,6 +53,7 @@ def log_config(
     logging.getLogger("asyncio").setLevel(logging.WARNING)
     logging.getLogger("selectors").setLevel(logging.WARNING)
     logging.getLogger("gitpython").setLevel(logging.WARNING)
+    logging.getLogger("pypdf").setLevel(logging.WARNING)
     logging.getLogger("openai").setLevel(logging.WARNING)
     logging.getLogger("pymongo").setLevel(logging.WARNING)
 
@@ -77,12 +78,12 @@ def _get_logger() -> logging.Logger:
 
 
 def db_stamp() -> str:
-    db_engine = os.environ.get("APP_DB_ENGINE", "MONGODB")
+    db_engine = os.getenv("APP_DB_ENGINE", "MONGODB")
     if db_engine == "DYNAMODB":
         response = f"{db_engine}|" + \
-            f"{os.environ.get('DYNAMDB_PREFIX', 'No-Prefix')}"
+            f"{os.getenv('DYNAMDB_PREFIX', 'No-Prefix')}"
     else:
-        response = f"{db_engine}|{os.environ.get('APP_DB_NAME')}"
+        response = f"{db_engine}|{os.getenv('APP_DB_NAME')}"
     if is_local_service():
         response += "|LOCAL"
     else:

@@ -28,6 +28,7 @@ from genericsuite_codegen.utilities.app_logger import (
     log_debug,
     log_warning,
     log_error,
+    log_info,
 )
 
 from .types import AgentConfig, QueryRequest, AgentContext, AgentResponse
@@ -36,17 +37,18 @@ from .tools import (
     KnowledgeBaseTool,
     validate_search_query,
     format_sources_for_attribution,
-    DEFAULT_MAX_CONTEXT_LENGTH
+    CONTEXT_DEFAULT_MAX_LENGTH
 )
 from .enhanced_search_types import EnhancedSearchConfig
 from .search_templates import SearchTemplateManager
 from .prompts import get_prompt_manager
+
 from .patch_openai_service_tier import patch_openai_service_tier
 from .patch_tokenizers import patch_tokenizers
 from .logfire import configure_logfire
 
 
-DEBUG = True
+DEBUG = False
 DEBUG_DETAILED = False
 
 
@@ -123,7 +125,7 @@ class GenericSuiteAgent:
 
         agent_config = AgentConfig(**config_args)
         _ = DEBUG and log_debug(
-            f"Agent - Config: {agent_config}"
+            f"Agent - Default config: {agent_config}"
         )
         return agent_config
 
@@ -357,7 +359,7 @@ class GenericSuiteAgent:
         self.config.base_url = model_kwargs["base_url"]
 
         _ = DEBUG and log_debug(f"Agent - Model kwargs: {model_kwargs}"
-                                + "\nInference Args: {self.inference_args}")
+                                + f"\nInference Args: {self.inference_args}")
 
         return OpenAIChatModel(
             self.config.model_name,
@@ -526,7 +528,10 @@ class GenericSuiteAgent:
             request: Query request.
 
         Returns:
-            Tuple[str, List[str]]: Context string and source paths.
+            Tuple[str, List[str]]: context, sources, raw_results
+                Formatted context string
+                List of sources (only the document paths)
+                Raw (KB search) results.
         """
         try:
             # Determine file type filter based on task type
@@ -682,7 +687,8 @@ class GenericSuiteAgent:
         # Extract token usage if available
         token_usage = None
         if hasattr(result, "usage") and result.usage:
-            _ = DEBUG and log_debug(
+            # _ = DEBUG and log_debug(
+            log_info(
                 f">> Agent | _format_response | Token usage: {result.usage}")
             token_usage = {
                 "prompt_tokens": getattr(result.usage, "prompt_tokens", 0),
@@ -1027,7 +1033,7 @@ def create_enhanced_search_config_from_env() -> EnhancedSearchConfig:
             max_context_length=int(
                 os.getenv(
                     "ENHANCED_SEARCH_MAX_CONTEXT_LENGTH", str(
-                        DEFAULT_MAX_CONTEXT_LENGTH)
+                        CONTEXT_DEFAULT_MAX_LENGTH)
                 )
             ),
             fallback_enabled=os.getenv(

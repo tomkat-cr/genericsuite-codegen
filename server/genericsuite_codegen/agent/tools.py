@@ -1,10 +1,12 @@
 """
-Knowledge base search tools for the GenericSuite CodeGen AI agent.
+Knowledge base search and code generation tools for the
+GenericSuite CodeGen AI agent.
 
 This module provides tools for vector similarity search, context retrieval,
-and source attribution for the Pydantic AI agent.
+source attribution and Python/React code generation.
 """
 from typing import List, Dict, Any, Optional, Tuple
+import os
 
 from pydantic_ai import Tool
 
@@ -64,7 +66,11 @@ DEBUG = False
 
 # Knowledge Base Tools
 
-DEFAULT_MAX_CONTEXT_LENGTH = 10000
+CONTEXT_DEFAULT_MAX_LENGTH = os.getenv(
+    "ENHANCED_SEARCH_MAX_CONTEXT_LENGTH", os.getenv(
+        "CONTEXT_DEFAULT_MAX_LENGTH", "10000"
+    )
+)
 
 
 class KnowledgeBaseTool:
@@ -368,7 +374,7 @@ class KnowledgeBaseTool:
     def get_context_for_generation(
         self,
         query: str,
-        max_context_length: int = DEFAULT_MAX_CONTEXT_LENGTH,
+        max_context_length: int = CONTEXT_DEFAULT_MAX_LENGTH,
         file_type_filter: Optional[str] = None,
         limit: int = 10,
         enable_dual_search: bool = True,
@@ -464,15 +470,6 @@ class KnowledgeBaseTool:
                     limit=limit
                 )
 
-            # Rank results by relevance
-            ranked_context = self.rank_context_by_relevance(
-                search_results, query)
-
-            # Build context string within length limits
-            context_parts = []
-            current_length = 0
-            sources = []
-
             # Add context information about dual search
             if dual_result.contextual_query:
                 context_header = (
@@ -492,45 +489,13 @@ class KnowledgeBaseTool:
                     f"Relevant context for: {query}\n" +
                     "=" * 50 + "\n\n")
 
-            header_length = len(context_header)
-            available_length = max_context_length - header_length
-
-            for context in ranked_context:
-                # Format context entry
-                source_info = f"Source: {context.source_path}"
-                content_with_source = f"{source_info}\n{context.content}\n"
-
-                # Check if adding this context would exceed the limit
-                if (current_length + len(content_with_source) >
-                        available_length):
-                    # Try to fit a truncated version
-                    remaining_space = (available_length -
-                                       current_length - len(source_info) - 20)
-                    if remaining_space > 100:
-                        # Only add if we have reasonable space
-                        truncated_content = (
-                            context.content[:remaining_space] + "...")
-                        context_parts.append(
-                            f"{source_info}\n{truncated_content}\n")
-                        sources.append(context.source_path)
-                    break
-
-                context_parts.append(content_with_source)
-                sources.append(context.source_path)
-                current_length += len(content_with_source)
-
-            # Join all context parts
-            formatted_context = "\n---\n".join(context_parts)
-            final_context = context_header + formatted_context
-
-            # Remove duplicate sources and include dual search results
-            unique_sources = list(set(sources))
-
-            _ = DEBUG and log_debug(
-                f"Enhanced search returned {len(search_results)} "
-                f"results from {len(unique_sources)} sources")
-
-            return final_context, unique_sources, search_results
+            return self.get_content_sources_raw_results(
+                query=query,
+                context_header=context_header,
+                search_results=search_results,
+                max_context_length=max_context_length,
+                title="Enhanced search"
+            )
 
         except Exception as e:
             log_error(f"Enhanced context generation failed: {e}"
@@ -541,6 +506,60 @@ class KnowledgeBaseTool:
                 file_type_filter=file_type_filter,
                 limit=limit
             )
+
+    def get_content_sources_raw_results(
+        self,
+        query: str,
+        context_header: str,
+        search_results: List[SearchResult],
+        max_context_length: int,
+        title: str
+    ) -> Tuple[str, List[str]]:
+
+        # Rank results by relevance
+        ranked_context = self.rank_context_by_relevance(
+            search_results, query)
+
+        # Build context string within length limits
+        available_length = max_context_length - len(context_header)
+        context_parts = []
+        current_length = 0
+        sources = []
+
+        for context in ranked_context:
+            # Format context entry
+            source_info = f"Source: {context.source_path}"
+            content_with_source = f"{source_info}\n{context.content}\n"
+
+            # Check if adding this context would exceed the limit
+            if (current_length + len(content_with_source) >
+                    available_length):
+                # Try to fit a truncated version
+                remaining_space = (available_length -
+                                   current_length - len(source_info) - 20)
+                if remaining_space > 100:
+                    # Only add if we have reasonable space
+                    truncated_content = (
+                        context.content[:remaining_space] + "...")
+                    context_parts.append(
+                        f"{source_info}\n{truncated_content}\n")
+                    sources.append(context.source_path)
+                break
+
+            context_parts.append(content_with_source)
+            sources.append(context.source_path)
+            current_length += len(content_with_source)
+
+        # Join all context parts
+        formatted_context = "\n---\n".join(context_parts)
+        final_context = context_header + formatted_context
+
+        _ = DEBUG and log_debug(
+            f"{title} returned {len(search_results)} "
+            f"results from {len(list(set(sources)))} sources")
+
+        # Remove duplicate sources and include dual search results
+        return final_context, list(set(sources)), search_results
 
     def _get_standard_context_for_generation(
         self,
@@ -583,45 +602,54 @@ class KnowledgeBaseTool:
             for r in search_results.results
         ]
 
-        ranked_context = self.rank_context_by_relevance(raw_results, query)
+        context_header = f"Relevant context for: {query}\n" + "=" * 50 + "\n\n"
 
-        # Build context string within length limits
-        context_parts = []
-        current_length = 0
-        sources = []
+        return self.get_content_sources_raw_results(
+            query=query,
+            context_header=context_header,
+            search_results=raw_results,
+            max_context_length=max_context_length,
+            title="Standard search"
+        )
 
-        for context in ranked_context:
-            # Format context entry
-            source_info = f"Source: {context.source_path}"
-            content_with_source = f"{source_info}\n{context.content}\n"
+        # # Build context string within length limits
+        # ranked_context = self.rank_context_by_relevance(raw_results, query)
+        # context_parts = []
+        # current_length = 0
+        # sources = []
 
-            # Check if adding this context would exceed the limit
-            if current_length + len(content_with_source) > max_context_length:
-                # Try to fit a truncated version
-                remaining_space = max_context_length - current_length - \
-                    len(source_info) - 20
-                if remaining_space > 100:
-                    # Only add if we have reasonable space
-                    truncated_content = \
-                        context.content[:remaining_space] + "..."
-                    context_parts.append(
-                        f"{source_info}\n{truncated_content}\n")
-                    sources.append(context.source_path)
-                break
+        # for context in ranked_context:
+        #     # Format context entry
+        #     source_info = f"Source: {context.source_path}"
+        #     content_with_source = f"{source_info}\n{context.content}\n"
 
-            context_parts.append(content_with_source)
-            sources.append(context.source_path)
-            current_length += len(content_with_source)
+        #     # Check if adding this context would exceed the limit
+        #     if current_length + len(content_with_source) > \
+        #        max_context_length:
+        #         # Try to fit a truncated version
+        #         remaining_space = max_context_length - current_length - \
+        #             len(source_info) - 20
+        #         if remaining_space > 100:
+        #             # Only add if we have reasonable space
+        #             truncated_content = \
+        #                 context.content[:remaining_space] + "..."
+        #             context_parts.append(
+        #                 f"{source_info}\n{truncated_content}\n")
+        #             sources.append(context.source_path)
+        #         break
 
-        # Join all context parts
-        formatted_context = "\n---\n".join(context_parts)
+        #     context_parts.append(content_with_source)
+        #     sources.append(context.source_path)
+        #     current_length += len(content_with_source)
 
-        # Add summary header
-        header = f"Relevant context for: {query}\n" + "=" * 50 + "\n\n"
-        final_context = header + formatted_context
+        # # Join all context parts
+        # formatted_context = "\n---\n".join(context_parts)
 
-        # Remove duplicate sources
-        return final_context, list(set(sources)), raw_results
+        # # Add summary header
+        # final_context = context_header + formatted_context
+
+        # # Remove duplicate sources
+        # return final_context, list(set(sources)), raw_results
 
     def search_similar_documents(
         self,
@@ -706,7 +734,7 @@ class KnowledgeBaseTool:
         self,
         user_query: str,
         code_context: Optional[CodeGenerationContext] = None,
-        max_context_length: int = DEFAULT_MAX_CONTEXT_LENGTH,
+        max_context_length: int = CONTEXT_DEFAULT_MAX_LENGTH,
         file_type_filter: Optional[str] = None,
         limit: int = 10
     ) -> Optional[DualSearchResult]:
@@ -787,242 +815,201 @@ class JSONConfigGenerator:
 
     def _load_templates(self) -> None:
         """Load configuration templates and patterns."""
-        # Base table configuration template
-        self.table_template = {
+        # Frontend configuration template (based on FrontendCrudEditorConfig)
+        self.frontend_template = {
+            "baseUrl": "",
+            "title": "",
+            "name": "",
+            "component": "",
+            "dbApiUrl": "",
+            "fieldElements": [],
+            "mandatoryFilters": {},
+            "userIdFilter": False,
+            "type": "master_listing",
+            "dbListPreRead": [],
+            "validations": []
+        }
+
+        # Backend configuration template (based on BackendCrudEditorConfig)
+        self.backend_template = {
             "table_name": "",
-            "table_config": {
-                "id_field": "id",
-                "fields": {},
-                "validations": {},
-                "relationships": {},
-                "permissions": {
-                    "create": ["admin", "user"],
-                    "read": ["admin", "user"],
-                    "update": ["admin", "user"],
-                    "delete": ["admin"]
-                },
-                "ui_config": {
-                    "list_view": {
-                        "columns": [],
-                        "searchable_fields": [],
-                        "sortable_fields": []
-                    },
-                    "form_view": {
-                        "field_order": [],
-                        "required_fields": [],
-                        "hidden_fields": []
-                    }
-                }
-            }
+            "creation_pk_name": "id",
+            "projection_exclusion": [],
+            "email_verification": [],
+            "passwords": [],
+            "mandatory_fields": [],
+            "additional_query_params": []
         }
 
-        # Base form configuration template
-        self.form_template = {
-            "form_name": "",
-            "form_config": {
-                "fields": {},
-                "validation_rules": {},
-                "ui_layout": {
-                    "sections": [],
-                    "field_groups": {}
-                },
-                "submit_config": {
-                    "endpoint": "",
-                    "method": "POST",
-                    "success_message": "Form submitted successfully",
-                    "error_message": "Form submission failed"
-                }
-            }
-        }
-
-        # Common field types and their configurations
-        self.field_types = {
-            "string": {
-                "type": "string",
-                "max_length": 255,
-                "required": False,
-                "default": ""
-            },
-            "integer": {
-                "type": "integer",
-                "min_value": None,
-                "max_value": None,
-                "required": False,
-                "default": 0
-            },
-            "float": {
-                "type": "float",
-                "min_value": None,
-                "max_value": None,
-                "precision": 2,
-                "required": False,
-                "default": 0.0
-            },
-            "boolean": {
-                "type": "boolean",
-                "required": False,
-                "default": False
-            },
-            "date": {
-                "type": "date",
-                "format": "YYYY-MM-DD",
-                "required": False,
-                "default": None
-            },
-            "datetime": {
-                "type": "datetime",
-                "format": "YYYY-MM-DD HH:mm:ss",
-                "required": False,
-                "default": None
-            },
-            "email": {
-                "type": "email",
-                "max_length": 255,
-                "required": False,
-                "validation": "email_format"
-            },
-            "url": {
-                "type": "url",
-                "max_length": 500,
-                "required": False,
-                "validation": "url_format"
-            },
-            "text": {
-                "type": "text",
-                "max_length": 5000,
-                "required": False,
-                "default": ""
-            },
-            "select": {
-                "type": "select",
-                "options": [],
-                "multiple": False,
-                "required": False,
-                "default": None
-            },
-            "file": {
-                "type": "file",
-                "allowed_types": ["image/*", "application/pdf"],
-                "max_size": "10MB",
-                "required": False
-            }
-        }
-
-    def generate_table_config(self, requirements: str, table_name: str,
-                              include_validation: bool = True
-                              ) -> JSONConfigResult:
+    def generate_frontend_config(
+        self,
+        requirements: str,
+        name: str,
+    ) -> JSONConfigResult:
         """
-        Generate a GenericSuite table configuration.
+        Generate a GenericSuite Frontend CRUD Editor configuration.
+
+        Args:
+            requirements (str): Requirements for the editor.
+            name (str): Name of the component/editor.
+
+        Returns:
+            JSONConfigResult: Generated frontend configuration.
+        """
+        try:
+            context, sources, raw_results = \
+                self.kb_tool.get_context_for_generation(
+                    query="GenericSuite frontend " +
+                    f"configuration {requirements}",
+                    max_context_length=CONTEXT_DEFAULT_MAX_LENGTH,
+                    file_type_filter="json",
+                    enable_dual_search=True
+                )
+
+            fields = self._parse_field_requirements(requirements)
+
+            config = self.frontend_template.copy()
+            # Basic defaults
+            config["name"] = name
+            config["title"] = f"{name} Management"
+            config["component"] = f"{name}Editor"
+            config["baseUrl"] = name.lower()
+            config["dbApiUrl"] = name.lower()
+
+            # Map fields to Frontend FieldElements
+            field_elements = []
+            for field_name, field_def in fields.items():
+                field_elements.append(
+                    self._map_to_field_element(field_name, field_def))
+
+            config["fieldElements"] = field_elements
+
+            validation_notes = self._generate_validation_notes(
+                config, requirements)
+
+            examples = self._generate_config_examples(config, "frontend")
+
+            return JSONConfigResult(
+                configuration=config,
+                config_type="frontend",
+                validation_notes=validation_notes,
+                examples=examples,
+                sources=sources
+            )
+
+        except Exception as e:
+            log_error(f"Failed to generate frontend configuration: {e}")
+            raise RuntimeError(
+                f"Frontend configuration generation failed: {e}")
+
+    def generate_backend_config(
+        self,
+        requirements: str,
+        table_name: str,
+    ) -> JSONConfigResult:
+        """
+        Generate a GenericSuite Backend CRUD Editor configuration.
 
         Args:
             requirements: Requirements for the table.
-            table_name: Name of the table.
-            include_validation: Include validation rules.
+            table_name: Database table name.
 
         Returns:
-            JSONConfigResult: Generated table configuration.
+            JSONConfigResult: Generated backend configuration.
         """
         try:
-            # Get relevant context for table configurations
             context, sources, raw_results = \
                 self.kb_tool.get_context_for_generation(
-                    query=f"GenericSuite table configuration {requirements}",
-                    max_context_length=DEFAULT_MAX_CONTEXT_LENGTH,
-                    file_type_filter="json"
+                    query=f"GenericSuite backend configuration {requirements}",
+                    max_context_length=CONTEXT_DEFAULT_MAX_LENGTH,
+                    file_type_filter="json",
+                    enable_dual_search=True
                 )
 
-            # Parse requirements to extract fields and specifications
             fields = self._parse_field_requirements(requirements)
 
-            # Generate base configuration
-            config = self.table_template.copy()
+            config = self.backend_template.copy()
             config["table_name"] = table_name
-            config["table_config"]["fields"] = fields
 
-            # Add validation rules if requested
-            if include_validation:
-                config["table_config"]["validations"] = \
-                    self._generate_validation_rules(fields)
+            # Map fields to backend properties
+            password_fields = []
+            mandatory_fields = []
+            email_verification = []
 
-            # Configure UI settings
-            config["table_config"]["ui_config"] = self._generate_ui_config(
-                fields, table_name)
+            for field_name, field_def in fields.items():
+                if field_def.get("required"):
+                    mandatory_fields.append(field_name)
+                if field_def.get("type") == "email":
+                    email_verification.append(field_name)
+                if field_def.get("type") == "password":
+                    password_fields.append(field_name)
 
-            # Generate validation notes
+            config["mandatory_fields"] = mandatory_fields
+            if email_verification:
+                config["email_verification"] = email_verification
+            if password_fields:
+                config["passwords"] = password_fields
+
             validation_notes = self._generate_validation_notes(
                 config, requirements)
 
-            # Create examples
-            examples = self._generate_config_examples(config, "table")
+            examples = self._generate_config_examples(config, "backend")
 
             return JSONConfigResult(
                 configuration=config,
-                config_type="table",
+                config_type="backend",
                 validation_notes=validation_notes,
                 examples=examples,
                 sources=sources
             )
 
         except Exception as e:
-            log_error(f"Failed to generate table configuration: {e}")
-            raise RuntimeError(f"Table configuration generation failed: {e}")
+            log_error(f"Failed to generate backend configuration: {e}")
+            raise RuntimeError(f"Backend configuration generation failed: {e}")
 
-    def generate_form_config(self, requirements: str, form_name: str
-                             ) -> JSONConfigResult:
-        """
-        Generate a GenericSuite form configuration.
+    def _map_to_field_element(self, field_name: str, field_def: Dict[str, Any]
+                              ) -> Dict[str, Any]:
+        """Map internal field definition to Frontend FieldElement."""
 
-        Args:
-            requirements: Requirements for the form.
-            form_name: Name of the form.
+        field_type_map = {
+            "string": "text",
+            "text": "textarea",
+            "integer": "integer",
+            "float": "number",
+            # Boolean often handled as select or special component, default to
+            # integer or switch if available
+            "boolean": "integer",
+            "date": "date",
+            "datetime": "datetime-local",
+            "email": "email",
+            "url": "text",
+            "file": "text",  # File usually needs special handling
+            "select": "select"
+        }
 
-        Returns:
-            JSONConfigResult: Generated form configuration.
-        """
-        try:
-            # Get relevant context for form configurations
-            context, sources, raw_results = \
-                self.kb_tool.get_context_for_generation(
-                    query=f"GenericSuite form configuration {requirements}",
-                    max_context_length=DEFAULT_MAX_CONTEXT_LENGTH,
-                    file_type_filter="json"
-                )
+        internal_type = field_def.get("type", "string")
+        frontend_type = field_type_map.get(internal_type, "text")
 
-            # Parse requirements to extract form fields
-            fields = self._parse_field_requirements(requirements)
+        element = {
+            "name": field_name,
+            "label": field_name.replace("_", " ").title(),
+            "type": frontend_type,
+            "required": field_def.get("required", False),
+            "listing": True  # Default to showing in listing
+        }
 
-            # Generate base configuration
-            config = self.form_template.copy()
-            config["form_name"] = form_name
-            config["form_config"]["fields"] = fields
+        if internal_type == "select":
+            # For select, we might need options. The interface implies
+            # 'select_elements' might refer to a predefined list ID, or
+            # 'options' array if supported directly.
+            # The interface has 'select_elements?: string' (ID for predefined)
+            # We'll just set a placeholder compatible with typical usage
+            pass
 
-            # Add validation rules
-            config["form_config"]["validation_rules"] = \
-                self._generate_form_validation_rules(
-                fields)
+        if field_def.get("default") is not None:
+            element["default_value"] = field_def["default"]
 
-            # Configure UI layout
-            config["form_config"]["ui_layout"] = self._generate_form_layout(
-                fields, form_name)
-
-            # Generate validation notes
-            validation_notes = self._generate_validation_notes(
-                config, requirements)
-
-            # Create examples
-            examples = self._generate_config_examples(config, "form")
-
-            return JSONConfigResult(
-                configuration=config,
-                config_type="form",
-                validation_notes=validation_notes,
-                examples=examples,
-                sources=sources
-            )
-
-        except Exception as e:
-            log_error(f"Failed to generate form configuration: {e}")
-            raise RuntimeError(f"Form configuration generation failed: {e}")
+        return element
 
     def _parse_field_requirements(self, requirements: str) -> Dict[str, Any]:
         """
@@ -1121,125 +1108,6 @@ class JSONConfigGenerator:
             "type": ["standard", "premium", "basic", "advanced"]
         }
         return options_map.get(field_name, ["option1", "option2", "option3"])
-
-    def _generate_validation_rules(self, fields: Dict[str, Any]
-                                   ) -> Dict[str, Any]:
-        """Generate validation rules for table fields."""
-        validations = {}
-
-        for field_name, field_config in fields.items():
-            field_validations = []
-
-            if field_config.get("required"):
-                field_validations.append("required")
-
-            if field_config.get("max_length"):
-                field_validations.append(
-                    f"max_length:{field_config['max_length']}")
-
-            if field_config.get("min_value") is not None:
-                field_validations.append(
-                    f"min_value:{field_config['min_value']}")
-
-            if field_config.get("max_value") is not None:
-                field_validations.append(
-                    f"max_value:{field_config['max_value']}")
-
-            if field_config.get("type") == "email":
-                field_validations.append("email")
-
-            if field_config.get("type") == "url":
-                field_validations.append("url")
-
-            if field_validations:
-                validations[field_name] = field_validations
-
-        return validations
-
-    def _generate_form_validation_rules(self, fields: Dict[str, Any]
-                                        ) -> Dict[str, Any]:
-        """Generate validation rules for form fields."""
-        return self._generate_validation_rules(fields)  # Same logic for now
-
-    def _generate_ui_config(self, fields: Dict[str, Any], table_name: str
-                            ) -> Dict[str, Any]:
-        """Generate UI configuration for table."""
-        field_names = list(fields.keys())
-
-        # Determine which fields to show in list view
-        list_columns = []
-        searchable_fields = []
-        sortable_fields = []
-
-        for field_name, field_config in fields.items():
-            field_type = field_config.get("type", "string")
-
-            # Add to list view if it's a basic display field
-            if field_type in [
-                "string", "integer", "date", "boolean", "select"] \
-                    and len(list_columns) < 5:
-                list_columns.append(field_name)
-
-            # Add to searchable if it's text-based
-            if field_type in ["string", "text", "email"]:
-                searchable_fields.append(field_name)
-
-            # Add to sortable if it's a simple type
-            if field_type in ["string", "integer", "float", "date", "datetime",
-                              "boolean"]:
-                sortable_fields.append(field_name)
-
-        return {
-            "list_view": {
-                "columns": list_columns,
-                "searchable_fields": searchable_fields,
-                "sortable_fields": sortable_fields
-            },
-            "form_view": {
-                "field_order": field_names,
-                "required_fields": [name for name, config in fields.items()
-                                    if config.get("required")],
-                "hidden_fields": [name for name in field_names
-                                  if name.endswith("_at")]
-            }
-        }
-
-    def _generate_form_layout(self, fields: Dict[str, Any], form_name: str
-                              ) -> Dict[str, Any]:
-        """Generate UI layout for form."""
-        field_names = list(fields.keys())
-
-        # Group fields into logical sections
-        sections = []
-        current_section = {
-            "title": "Basic Information",
-            "fields": []
-        }
-
-        for field_name in field_names:
-            current_section["fields"].append(field_name)
-
-            # Create new section after every 5 fields
-            if len(current_section["fields"]) >= 5:
-                sections.append(current_section)
-                current_section = {
-                    "title": "Additional Information",
-                    "fields": []
-                }
-
-        # Add remaining fields
-        if current_section["fields"]:
-            sections.append(current_section)
-
-        return {
-            "sections": sections,
-            "field_groups": {
-                "basic": [name for name in field_names
-                          if not name.endswith("_at")],
-                "timestamps": [name for name in field_names
-                               if name.endswith("_at")]
-            }
-        }
 
     def _generate_validation_notes(self, config: Dict[str, Any],
                                    requirements: str) -> List[str]:
@@ -1525,30 +1393,19 @@ def create_json_config_generation_tool(kb_tool: KnowledgeBaseTool) -> Tool:
             JSONConfigResult: Generated configuration with validation notes
             and examples.
         """
-        if request.config_type == "table":
-            table_name = request.table_name or "generated_table"
-            return json_generator.generate_table_config(
-                requirements=request.requirements,
-                table_name=table_name,
-                include_validation=request.include_validation
-            )
-        elif request.config_type == "form":
-            form_name = request.table_name or "generated_form"
-            return json_generator.generate_form_config(
-                requirements=request.requirements,
-                form_name=form_name
-            )
-        else:
-            # For other config types, use table as default with modifications
-            config_name = request.table_name \
-                or f"generated_{request.config_type}"
-            result = json_generator.generate_table_config(
-                requirements=request.requirements,
-                table_name=config_name,
-                include_validation=request.include_validation
-            )
-            result.config_type = request.config_type
-            return result
+        config_name = request.table_name \
+            or f"generated_{request.config_type}"
+        frontend_config = json_generator.generate_frontend_config(
+            requirements=request.requirements,
+            name=config_name,
+            include_validation=request.include_validation
+        )
+        backend_config = json_generator.generate_backend_config(
+            requirements=request.requirements,
+            name=config_name,
+            include_validation=request.include_validation
+        )
+        return [frontend_config, backend_config]
 
     return Tool(generate_json_configuration, description=(
         "Generate GenericSuite JSON configurations for tables, forms, menus, "
@@ -1869,7 +1726,7 @@ def {function_name}({function_parameters}) -> {return_type}:
             context, sources, raw_results = \
                 self.kb_tool.get_context_for_generation(
                     query=f"GenericSuite Langchain tool {requirements}",
-                    max_context_length=DEFAULT_MAX_CONTEXT_LENGTH,
+                    max_context_length=CONTEXT_DEFAULT_MAX_LENGTH,
                     file_type_filter="py"
                 )
 
@@ -1953,7 +1810,7 @@ def {function_name}({function_parameters}) -> {return_type}:
             context, sources, raw_results = \
                 self.kb_tool.get_context_for_generation(
                     query=f"GenericSuite MCP tool FastMCP {requirements}",
-                    max_context_length=DEFAULT_MAX_CONTEXT_LENGTH,
+                    max_context_length=CONTEXT_DEFAULT_MAX_LENGTH,
                     file_type_filter="py"
                 )
 
@@ -2039,7 +1896,7 @@ def {function_name}({function_parameters}) -> {return_type}:
             context, sources, raw_results = \
                 self.kb_tool.get_context_for_generation(
                     query=f"GenericSuite utility function {requirements}",
-                    max_context_length=DEFAULT_MAX_CONTEXT_LENGTH,
+                    max_context_length=CONTEXT_DEFAULT_MAX_LENGTH,
                     file_type_filter="py"
                 )
 
@@ -2596,7 +2453,7 @@ export default {form_name};
                 self.kb_tool.get_context_for_generation(
                     query=f"GenericSuite React component {requirements} "
                     f"{component_type}",
-                    max_context_length=DEFAULT_MAX_CONTEXT_LENGTH,
+                    max_context_length=CONTEXT_DEFAULT_MAX_LENGTH,
                     file_type_filter="jsx"
                 )
 
@@ -3160,7 +3017,7 @@ logger = logging.getLogger(__name__)
                 self.kb_tool.get_context_for_generation(
                     query=f"GenericSuite {framework} {code_type} "
                     f"{requirements}",
-                    max_context_length=DEFAULT_MAX_CONTEXT_LENGTH,
+                    max_context_length=CONTEXT_DEFAULT_MAX_LENGTH,
                     file_type_filter="py"
                 )
 
@@ -4244,7 +4101,7 @@ if __name__ == "__main__":
             context, sources, raw_results = \
                 kb_tool.get_context_for_generation(
                     "How to create a GenericSuite table",
-                    max_context_length=DEFAULT_MAX_CONTEXT_LENGTH
+                    max_context_length=CONTEXT_DEFAULT_MAX_LENGTH
                 )
             print(f"Context length: {len(context)}")
             print(f"Sources: {sources}")

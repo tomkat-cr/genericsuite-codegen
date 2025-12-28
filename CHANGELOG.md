@@ -26,26 +26,32 @@ This project adheres to [Semantic Versioning](http://semver.org/) and [Keep a Ch
 - AI provider specific variables: OPENAI_API_KEY, OPENAI_MODEL_NAME, HF_TOKEN, HF_MODEL_NAME, GROQ_API_KEY, GROQ_MODEL_NAME, TOGETHER_API_KEY, TOGETHER_MODEL_NAME, OPENROUTER_API_KEY, OPENROUTER_MODEL_NAME, NVIDIA_API_KEY, NVIDIA_MODEL_NAME, XAI_API_KEY, XAI_MODEL_NAME, RHYMES_API_KEY, RHYMES_MODEL_NAME, and OLLAMA_MODEL_NAME.
 - Logfire integration.
 - Script to start and stop the Logfire Telemetry container.
+- CRUD editor JSON config files validation tool.
+- TEMP_BASE_WEB_URL envvar and "make dev-local-basecamp" to support path translation for sources using the local GenericSuite (Basecamp) web documentation.
+- DOCUMENT_RETRIEVAL_MAX_FILE_SIZE_MB envvar to limit the file size for retrieval.
 
 ### Changed
 - Rename "/knowledge-base/status" endpoint to "/update-knowledge-base/status".
 - Rename "/knowledge-base/progress" endpoint to "/update-knowledge-base/progress".
-- Rename MONGODB_URI and MONGODB_DB_NAME environment variables to APP_DB_URI and APP_DB_NAME.
-- Rename LLM_MODEL environment variable to LLM_MODEL_NAME.
+- Rename MONGODB_URI and MONGODB_DB_NAME envvars to APP_DB_URI and APP_DB_NAME.
+- Rename LLM_MODEL envvar to LLM_MODEL_NAME.
 - All logging is now configurable centralized in app_logger.py.
 - "utilities.py" moved from "server/genericsuite_codegen/ai" to "server/genericsuite_codegen/utilities".
 - "model_api" added to AgentConfig model.
 - Reduce noise from external (pymongo) and internal libraries (debug messages on uvicorn).
 - UI: Timestamps are now displayed in local time.
 - UI: task_type, model_used and token_usage are now displayed in the chat interface when debugging is enabled.
+- UI: "KnowledgeBasePage.tsx" was splited to separate components.
+- Ingestion: filter files from the cloned repo that are not under the "docs" directory (BASE_LOCAL_PATH). Also copy the files "CrudEditorConfigInterface.ts" and "crud_editor_config_classes.py" once the repo is updated.
+- Rename DEFAULT_MAX_CONTEXT_LENGTH envvar to CONTEXT_DEFAULT_MAX_LENGTH. 
 
 ### Fixed
-- Logger debug set correctly when DEBUG variable is set to 1.
+- Logger debug set correctly when DEBUG envvar is set to 1.
 - UI: API calls issue because of the additional "data" property in the response.
 
 ### Removed
-- LLM_API_KEY environment variable, replaced by AI provider specific variables.
-- MONGODB_HOST_NAME, MONGODB_HOST_PORT, MONGODB_USER, MONGODB_PASSWORD environment variables from .env.example file.
+- LLM_API_KEY envvar, replaced by AI provider specific variables.
+- MONGODB_HOST_NAME, MONGODB_HOST_PORT, MONGODB_USER, MONGODB_PASSWORD envvars from ".env.example" file.
 
 
 ## [1.3.0] - 2025-10-01

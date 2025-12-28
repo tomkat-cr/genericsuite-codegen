@@ -1,10 +1,17 @@
 from typing import List, Dict, Any, Optional
+import os
 from datetime import datetime
 import datetime as dt
 
 from dataclasses import dataclass
 from pydantic import BaseModel, Field
 
+
+CONTEXT_DEFAULT_MAX_LENGTH = os.getenv(
+    "ENHANCED_SEARCH_MAX_CONTEXT_LENGTH", os.getenv(
+        "CONTEXT_DEFAULT_MAX_LENGTH", "10000"
+    )
+)
 
 # Knowledge Base Tools
 
@@ -72,7 +79,7 @@ class JSONConfigRequest(BaseModel):
         default=True, description="Include example values and comments")
 
 
-class JSONConfigResult(BaseModel):
+class JSONConfigResultRecord(BaseModel):
     """Result model for JSON configuration generation."""
     configuration: Dict[str, Any] = Field(
         description="Generated JSON configuration")
@@ -83,6 +90,12 @@ class JSONConfigResult(BaseModel):
         default_factory=dict, description="Example configurations")
     sources: List[str] = Field(
         default_factory=list, description="Source documents used")
+
+
+class JSONConfigResult(BaseModel):
+    """Result model for JSON configuration generation."""
+    records: List[JSONConfigResultRecord] = Field(
+        description="List of JSON configuration records")
 
 
 # Create Context Retrieval Tool
@@ -270,7 +283,8 @@ class QueryRequest(BaseModel):
         default=None, description="Backend framework for code generation"
     )
     context_limit: int = Field(
-        default=4000, description="Maximum context length")
+        default=CONTEXT_DEFAULT_MAX_LENGTH,
+        description="Maximum context length")
     include_sources: bool = Field(
         default=True, description="Include source attribution in response"
     )

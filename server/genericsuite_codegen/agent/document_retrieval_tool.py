@@ -31,6 +31,9 @@ from .enhanced_search_logging import (
 
 DEBUG = False
 
+DOCUMENT_RETRIEVAL_MAX_FILE_SIZE_MB = int(getenv(
+    "DOCUMENT_RETRIEVAL_MAX_FILE_SIZE_MB", "10"))   # 10MB default
+
 
 class DocumentRetrievalTool:
     """
@@ -125,7 +128,7 @@ class DocumentRetrievalTool:
                 last_modified = datetime.fromtimestamp(stat_info.st_mtime)
 
                 # Check file size limits (10MB default)
-                max_size = 10 * 1024 * 1024  # 10MB
+                max_size = DOCUMENT_RETRIEVAL_MAX_FILE_SIZE_MB * 1024 * 1024
                 if file_size > max_size:
                     raise DocumentRetrievalError(
                         f"File too large: {file_size} bytes (max: {max_size})",
