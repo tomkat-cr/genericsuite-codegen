@@ -94,7 +94,7 @@ fi
 
 # MCP server port
 if [ -z "$MCP_SERVER_PORT" ]; then
-    export MCP_SERVER_PORT=8000
+    export MCP_SERVER_PORT=8072
 fi
 
 # MCP server host

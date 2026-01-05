@@ -6,11 +6,10 @@ and all API endpoints for the GenericSuite CodeGen RAG system.
 """
 from typing import Union
 import sys
-import os
 import asyncio
 from pathlib import Path
 
-from .types import (
+from genericsuite_codegen.api.types import (
     StandardGsResponse,
     StandardGsErrorResponse,
 )
@@ -20,13 +19,14 @@ from genericsuite_codegen.utilities.app_logger import (
     log_debug,
     set_app_logs,
 )
+from genericsuite_codegen.utilities.env_vars import get_envvar
 
 
-DEBUG = os.getenv("BATCH_SERVER_DEBUG", "0") == "1"
+DEBUG = get_envvar("BATCH_SERVER_DEBUG", "0") == "1"
 
 
 current_dir = Path(__file__).parent
-log_dir = os.getenv("SERVER_LOGS_DIR", f"{current_dir}/../..")
+log_dir = get_envvar("SERVER_LOGS_DIR", f"{current_dir}/../..")
 
 
 def result_wrapper(

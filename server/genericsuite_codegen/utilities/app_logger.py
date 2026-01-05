@@ -3,19 +3,21 @@ Logging utilities
 """
 
 from typing import Any, Union
-import os
 import sys
 import logging
 import datetime
+import traceback
 
-DEBUG = True
+from genericsuite_codegen.utilities.env_vars import get_envvar
+
+DEBUG = False
 
 app_logs: Union[logging.Logger, None] = None
 
 
 def is_local_service() -> bool:
     """Check if the service is running locally"""
-    return os.getenv("APP_STAGE", "dev") == "dev"
+    return get_envvar("APP_STAGE", "dev") == "dev"
 
 
 def log_config(
@@ -24,16 +26,16 @@ def log_config(
     debug: bool = DEBUG
 ) -> logging.Logger:
     """Logging configuration"""
-    logger_options = os.getenv("LOGGER_OPTIONS", "")
+    app_logger_options = get_envvar("APP_LOGGER_OPTIONS", "")
     logger = logging.getLogger(name if name else "")
     logger.propagate = False
     if debug:
         logger.setLevel(logging.DEBUG)
-        if "silent" not in logger_options:
+        if "silent" not in app_logger_options:
             print("Logger configured in DEBUG mode")
     else:
         logger.setLevel(logging.INFO)
-        if "silent" not in logger_options:
+        if "silent" not in app_logger_options:
             print("Logger configured in INFO mode")
     handler = logging.StreamHandler(sys.stdout)
     if log_file:
@@ -78,12 +80,12 @@ def _get_logger() -> logging.Logger:
 
 
 def db_stamp() -> str:
-    db_engine = os.getenv("APP_DB_ENGINE", "MONGODB")
+    db_engine = get_envvar("APP_DB_ENGINE", "MONGODB")
     if db_engine == "DYNAMODB":
         response = f"{db_engine}|" + \
-            f"{os.getenv('DYNAMDB_PREFIX', 'No-Prefix')}"
+            f"{get_envvar('DYNAMDB_PREFIX', 'No-Prefix')}"
     else:
-        response = f"{db_engine}|{os.getenv('APP_DB_NAME')}"
+        response = f"{db_engine}|{get_envvar('APP_DB_NAME')}"
     if is_local_service():
         response += "|LOCAL"
     else:
@@ -107,10 +109,18 @@ def log_debug(message: Any) -> str:
     return fmt_msg
 
 
-def log_info(message: Any) -> str:
+def log_info(message: Any, exc_info=False) -> str:
     """Register an Info log"""
     fmt_msg = formatted_message(message)
-    _get_logger().info("%s", fmt_msg)
+    log = _get_logger()
+    log.info("%s", fmt_msg)
+    if exc_info:
+        # Log the latest exception traceback
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        log.info(f"Exception type: {exc_type}")
+        log.info(f"Exception value: {exc_value}")
+        log.info("Traceback details:")
+        traceback.print_tb(exc_traceback)
     return fmt_msg
 
 

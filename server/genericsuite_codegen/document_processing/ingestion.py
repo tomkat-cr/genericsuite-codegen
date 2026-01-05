@@ -23,12 +23,17 @@ from genericsuite_codegen.utilities.app_logger import (
     log_warning,
     log_error,
 )
+from genericsuite_codegen.utilities.env_vars import get_envvar
+from genericsuite_codegen.utilities.utilities import get_last_url_element
 
-from .processors import DocumentProcessorManager, Document
-from .chunker import DocumentChunker, DocumentChunk, chunk_document
-from .embeddings import EmbeddingGenerator, EmbeddedChunk
-from .enums import IngestionStatus
-from .types import (
+from genericsuite_codegen.document_processing.processors import (
+    DocumentProcessorManager, Document)
+from genericsuite_codegen.document_processing.chunker import (
+    DocumentChunker, DocumentChunk, chunk_document)
+from genericsuite_codegen.document_processing.embeddings import (
+    EmbeddingGenerator, EmbeddedChunk)
+from genericsuite_codegen.document_processing.enums import IngestionStatus
+from genericsuite_codegen.document_processing.types import (
     IngestionProgress,
     IngestionRepositoryInfo,
     IngestionStatistics,
@@ -38,9 +43,9 @@ from .types import (
 
 DEBUG = True
 
-BASE_LOCAL_PATH = os.getenv("BASE_LOCAL_PATH", '')
-PROGRESS_FILE_DIR = os.getenv("SERVER_PROGRESS_FILE_DIR",
-                              os.getenv("LOCAL_REPO_DIR", "/tmp"))
+BASE_LOCAL_PATH = get_envvar("BASE_LOCAL_PATH", '')
+PROGRESS_FILE_DIR = get_envvar("SERVER_PROGRESS_FILE_DIR",
+                               get_envvar("LOCAL_REPO_DIR", "/tmp"))
 PROGRESS_FILE_PATH = PROGRESS_FILE_DIR + "/ingestion_progress.json"
 
 
@@ -198,6 +203,11 @@ class DocumentIngestionOrchestrator:
         self.chunking_strategy = chunking_strategy
         self.progress_callback = progress_callback
 
+        self.filename_exclusions = [
+            ".git",
+            "requirements.txt",
+        ]
+
         # Initialize components
         self.cloner = RepositoryCloner(local_dir)
         self.processor_manager = None
@@ -315,11 +325,20 @@ class DocumentIngestionOrchestrator:
                     current_file=str(file_path),
                     processed_files=i
                 )
+
                 if not f"{file_path}".startswith(BASE_LOCAL_PATH):
                     _ = DEBUG and log_debug(
                         "DocumentIngestionOrchestrator | process_files"
                         f" | Skipping file: {file_path}")
                     continue
+
+                file_name = get_last_url_element(str(file_path))
+                if file_name in self.filename_exclusions:
+                    _ = DEBUG and log_debug(
+                        "DocumentIngestionOrchestrator | process_files"
+                        f" | Skipping file: {file_path}")
+                    continue
+
                 try:
                     document = self.processor_manager.process_file(file_path)
                     if document:
@@ -592,8 +611,13 @@ class DocumentIngestionOrchestrator:
             _ = DEBUG and log_debug(
                 "run_full_ingestion | Step 8: Ingestion completed "
                 "successfully")
+
             self.progress.completed_at = datetime.now()
+            self.progress.total_files = len(documents)
+
             self._update_progress(
+                total_files=self.progress.total_files,
+                processed_files=self.progress.total_files,
                 status=IngestionStatus.COMPLETED,
                 current_step="Ingestion completed successfully",
                 increment_completed=True

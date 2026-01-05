@@ -18,14 +18,14 @@ if [ "${BATCH_SERVER_DEBUG}" = "1" ]; then
     CMD_POSTFIX=""
 fi
 
-LOGGER_OPTIONS="silent"
+APP_LOGGER_OPTIONS="silent"
 if [ "${BATCH_SERVER_SCRIPT_DEBUG}" = "1" ]; then
-    LOGGER_OPTIONS=""
+    APP_LOGGER_OPTIONS=""
 fi
-export LOGGER_OPTIONS
+export APP_LOGGER_OPTIONS
 
 while true; do
-    # curl http://localhost:8000/v1/update-knowledge-base > ${CMD_POSTFIX}
+    # curl http://localhost:8002/v1/update-knowledge-base > ${CMD_POSTFIX}
     bash ./server/run_batch_server.sh update-knowledge-base ${CMD_POSTFIX}
     sleep 30
 done

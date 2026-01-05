@@ -26,17 +26,18 @@ fi
 
 if [ "$ACTION" = "run" ]; then
     echo "Starting client in development mode..."
+	echo "poetry run uvicorn genericsuite_codegen.api.main:app --reload --host 0.0.0.0 --port ${SERVER_PORT:-8002}" 
 	poetry run uvicorn \
         genericsuite_codegen.api.main:app \
         --reload \
         --host 0.0.0.0 \
-        --port 8000
+        --port "${SERVER_PORT:-8002}"
 
 elif [ "$ACTION" = "test" ]; then
     echo "Running tests..."
     export ALLOWED_HOSTS="*"
     export OPENAI_API_KEY="sk-proj-1234567890"
-    export LLM_MODEL_NAME=gpt-4o-mini
+    export OPENAI_MODEL_NAME=gpt-4o-mini
     export LOCAL_REPO_DIR="../local_repo_files"
     poetry run pytest "${TEST_FILTER}"
 

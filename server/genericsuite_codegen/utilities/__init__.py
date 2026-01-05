@@ -14,7 +14,6 @@ from genericsuite_codegen.utilities.utilities import (
     validate_environment,
     get_database_config,
     get_agent_config,
-    get_embedding_config,
     get_server_config,
     format_file_size,
     sanitize_path,
@@ -36,6 +35,7 @@ from genericsuite_codegen.utilities.utilities import (
     get_utcnow_iso,
     get_utcnow,
     local_path_to_url,
+    get_file_extension,
     rate_limiter,
 )
 
@@ -53,7 +53,6 @@ __all__ = [
     "validate_environment",
     "get_database_config",
     "get_agent_config",
-    "get_embedding_config",
     "get_server_config",
     "format_file_size",
     "sanitize_path",
@@ -75,6 +74,7 @@ __all__ = [
     "get_utcnow_iso",
     "get_utcnow",
     "local_path_to_url",
+    "get_file_extension",
     "rate_limiter",
     "RateLimiter",
 ]

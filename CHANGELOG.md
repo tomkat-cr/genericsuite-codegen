@@ -21,14 +21,26 @@ This project adheres to [Semantic Versioning](http://semver.org/) and [Keep a Ch
 
 ### Added
 - CRON process to update the knowledge base.
+- Settings page to configure the AI providers and other settings.
+- Settings stored in the JSON file, if the envvar is not set there, defaults to the .env file variables.
 - Huggingface, Groq AI/ML API, Together.ai, OpenRouter, Nvidia, XAI, Ollama and Rhymes providers.
-- LLM_STOP environment variable to stop tokens.
-- AI provider specific variables: OPENAI_API_KEY, OPENAI_MODEL_NAME, HF_TOKEN, HF_MODEL_NAME, GROQ_API_KEY, GROQ_MODEL_NAME, TOGETHER_API_KEY, TOGETHER_MODEL_NAME, OPENROUTER_API_KEY, OPENROUTER_MODEL_NAME, NVIDIA_API_KEY, NVIDIA_MODEL_NAME, XAI_API_KEY, XAI_MODEL_NAME, RHYMES_API_KEY, RHYMES_MODEL_NAME, and OLLAMA_MODEL_NAME.
+- TOGETHER_STOP environment variable to stop tokens.
+- Rename LLM_MODEL_NAME to AI provider specific environment variables: OPENAI_API_KEY, OPENAI_MODEL_NAME, HF_TOKEN, HF_MODEL_NAME, GROQ_API_KEY, GROQ_MODEL_NAME, TOGETHER_API_KEY, TOGETHER_MODEL_NAME, OPENROUTER_API_KEY, OPENROUTER_MODEL_NAME, NVIDIA_API_KEY, NVIDIA_MODEL_NAME, XAI_API_KEY, XAI_MODEL_NAME, RHYMES_API_KEY, RHYMES_MODEL_NAME, and OLLAMA_MODEL_NAME.
+- Rename LLM_BASE_URL to AI provider specific environment variables: OPENAI_BASE_URL, HF_BASE_URL, GROQ_BASE_URL, TOGETHER_BASE_URL, OPENROUTER_BASE_URL, NVIDIA_BASE_URL, XAI_BASE_URL, RHYMES_BASE_URL, and OLLAMA_BASE_URL.
 - Logfire integration.
 - Script to start and stop the Logfire Telemetry container.
-- CRUD editor JSON config files validation tool.
+- UI: Knowledge Base Search.
+- UI: CRUD editor JSON config files validation tool.
 - TEMP_BASE_WEB_URL envvar and "make dev-local-basecamp" to support path translation for sources using the local GenericSuite (Basecamp) web documentation.
 - DOCUMENT_RETRIEVAL_MAX_FILE_SIZE_MB envvar to limit the file size for retrieval.
+- APP_LOGGER_OPTIONS envvar to silent the logger startup debug messages on the batch server.
+- Add the "exc_info" parameter to log_error() function to log the exception traceback.
+- MAX_PROMPT_LENGTH envvar to limit the prompt length.
+- MCP_SERVER_DEBUG envvar to enable debug mode.
+- Bearer token support in MCP server and security check on all tools and resources.
+- ConversationsService class to add conversation history to other tools different than Agent queries, e.g. JSON config and Python code generation.
+- "server/genericsuite_codegen/assets/llm_models_data.json" file to store the AI models data, including the context window size and token pricing.
+- File name exclusions to the Ingestion process to ignore "requirements.txt" files.
 
 ### Changed
 - Rename "/knowledge-base/status" endpoint to "/update-knowledge-base/status".
@@ -43,11 +55,18 @@ This project adheres to [Semantic Versioning](http://semver.org/) and [Keep a Ch
 - UI: task_type, model_used and token_usage are now displayed in the chat interface when debugging is enabled.
 - UI: "KnowledgeBasePage.tsx" was splited to separate components.
 - Ingestion: filter files from the cloned repo that are not under the "docs" directory (BASE_LOCAL_PATH). Also copy the files "CrudEditorConfigInterface.ts" and "crud_editor_config_classes.py" once the repo is updated.
-- Rename DEFAULT_MAX_CONTEXT_LENGTH envvar to CONTEXT_DEFAULT_MAX_LENGTH. 
+- Rename DEFAULT_MAX_CONTEXT_LENGTH envvar to CONTEXT_DEFAULT_MAX_LENGTH.
+- Rename the CORS_ORIGINS envvar to CORS_ORIGIN.
+- Rename MCP server tools removing the "mcp_" prefix to the function names.
+- Change ports 8000, 8070, 3000 and 3001 to 8002, 8072, 3002 and 3003 respectively.
+- Change enhanced search max_context_length and context_limit from 8000 to 2000000.
+- Separate AI tools in individual files.
 
 ### Fixed
 - Logger debug set correctly when DEBUG envvar is set to 1.
 - UI: API calls issue because of the additional "data" property in the response.
+- The JSON config generation to include both frontend and backend files following the GenericSuite rules.
+- Issue with extract_code_blocks() separating the blocks between backticks ` that are prefixed/suffixed with other texts.
 
 ### Removed
 - LLM_API_KEY envvar, replaced by AI provider specific variables.

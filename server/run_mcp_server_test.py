@@ -144,7 +144,7 @@ def test_configuration():
 
         env_config = MCPConfig(
             server_name=os.getenv("MCP_SERVER_NAME", "default"),
-            port=int(os.getenv("MCP_SERVER_PORT", "8070"))
+            port=int(os.getenv("MCP_SERVER_PORT", "8072"))
         )
 
         logger.info(f"Env config - Name: {env_config.server_name}")

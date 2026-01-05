@@ -5,7 +5,6 @@ Startup script for the GenericSuite CodeGen MCP Server.
 This script provides a convenient way to start the MCP server with
 proper environment setup and error handling.
 """
-import os
 import sys
 import asyncio
 from pathlib import Path
@@ -23,8 +22,9 @@ from genericsuite_codegen.utilities.app_logger import (
     log_error,
     set_app_logs,
 )
+from genericsuite_codegen.utilities.env_vars import get_envvar
 
-DEBUG = False
+DEBUG = get_envvar("MCP_SERVER_DEBUG", "0") == "1"
 
 # Add the current directory to Python path
 current_dir = Path(__file__).parent
@@ -34,7 +34,7 @@ sys.path.insert(0, str(current_dir))
 server_dir = current_dir.parent / "mcp-server"
 sys.path.insert(0, str(server_dir))
 
-log_dir = os.getenv("SERVER_LOGS_DIR", server_dir)
+log_dir = get_envvar("SERVER_LOGS_DIR", server_dir)
 set_app_logs(
     name="mcpserver",
     log_file=f"{log_dir}/mcp_server.log",
@@ -102,6 +102,7 @@ async def main_async():
 
     except KeyboardInterrupt:
         log_info("\nMCP server stopped by user (Ctrl+C)")
+
     except Exception as e:
         log_error(f"Failed to start MCP server: {e}", exc_info=True)
         raise

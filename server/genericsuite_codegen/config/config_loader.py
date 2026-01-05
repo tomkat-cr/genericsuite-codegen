@@ -1,7 +1,6 @@
 """Configuration loader for enhanced search functionality."""
 
 import json
-import os
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 from dataclasses import dataclass, field
@@ -11,6 +10,7 @@ from genericsuite_codegen.utilities.app_logger import (
     log_warning,
     log_error,
 )
+from genericsuite_codegen.utilities.env_vars import get_envvar
 
 DEBUG = False
 
@@ -146,7 +146,7 @@ class ConfigLoader:
             return f"enhanced_search_config.{environment}.json"
 
         # Check environment variable
-        env_name = os.getenv("ENVIRONMENT", "").lower()
+        env_name = get_envvar("APP_STAGE", "").lower()
         if env_name in ["development", "dev"]:
             return "enhanced_search_config.development.json"
         elif env_name in ["production", "prod"]:
@@ -189,61 +189,61 @@ class ConfigLoader:
         env_config = {}
 
         # Enhanced search settings
-        if os.getenv("ENHANCED_SEARCH_ENABLED"):
+        if get_envvar("ENHANCED_SEARCH_ENABLED"):
             env_config.setdefault(
                 "enhanced_search", {})["enabled"] = (
-                os.getenv("ENHANCED_SEARCH_ENABLED", "true").lower() == "true"
+                get_envvar("ENHANCED_SEARCH_ENABLED", "true").lower() == "true"
             )
 
-        if os.getenv("ENHANCED_SEARCH_MAX_CONTEXT_LENGTH"):
+        if get_envvar("ENHANCED_SEARCH_MAX_CONTEXT_LENGTH"):
             env_config.setdefault(
                 "enhanced_search", {})["max_context_length"] = int(
-                os.getenv("ENHANCED_SEARCH_MAX_CONTEXT_LENGTH", "10000")
+                get_envvar("ENHANCED_SEARCH_MAX_CONTEXT_LENGTH", "10000")
             )
 
-        if os.getenv("ENHANCED_SEARCH_FALLBACK_ENABLED"):
+        if get_envvar("ENHANCED_SEARCH_FALLBACK_ENABLED"):
             env_config.setdefault(
                 "enhanced_search", {})["fallback_enabled"] = (
-                os.getenv("ENHANCED_SEARCH_FALLBACK_ENABLED",
-                          "true").lower() == "true"
+                get_envvar("ENHANCED_SEARCH_FALLBACK_ENABLED",
+                           "true").lower() == "true"
             )
 
         # Local storage settings
-        if os.getenv("LOCAL_REPO_DIR"):
+        if get_envvar("LOCAL_REPO_DIR"):
             env_config.setdefault("local_storage", {})["local_repo_path"] = (
-                os.getenv("LOCAL_REPO_DIR", "local_repo_files")
+                get_envvar("LOCAL_REPO_DIR", "local_repo_files")
             )
 
-        if os.getenv("DOCUMENT_RETRIEVAL_MAX_FILE_SIZE_MB"):
+        if get_envvar("DOCUMENT_RETRIEVAL_MAX_FILE_SIZE_MB"):
             env_config.setdefault(
                 "local_storage", {})["max_file_size_mb"] = int(
-                os.getenv("DOCUMENT_RETRIEVAL_MAX_FILE_SIZE_MB", "10")
+                get_envvar("DOCUMENT_RETRIEVAL_MAX_FILE_SIZE_MB", "10")
             )
 
         # Performance settings
-        if os.getenv("SEARCH_MAX_CONCURRENT_SEARCHES"):
+        if get_envvar("SEARCH_MAX_CONCURRENT_SEARCHES"):
             env_config.setdefault(
                 "search_performance", {})["max_concurrent_searches"] = int(
-                os.getenv("SEARCH_MAX_CONCURRENT_SEARCHES", "5")
+                get_envvar("SEARCH_MAX_CONCURRENT_SEARCHES", "5")
             )
 
-        if os.getenv("SEARCH_TIMEOUT_SECONDS"):
+        if get_envvar("SEARCH_TIMEOUT_SECONDS"):
             env_config.setdefault(
                 "search_performance", {})["search_timeout_seconds"] = int(
-                os.getenv("SEARCH_TIMEOUT_SECONDS", "30")
+                get_envvar("SEARCH_TIMEOUT_SECONDS", "30")
             )
 
         # Context determination settings
-        if os.getenv("CONTEXT_DETERMINATION_CONFIDENCE_THRESHOLD"):
+        if get_envvar("CONTEXT_DETERMINATION_CONFIDENCE_THRESHOLD"):
             env_config.setdefault(
                 "context_determination", {})["confidence_threshold"] = float(
-                os.getenv("CONTEXT_DETERMINATION_CONFIDENCE_THRESHOLD", "0.6")
+                get_envvar("CONTEXT_DETERMINATION_CONFIDENCE_THRESHOLD", "0.6")
             )
 
         # Logging settings
-        if os.getenv("ENHANCED_SEARCH_LOG_LEVEL"):
+        if get_envvar("ENHANCED_SEARCH_LOG_LEVEL"):
             env_config.setdefault("logging", {})["level"] = (
-                os.getenv("ENHANCED_SEARCH_LOG_LEVEL", "INFO")
+                get_envvar("ENHANCED_SEARCH_LOG_LEVEL", "INFO")
             )
 
         return env_config

@@ -3,7 +3,7 @@
 # 2025-09-01 | CR
 
 run_server() {
-    cd /code/server && uvicorn genericsuite_codegen.api.main:app --host 0.0.0.0 --port 8000 --env-file /var/scripts/.env --reload
+    cd /code/server && uvicorn genericsuite_codegen.api.main:app --host 0.0.0.0 --port 8002 --env-file /var/scripts/.env --reload
 }
 
 run_mcp_server() {

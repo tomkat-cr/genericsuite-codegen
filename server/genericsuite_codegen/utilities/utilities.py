@@ -5,7 +5,6 @@ This module provides common utilities for logging, configuration,
 request handling, and other shared functionality across the API.
 """
 
-import os
 import uuid
 import time
 from typing import Dict, Any, Optional
@@ -24,18 +23,26 @@ from genericsuite_codegen.utilities.rate_limiter import RateLimiter
 from genericsuite_codegen.utilities.app_logger import (
     log_debug,
 )
-from genericsuite_codegen.document_processing.embeddings import (
-    EMBEDDINGS_PROVIDER,
-    EMBEDDINGS_MODEL,
-    get_embeddings_dimension,
-)
+from genericsuite_codegen.utilities.env_vars import get_envvar
 
 DEBUG = False
 
-BASE_LOCAL_PATH = os.getenv("BASE_LOCAL_PATH", '')
-ALT_BASE_LOCAL_PATH = os.getenv("ALT_BASE_LOCAL_PATH", '')
-BASE_WEB_URL = os.getenv("BASE_WEB_URL", '')
-TEMP_BASE_WEB_URL = os.getenv("TEMP_BASE_WEB_URL")
+DEFAULT_USER_ID = "default_user"
+MSG_ERROR_INVALID_KEY = "Invalid API key"
+
+BASE_LOCAL_PATH = get_envvar("BASE_LOCAL_PATH", '')
+ALT_BASE_LOCAL_PATH = get_envvar("ALT_BASE_LOCAL_PATH", '')
+BASE_WEB_URL = get_envvar("BASE_WEB_URL", '')
+TEMP_BASE_WEB_URL = get_envvar("TEMP_BASE_WEB_URL")
+
+DEFAULT_LLM_PROVIDER = get_envvar("DEFAULT_LLM_PROVIDER", "openai")
+DEFAULT_LLM_MODEL_NAME = get_envvar("DEFAULT_LLM_MODEL_NAME", "gpt-4o-mini")
+DEFAULT_LLM_TEMPERATURE = float(get_envvar("DEFAULT_LLM_TEMPERATURE", "0.1"))
+CONTEXT_DEFAULT_MAX_LENGTH = int(get_envvar(
+    "ENHANCED_SEARCH_MAX_CONTEXT_LENGTH", get_envvar(
+        "CONTEXT_DEFAULT_MAX_LENGTH", "10000"
+    )
+))
 
 
 def std_response(
@@ -73,7 +80,7 @@ def get_app_info() -> AppInfo:
         AppInfo: Application information object.
     """
     return AppInfo(
-        name=os.getenv("APP_NAME", "GenericSuite CodeGen"),
+        name=get_envvar("APP_NAME", "GenericSuite CodeGen"),
         version="1.0.0",  # Should match pyproject.toml
         description="RAG AI system for GenericSuite documentation and"
                     " code generation",
@@ -142,13 +149,13 @@ def validate_environment() -> Dict[str, Any]:
     """
     required_vars = [
         "APP_DB_URI",
-        "OPENAI_API_KEY"
+        "APP_DB_NAME",
     ]
 
     optional_vars = [
-        "HF_TOKEN",
         "LLM_PROVIDER",
-        "LLM_MODEL_NAME",
+        "HF_TOKEN",
+        "OPENAI_API_KEY",
         "EMBEDDINGS_PROVIDER",
         "EMBEDDINGS_MODEL"
     ]
@@ -157,11 +164,11 @@ def validate_environment() -> Dict[str, Any]:
     missing_optional = []
 
     for var in required_vars:
-        if not os.getenv(var):
+        if not get_envvar(var):
             missing_required.append(var)
 
     for var in optional_vars:
-        if not os.getenv(var):
+        if not get_envvar(var):
             missing_optional.append(var)
 
     return {
@@ -180,11 +187,11 @@ def get_database_config() -> Dict[str, Any]:
         Dict[str, Any]: Database configuration.
     """
     return {
-        "uri": os.getenv("APP_DB_URI", "mongodb://localhost:27017/"),
-        "database_name": os.getenv("DATABASE_NAME", "genericsuite_codegen"),
-        "connection_timeout": int(os.getenv("DB_CONNECTION_TIMEOUT", "10")),
+        "uri": get_envvar("APP_DB_URI", "mongodb://localhost:27017/"),
+        "database_name": get_envvar("DATABASE_NAME", "genericsuite_codegen"),
+        "connection_timeout": int(get_envvar("DB_CONNECTION_TIMEOUT", "10")),
         "server_selection_timeout":
-            int(os.getenv("DB_SERVER_SELECTION_TIMEOUT", "5"))
+            int(get_envvar("DB_SERVER_SELECTION_TIMEOUT", "5"))
     }
 
 
@@ -196,38 +203,16 @@ def get_agent_config() -> Dict[str, Any]:
         Dict[str, Any]: Agent configuration.
     """
     return {
-        "provider": os.getenv("LLM_PROVIDER", "openai"),
-        "model": os.getenv("LLM_MODEL_NAME", "gpt-4"),
-        "temperature": float(os.getenv("LLM_TEMPERATURE", "0.1")),
+        "provider": get_envvar("LLM_PROVIDER", DEFAULT_LLM_PROVIDER),
+        "model": get_envvar("LLM_MODEL_NAME", DEFAULT_LLM_MODEL_NAME),
+        "temperature": float(get_envvar("LLM_TEMPERATURE",
+                                        DEFAULT_LLM_TEMPERATURE)),
         "max_tokens": (
-            int(os.getenv("LLM_MAX_TOKENS", "4000"))
-            if os.getenv("LLM_MAX_TOKENS") else None),
-        "timeout": int(os.getenv("LLM_TIMEOUT", "60")),
-        "api_key": os.getenv("OPENAI_API_KEY"),
-        "base_url": os.getenv("LLM_BASE_URL")
-    }
-
-
-def get_embedding_config() -> Dict[str, Any]:
-    """
-    Get embedding configuration from environment.
-
-    Returns:
-        Dict[str, Any]: Embedding configuration.
-    """
-    dimension = get_embeddings_dimension()
-    log_debug(
-        ">> utilities.py | get_embedding_config | "
-        + f"Provider: {EMBEDDINGS_PROVIDER} | Model: {EMBEDDINGS_MODEL}"
-        + f" | Dimension: {dimension}")
-    return {
-        "provider": EMBEDDINGS_PROVIDER,
-        "model": EMBEDDINGS_MODEL,
-        "api_key": (
-            os.getenv("OPENAI_API_KEY")
-            if os.getenv("EMBEDDINGS_PROVIDER", "openai") == "openai"
-            else os.getenv("HF_TOKEN")),
-        "dimension": dimension
+            int(get_envvar("LLM_MAX_TOKENS", "4000"))
+            if get_envvar("LLM_MAX_TOKENS") else None),
+        "timeout": int(get_envvar("LLM_TIMEOUT", "60")),
+        "api_key": get_envvar("OPENAI_API_KEY"),
+        "base_url": get_envvar("LLM_BASE_URL")
     }
 
 
@@ -239,15 +224,15 @@ def get_server_config() -> Dict[str, Any]:
         Dict[str, Any]: Server configuration.
     """
     return {
-        "host": os.getenv("SERVER_HOST", "0.0.0.0"),
-        "port": int(os.getenv("SERVER_PORT", "8000")),
-        "debug": os.getenv("SERVER_DEBUG", "0") == "1",
+        "host": get_envvar("SERVER_HOST", "0.0.0.0"),
+        "port": int(get_envvar("SERVER_PORT", "8002")),
+        "debug": get_envvar("SERVER_DEBUG", "0") == "1",
         "cors_origins":
-            os.getenv("CORS_ORIGINS", "http://localhost:3000").split(","),
+            get_envvar("CORS_ORIGIN", "http://localhost:3002").split(","),
         "allowed_hosts":
-            os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1").split(","),
+            get_envvar("ALLOWED_HOSTS", "localhost,127.0.0.1").split(","),
         "max_request_size":
-            int(os.getenv("MAX_REQUEST_SIZE", "10485760"))  # 10MB default
+            int(get_envvar("MAX_REQUEST_SIZE", "10485760"))  # 10MB default
     }
 
 
@@ -339,8 +324,10 @@ def validate_json_content(content: str) -> tuple[bool, Optional[str]]:
         return False, str(e)
 
 
-def extract_code_blocks(content: str, language: Optional[str] = None
-                        ) -> list[Dict[str, str]]:
+def extract_code_blocks(
+    content: str,
+    language: Optional[str] = None
+) -> list[Dict[str, str]]:
     """
     Extract code blocks from markdown content.
 
@@ -353,12 +340,15 @@ def extract_code_blocks(content: str, language: Optional[str] = None
     """
     import re
 
+    # # Clean the content to only have the code between the first and last ```
+    # content = "```" + content.split("```")[1].split("```")[0] + "```"
+
     # Pattern to match code blocks
-    pattern = r'```(\w+)?\n(.*?)\n```'
+    pattern = r'(.*?)```(\w+)?\n(.*?)\n```(.*?)'
     matches = re.findall(pattern, content, re.DOTALL)
 
     code_blocks = []
-    for lang, code in matches:
+    for _, lang, code, _ in matches:
         if language is None or lang == language:
             code_blocks.append({
                 "language": lang or "text",
@@ -665,8 +655,28 @@ def local_path_to_url(source: str, is_url: bool = True) -> str:
     return content
 
 
+def get_last_url_element(url: str) -> str:
+    """
+    Returns the last element from a URL (normally a file or page name)
+    """
+    return url.split('/')[-1]
+
+
+def get_file_extension(file_path: str) -> str:
+    """
+    Returns the file extension from a path or filename.
+    If there's no "." in file_path, assumes there's no file extension, so
+    returns an empty string.
+    """
+    if file_path is None:
+        return ''
+    if len(file_path.split('.')) > 1:
+        return file_path.split('.')[-1]
+    return ''
+
+
 # Global rate limiter instance
 rate_limiter = RateLimiter(
-    max_requests=int(os.getenv("RATE_LIMIT_REQUESTS", "100")),
-    window_seconds=int(os.getenv("RATE_LIMIT_WINDOW", "60"))
+    max_requests=int(get_envvar("RATE_LIMIT_REQUESTS", "100")),
+    window_seconds=int(get_envvar("RATE_LIMIT_WINDOW", "60"))
 )

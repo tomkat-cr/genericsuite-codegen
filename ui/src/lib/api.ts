@@ -57,6 +57,27 @@ export interface QueryRequest {
   include_sources?: boolean
 }
 
+export enum SettingItemType {
+  LABEL = 'label',
+  VARIABLE = 'variable'
+}
+
+export interface SettingItem {
+  type: SettingItemType
+  name?: string
+  label: string
+  value?: string
+  select_options?: string[]
+}
+
+export interface SettingsResponse {
+  settings: SettingItem[]
+}
+
+export interface UpdateSettingsRequest {
+  settings: { [key: string]: string }
+}
+
 export const debug = process.env.VITE_DEBUG === '1'
 export const baseUrl = process.env.VITE_API_BASE_URL
 
@@ -120,6 +141,20 @@ class ApiService {
 
   async queryAgent(request: QueryRequest) {
     const response = await fetch(`${baseUrl}/query`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request)
+    })
+    return this.handleResponse(response)
+  }
+
+  async getSettings(): Promise<ApiResponse<SettingsResponse>> {
+    const response = await fetch(`${baseUrl}/settings`)
+    return this.handleResponse<SettingsResponse>(response)
+  }
+
+  async updateSettings(request: UpdateSettingsRequest): Promise<ApiResponse<any>> {
+    const response = await fetch(`${baseUrl}/settings`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(request)

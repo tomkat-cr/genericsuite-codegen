@@ -5,7 +5,6 @@ This module provides embedding generation using OpenAI and HuggingFace models
 with configurable model selection and dimension validation.
 """
 
-import os
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 import asyncio
@@ -28,16 +27,17 @@ from genericsuite_codegen.utilities.app_logger import (
     log_warning,
     log_error,
 )
+from genericsuite_codegen.utilities.env_vars import get_envvar
 
-from .types import (
+from genericsuite_codegen.document_processing.types import (
     EmbeddingModel,
     EmbeddedChunk,
 )
 
 DEBUG = True
 
-EMBEDDINGS_PROVIDER = os.getenv('EMBEDDINGS_PROVIDER', 'openai')
-EMBEDDINGS_MODEL = os.getenv('EMBEDDINGS_MODEL', 'text-embedding-3-small')
+EMBEDDINGS_PROVIDER = get_envvar('EMBEDDINGS_PROVIDER', 'openai')
+EMBEDDINGS_MODEL = get_envvar('EMBEDDINGS_MODEL', 'text-embedding-3-small')
 
 
 class EmbeddingProvider(ABC):
@@ -108,8 +108,8 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
                               "pip install openai")
 
         self.model = model
-        self.api_key = api_key or os.getenv('OPENAI_API_KEY')
-        self.base_url = base_url or os.getenv('OPENAI_BASE_URL')
+        self.api_key = api_key or get_envvar('OPENAI_API_KEY')
+        self.base_url = base_url or get_envvar('OPENAI_BASE_URL')
 
         if not self.api_key:
             raise ValueError("OpenAI API key not provided. Set OPENAI_API_KEY"
@@ -352,13 +352,14 @@ class EmbeddingGenerator:
         """
         # Get configuration from environment if not provided
         if provider is None:
-            provider = os.getenv('EMBEDDINGS_PROVIDER', 'huggingface').lower()
+            provider = get_envvar('EMBEDDINGS_PROVIDER', 'huggingface').lower()
 
         if model is None:
             if provider == 'openai':
-                model = os.getenv('EMBEDDINGS_MODEL', 'text-embedding-3-small')
+                model = get_envvar('EMBEDDINGS_MODEL',
+                                   'text-embedding-3-small')
             else:
-                model = os.getenv('EMBEDDINGS_MODEL', 'thenlper/gte-small')
+                model = get_envvar('EMBEDDINGS_MODEL', 'thenlper/gte-small')
 
         self.provider_name = provider
         self.model_name = model
@@ -552,3 +553,28 @@ def get_embeddings_dimension() -> int:
         + f"| Provider: {provider} | Model: {model} | Dimension: {dimension}"
     )
     return dimension
+
+
+def get_embedding_config() -> Dict[str, Any]:
+    """
+    Get embedding configuration from environment.
+
+    Returns:
+        Dict[str, Any]: Embedding configuration.
+    """
+    dimension = get_embeddings_dimension()
+    log_debug(
+        ">> embeddings.py | get_embedding_config | "
+        + f"Provider: {EMBEDDINGS_PROVIDER} | Model: {EMBEDDINGS_MODEL}"
+        + f" | Dimension: {dimension}")
+    return {
+        "provider": EMBEDDINGS_PROVIDER,
+        "model": EMBEDDINGS_MODEL,
+        "api_key": (
+            get_envvar("OPENAI_API_KEY")
+            if EMBEDDINGS_PROVIDER == "openai"
+            else get_envvar("HF_TOKEN")
+            if EMBEDDINGS_PROVIDER == "huggingface"
+            else None),
+        "dimension": dimension
+    }

@@ -1,0 +1,302 @@
+{
+    "openai": {
+        "price_per_n_tokens": 1000000,
+        "models": {
+            "gpt-5.2": {
+                "input_tokens_price": 1.75,
+                "output_tokens_price": 14.00,
+                "context_window_size": 400000
+            },
+            "gpt-5.1": {
+                "input_tokens_price": 1.25,
+                "output_tokens_price": 10.00,
+                "context_window_size": 400000
+            },
+            "gpt-5": {
+                "input_tokens_price": 1.25,
+                "output_tokens_price": 10.00,
+                "context_window_size": 400000
+            },
+            "gpt-5-mini": {
+                "input_tokens_price": 0.25,
+                "output_tokens_price": 2.00,
+                "context_window_size": 400000
+            },
+            "gpt-5-nano": {
+                "input_tokens_price": 0.05,
+                "output_tokens_price": 0.40,
+                "context_window_size": 400000
+            },
+            "gpt-5.2-chat-latest": {
+                "input_tokens_price": 1.75,
+                "output_tokens_price": 14.00,
+                "context_window_size": 128000
+            },
+            "gpt-5.2-pro": {
+                "input_tokens_price": 21.00,
+                "output_tokens_price": 168.00,
+                "context_window_size": 400000
+            },
+            "gpt-4.1": {
+                "input_tokens_price": 2.00,
+                "output_tokens_price": 8.00,
+                "context_window_size": 1047576
+            },
+            "gpt-4.1-mini": {
+                "input_tokens_price": 0.40,
+                "output_tokens_price": 1.60,
+                "context_window_size": 1047576
+            },
+            "gpt-4.1-nano": {
+                "input_tokens_price": 0.10,
+                "output_tokens_price": 0.40,
+                "context_window_size": 1047576
+            },
+            "gpt-4o": {
+                "input_tokens_price": 2.50,
+                "output_tokens_price": 10.00,
+                "context_window_size": 128000
+            },
+            "gpt-4o-mini": {
+                "input_tokens_price": 0.15,
+                "output_tokens_price": 0.60,
+                "context_window_size": 128000
+            },
+            "o1": {
+                "input_tokens_price": 15.00,
+                "output_tokens_price": 60.00,
+                "context_window_size": 200000
+            },
+            "o1-mini": {
+                "input_tokens_price": 1.10,
+                "output_tokens_price": 4.40,
+                "context_window_size": 128000
+            },
+            "o1-pro": {
+                "input_tokens_price": 150.00,
+                "output_tokens_price": 600.00,
+                "context_window_size": 128000
+            },
+            "o3": {
+                "input_tokens_price": 2.00,
+                "output_tokens_price": 8.00,
+                "context_window_size": 128000
+            },
+            "o3-pro": {
+                "input_tokens_price": 20.00,
+                "output_tokens_price": 80.00,
+                "context_window_size": 256000
+            },
+            "o3-mini": {
+                "input_tokens_price": 1.10,
+                "output_tokens_price": 4.40,
+                "context_window_size": 128000
+            },
+            "o4-mini": {
+                "input_tokens_price": 1.10,
+                "output_tokens_price": 4.40,
+                "context_window_size": 200000
+            },
+            "gpt-4-turbo-2024-04-09": {
+                "input_tokens_price": 10.00,
+                "output_tokens_price": 30.00,
+                "context_window_size": 128000
+            },
+            "gpt-4-0613": {
+                "input_tokens_price": 30.00,
+                "output_tokens_price": 60.00,
+                "context_window_size": 8192
+            },
+            "gpt-4-32k": {
+                "input_tokens_price": 60.00,
+                "output_tokens_price": 120.00,
+                "context_window_size": 32768
+            },
+            "gpt-3.5-turbo-0125": {
+                "input_tokens_price": 0.50,
+                "output_tokens_price": 1.50,
+                "context_window_size": 16385
+            },
+            "davinci-002": {
+                "input_tokens_price": 2.00,
+                "output_tokens_price": 2.00,
+                "context_window_size": 4096
+            },
+            "babbage-002": {
+                "input_tokens_price": 0.40,
+                "output_tokens_price": 0.40,
+                "context_window_size": 4096
+            }
+        }
+    },
+    "anthropic": {
+        "price_per_n_tokens": 1000000,
+        "models": {
+            "claude-4.5-opus": {
+                "input_tokens_price": 5.00,
+                "output_tokens_price": 25.00,
+                "context_window_size": 200000
+            },
+            "claude-4.5-sonnet": {
+                "input_tokens_price": 3.00,
+                "output_tokens_price": 15.00,
+                "context_window_size": 1000000
+            },
+            "claude-4.5-haiku": {
+                "input_tokens_price": 1.00,
+                "output_tokens_price": 5.00,
+                "context_window_size": 200000
+            },
+            "claude-4.1-opus": {
+                "input_tokens_price": 15.00,
+                "output_tokens_price": 75.00,
+                "context_window_size": 200000
+            },
+            "claude-3.5-sonnet": {
+                "input_tokens_price": 3.00,
+                "output_tokens_price": 15.00,
+                "context_window_size": 200000
+            },
+            "claude-3.5-haiku": {
+                "input_tokens_price": 0.80,
+                "output_tokens_price": 4.00,
+                "context_window_size": 200000
+            }
+        }
+    },
+    "google": {
+        "price_per_n_tokens": 1000000,
+        "models": {
+            "gemini-2.5-pro": {
+                "input_tokens_price": 1.25,
+                "output_tokens_price": 10.00,
+                "context_window_size": 2000000
+            },
+            "gemini-2.5-flash": {
+                "input_tokens_price": 0.15,
+                "output_tokens_price": 0.60,
+                "context_window_size": 1000000
+            },
+            "gemini-2.0-pro": {
+                "input_tokens_price": 0.70,
+                "output_tokens_price": 2.00,
+                "context_window_size": 2000000
+            },
+            "gemini-2.0-flash": {
+                "input_tokens_price": 0.15,
+                "output_tokens_price": 0.55,
+                "context_window_size": 1000000
+            },
+            "gemini-2.0-flash-lite": {
+                "input_tokens_price": 0.075,
+                "output_tokens_price": 0.30,
+                "context_window_size": 1000000
+            },
+            "gemini-1.5-pro": {
+                "input_tokens_price": 1.25,
+                "output_tokens_price": 5.00,
+                "context_window_size": 2000000
+            },
+            "gemini-1.5-flash": {
+                "input_tokens_price": 0.075,
+                "output_tokens_price": 0.30,
+                "context_window_size": 1000000
+            }
+        }
+    },
+    "huggingface": {
+        "price_per_n_tokens": 1000000,
+        "models": {
+            "moonshotai/Kimi-K2-Instruct-0905": {
+                "input_tokens_price": 0.01,
+                "output_tokens_price": 0.01,
+                "context_window_size": 256000
+            }
+        }
+    },
+    "aimlapi": {
+        "price_per_n_tokens": 1000000,
+        "models": {
+            "deepseek/deepseek-non-reasoner-v3.1-terminus": {
+                "input_tokens_price": 0.294,
+                "output_tokens_price": 0.441,
+                "context_window_size": 128000
+            }
+        }
+    },
+    "groq": {
+        "price_per_n_tokens": 1000000,
+        "models": {
+            "mixtral-8x7b-32768": {
+                "input_tokens_price": 0.01,
+                "output_tokens_price": 0.01,
+                "context_window_size": 32000
+            }
+        }
+    },
+    "together": {
+        "price_per_n_tokens": 1000000,
+        "models": {
+            "meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo": {
+                "input_tokens_price": 0.88,
+                "output_tokens_price": 0.88,
+                "context_window_size": 128000
+            }
+        }
+    },
+    "openrouter": {
+        "price_per_n_tokens": 1000000,
+        "models": {
+            "google/gemini-2.0-flash-lite-001": {
+                "input_tokens_price": 0.075,
+                "output_tokens_price": 0.30,
+                "context_window_size": 128000
+            }
+        }
+    },
+    "xai": {
+        "price_per_n_tokens": 1000000,
+        "models": {
+            "grok-4-fast-reasoning": {
+                "input_tokens_price": 0.20,
+                "output_tokens_price": 0.50,
+                "context_window_size": 131000
+            },
+            "grok-3-mini": {
+                "input_tokens_price": 0.30,
+                "output_tokens_price": 0.50,
+                "context_window_size": 131000
+            }
+        }
+    },
+    "nvidia": {
+        "price_per_n_tokens": 1000000,
+        "models": {
+            "nvidia/llama-3.1-nemotron-70b-instruct": {
+                "input_tokens_price": 0.01,
+                "output_tokens_price": 0.01,
+                "context_window_size": 128000
+            }
+        }
+    },
+    "rhymes": {
+        "price_per_n_tokens": 1000000,
+        "models": {
+            "aria": {
+                "input_tokens_price": 0.01,
+                "output_tokens_price": 0.01,
+                "context_window_size": 8000
+            }
+        }
+    },
+    "ollama": {
+        "price_per_n_tokens": 1000000,
+        "models": {
+            "gpt-oss:20b": {
+                "input_tokens_price": 0,
+                "output_tokens_price": 0,
+                "context_window_size": 131072
+            }
+        }
+    }
+}

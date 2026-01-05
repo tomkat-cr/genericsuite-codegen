@@ -1,7 +1,7 @@
 {
   "enhanced_search": {
     "enabled": true,
-    "max_context_length": 8000,
+    "max_context_length": 2000000,
     "fallback_enabled": true,
     "dual_search_enabled": true,
     "context_determination_enabled": true,
@@ -11,12 +11,33 @@
     "local_repo_path": "/var/local_repo_files",
     "max_file_size_mb": 5,
     "allowed_file_extensions": [
-      ".md", ".py", ".js", ".jsx", ".ts", ".tsx", ".json", ".yaml", ".yml", 
-      ".txt", ".rst", ".html", ".css", ".sh", ".toml"
+      ".md",
+      ".py",
+      ".js",
+      ".jsx",
+      ".ts",
+      ".tsx",
+      ".json",
+      ".yaml",
+      ".yml",
+      ".txt",
+      ".rst",
+      ".html",
+      ".css",
+      ".sh",
+      ".toml"
     ],
     "excluded_directories": [
-      ".git", "__pycache__", "node_modules", ".pytest_cache", 
-      "dist", "build", ".vscode", ".idea", "logs", "tmp"
+      ".git",
+      "__pycache__",
+      "node_modules",
+      ".pytest_cache",
+      "dist",
+      "build",
+      ".vscode",
+      ".idea",
+      "logs",
+      "tmp"
     ]
   },
   "search_performance": {
@@ -29,13 +50,53 @@
     "confidence_threshold": 0.7,
     "default_context": "generic",
     "context_keywords": {
-      "json": ["json", "configuration", "config", "table", "schema"],
-      "langchain": ["langchain", "tool", "chain", "agent"],
-      "mcp": ["mcp", "server", "protocol", "model context"],
-      "frontend": ["react", "component", "ui", "frontend", "client"],
-      "backend": ["fastapi", "api", "server", "backend", "endpoint"],
-      "frontend_ai": ["react", "ai", "chat", "llm", "frontend"],
-      "backend_ai": ["fastapi", "ai", "agent", "llm", "backend"]
+      "json": [
+        "json",
+        "configuration",
+        "config",
+        "table",
+        "schema"
+      ],
+      "langchain": [
+        "langchain",
+        "tool",
+        "chain",
+        "agent"
+      ],
+      "mcp": [
+        "mcp",
+        "server",
+        "protocol",
+        "model context"
+      ],
+      "frontend": [
+        "react",
+        "component",
+        "ui",
+        "frontend",
+        "client"
+      ],
+      "backend": [
+        "fastapi",
+        "api",
+        "server",
+        "backend",
+        "endpoint"
+      ],
+      "frontend_ai": [
+        "react",
+        "ai",
+        "chat",
+        "llm",
+        "frontend"
+      ],
+      "backend_ai": [
+        "fastapi",
+        "ai",
+        "agent",
+        "llm",
+        "backend"
+      ]
     }
   },
   "logging": {

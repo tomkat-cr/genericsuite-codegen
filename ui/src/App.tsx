@@ -5,6 +5,7 @@ import { CodeGenerationPage } from './pages/CodeGenerationPage'
 import { ConfigValidatorPage } from './pages/ConfigValidatorPage'
 import { HomePage } from './pages/HomePage'
 import { KnowledgeBasePage } from './pages/KnowledgeBasePage'
+import { SettingsPage } from './pages/SettingsPage'
 
 function App() {
   return (
@@ -15,6 +16,7 @@ function App() {
         <Route path="/chat" element={<ChatPage />} />
         <Route path="/code-generation" element={<CodeGenerationPage />} />
         <Route path="/config-validator" element={<ConfigValidatorPage />} />
+        <Route path="/settings" element={<SettingsPage />} />
       </Routes>
     </Layout>
   )

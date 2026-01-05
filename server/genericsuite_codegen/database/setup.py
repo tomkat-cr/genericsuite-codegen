@@ -6,7 +6,6 @@ and schema initialization for the knowledge base, conversations, and users
 collections.
 """
 
-import os
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 import asyncio
@@ -28,6 +27,7 @@ from genericsuite_codegen.utilities.app_logger import (
     log_warning,
     log_error,
 )
+from genericsuite_codegen.utilities.env_vars import get_envvar
 from genericsuite_codegen.document_processing.types import EmbeddedChunk
 from genericsuite_codegen.document_processing.embeddings \
     import get_embeddings_dimension
@@ -35,17 +35,17 @@ from genericsuite_codegen.document_processing.embeddings \
 DEBUG = False
 
 
-APP_DB_URI = os.getenv("APP_DB_URI", "mongodb://localhost:27017/")
-APP_DB_NAME = os.getenv("APP_DB_NAME", "genericsuite_codegen")
+APP_DB_URI = get_envvar("APP_DB_URI", "mongodb://localhost:27017/")
+APP_DB_NAME = get_envvar("APP_DB_NAME", "genericsuite_codegen")
 
-MONGODB_MAX_POOL_SIZE = int(os.getenv("MONGODB_MAX_POOL_SIZE", "10"))
-MONGODB_MIN_POOL_SIZE = int(os.getenv("MONGODB_MIN_POOL_SIZE", "1"))
-MONGODB_MAX_IDLE_TIME_MS = int(os.getenv("MONGODB_MAX_IDLE_TIME_MS", "30000"))
+MONGODB_MAX_POOL_SIZE = int(get_envvar("MONGODB_MAX_POOL_SIZE", "10"))
+MONGODB_MIN_POOL_SIZE = int(get_envvar("MONGODB_MIN_POOL_SIZE", "1"))
+MONGODB_MAX_IDLE_TIME_MS = int(get_envvar("MONGODB_MAX_IDLE_TIME_MS", "30000"))
 MONGODB_SERVER_SELECTION_TIMEOUT_MS = int(
-    os.getenv("MONGODB_SERVER_SELECTION_TIMEOUT_MS", "5000"))
+    get_envvar("MONGODB_SERVER_SELECTION_TIMEOUT_MS", "5000"))
 
-SEARCH_SIMILAR_LIMIT = int(os.getenv("SEARCH_SIMILAR_LIMIT", "5"))
-KB_STATS_RECENT_DOCS_LIMIT = int(os.getenv("KB_STATS_RECENT_DOCS_LIMIT", "5"))
+SEARCH_SIMILAR_LIMIT = int(get_envvar("SEARCH_SIMILAR_LIMIT", "5"))
+KB_STATS_RECENT_DOCS_LIMIT = int(get_envvar("KB_STATS_RECENT_DOCS_LIMIT", "5"))
 
 
 @dataclass

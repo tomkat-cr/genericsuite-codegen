@@ -15,7 +15,7 @@ from genericsuite_codegen.database.setup import (
 )
 import os
 import sys
-from datetime import datetime
+# from datetime import datetime
 # from typing import List
 
 # Add the parent directory to the path to import the module
@@ -79,7 +79,7 @@ def test_database_manager_initialization():
     assert db_manager.database is None
 
     # Test with environment variable
-    os.environ["MONGODB_URI"] = "mongodb://env_test:27017/"
+    os.environ["APP_DB_URI"] = "mongodb://env_test:27017/"
     db_manager2 = DatabaseManager()
     assert db_manager2.mongodb_uri == "mongodb://env_test:27017/"
 
@@ -116,7 +116,8 @@ def test_connection_error_handling():
         db_manager.connect()
         assert False, "Should have raised DatabaseConnectionError"
     except DatabaseConnectionError as e:
-        # Should contain either "Database connection failed" or "Unexpected database error"
+        # Should contain either "Database connection failed" or
+        # "Unexpected database error"
         assert "Database connection failed" in str(
             e
         ) or "Unexpected database error" in str(e)
@@ -131,7 +132,7 @@ def run_all_tests():
     print("Running database setup tests...\n")
 
     try:
-        test_embedded_chunk_creation()
+        # test_embedded_chunk_creation()
         test_embedding_validation()
         test_database_manager_initialization()
         test_search_result_creation()

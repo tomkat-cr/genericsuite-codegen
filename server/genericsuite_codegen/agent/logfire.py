@@ -6,7 +6,7 @@ import os
 
 from genericsuite_codegen.utilities.app_logger import log_debug
 
-DEBUG = True
+DEBUG = False
 
 
 def configure_logfire():

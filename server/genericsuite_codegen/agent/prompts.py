@@ -11,6 +11,10 @@ for the Pydantic AI agent specialized in GenericSuite development.
 from typing import Optional, List
 from datetime import datetime
 
+from genericsuite_codegen.utilities.env_vars import get_envvar
+
+MAX_PROMPT_LENGTH = get_envvar("MAX_PROMPT_LENGTH", 8000)
+
 
 class GenericSuitePrompts:
     """
@@ -438,7 +442,10 @@ Use this example as a reference for structure and patterns, but adapt it to the 
 """
 
 
-def validate_prompt_length(prompt: str, max_length: int = 8000) -> bool:
+def validate_prompt_length(
+    prompt: str,
+    max_length: int = MAX_PROMPT_LENGTH
+) -> bool:
     """
     Validate that a prompt doesn't exceed maximum length.
 

@@ -5,7 +5,6 @@ This module sets up the main FastAPI application with CORS, middleware,
 and all API endpoints for the GenericSuite CodeGen RAG system.
 """
 
-import os
 from contextlib import asynccontextmanager
 from typing import List, Optional, Union
 
@@ -18,11 +17,9 @@ from fastapi.responses import StreamingResponse, Response
 from fastapi.exceptions import RequestValidationError
 import uvicorn
 
-from .types import (
+from genericsuite_codegen.api.types import (
     ErrorResponse,
     QueryRequest,
-    ConversationCreate,
-    ConversationUpdate,
     KnowledgeBaseUpdate,
     SearchQuery,
     FileGenerationRequest,
@@ -30,7 +27,13 @@ from .types import (
     StandardGsResponse,
     StandardGsErrorResponse,
     GenerationRequest,
+    UpdateSettingsRequest,
 )
+from genericsuite_codegen.conversations.types import (
+    ConversationCreate,
+    ConversationUpdate,
+)
+
 # from genericsuite_codegen.document_processing.types import (
 #     IngestionProgress,
 #     IngestionResult,
@@ -50,16 +53,19 @@ from genericsuite_codegen.utilities.app_logger import (
     log_error,
     log_info,
 )
+from genericsuite_codegen.utilities.env_vars import get_envvar
 from genericsuite_codegen.document_processing.ingestion import RepositoryCloner
+from genericsuite_codegen.conversations.service import ConversationsService
 from genericsuite_codegen.database.setup import (
     initialize_database,
     test_database_connection,
 )
+from genericsuite_codegen.utilities.utilities import DEFAULT_USER_ID
 
 DEBUG = False
 
 EP_PREFIX = '/v1'
-PERFORM_AGENT_HEALT_CHECK = os.getenv("PERFORM_AGENT_HEALT_CHECK", "0") == "1"
+PERFORM_AGENT_HEALT_CHECK = get_envvar("PERFORM_AGENT_HEALT_CHECK", "0") == "1"
 
 
 @asynccontextmanager
@@ -142,9 +148,12 @@ def setup_middleware(app: FastAPI) -> None:
         app: FastAPI application instance.
     """
     # CORS middleware
-    cors_origins = os.getenv(
-        "CORS_ORIGINS", "http://localhost:3000,http://localhost:3001"
+    cors_origins = get_envvar(
+        "CORS_ORIGIN", "http://localhost:3002"
     ).split(",")
+
+    _ = DEBUG and log_debug(
+        f">> setup_middleware | cors_origins: {cors_origins}")
 
     app.add_middleware(
         CORSMiddleware,
@@ -155,9 +164,10 @@ def setup_middleware(app: FastAPI) -> None:
     )
 
     # Trusted host middleware
-    allowed_hosts = os.getenv("ALLOWED_HOSTS",
-                              "localhost,127.0.0.1").split(",")
-    app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts)
+    allowed_hosts = get_envvar("ALLOWED_HOSTS",
+                               "localhost,127.0.0.1").split(",")
+    app.add_middleware(
+        TrustedHostMiddleware, allowed_hosts=allowed_hosts)
 
     # Request logging middleware
     @app.middleware("http")
@@ -258,7 +268,7 @@ def setup_exception_handlers(app: FastAPI) -> None:
             error_code="INTERNAL_ERROR",
             message="An internal server error occurred",
             details=(
-                {"error": str(exc)} if os.getenv(
+                {"error": str(exc)} if get_envvar(
                     "SERVER_DEBUG", "0") == "1" else None
             ),
             correlation_id=correlation_id,
@@ -363,6 +373,9 @@ def setup_routes(app: FastAPI) -> None:
     async def query_agent(
         req: Request,
         request: Optional[QueryRequest] = Body(default=None),
+        # TODO: Use default user for now (in real app, this would come
+        # from auth)
+        user_id: str = DEFAULT_USER_ID,
     ):
         """
         Query the AI agent.
@@ -376,8 +389,13 @@ def setup_routes(app: FastAPI) -> None:
         """
         correlation_id = getattr(req.state, "correlation_id", "unknown")
         result = result_wrapper(
-            await methods.query_agent(request, correlation_id,
-                                      translate_path=True))
+            await methods.query_agent(
+                request=request,
+                correlation_id=correlation_id,
+                user_id=user_id,
+                translate_path=True,
+            )
+        )
         _ = DEBUG and log_debug(
             f"/query | query_agent | result.result: {result}")
         return result
@@ -388,6 +406,9 @@ def setup_routes(app: FastAPI) -> None:
     async def stream_query_agent(
         req: Request,
         request: Optional[QueryRequest] = Body(default=None),
+        # TODO: Use default user for now (in real app, this would come
+        # from auth)
+        user_id: str = DEFAULT_USER_ID,
     ):
         """
         Stream AI agent query response.
@@ -401,7 +422,11 @@ def setup_routes(app: FastAPI) -> None:
         """
         correlation_id = getattr(req.state, "correlation_id", "unknown")
         return StreamingResponse(
-            methods.stream_agent_query(request, correlation_id),
+            methods.stream_agent_query(
+                request=request,
+                correlation_id=correlation_id,
+                user_id=user_id,
+            ),
             media_type="text/plain",
             headers={
                 "Cache-Control": "no-cache",
@@ -420,8 +445,9 @@ def setup_routes(app: FastAPI) -> None:
     async def create_conversation(
         req: Request,
         request: Optional[ConversationCreate] = Body(default=None),
-        # TODO: In a real app, this would come from authentication
-        user_id: str = "default_user",
+        # TODO: Use default user for now (in real app, this would come
+        # from auth)
+        user_id: str = DEFAULT_USER_ID,
     ):
         """
         Create a new conversation.
@@ -433,9 +459,9 @@ def setup_routes(app: FastAPI) -> None:
         Returns:
             Conversation: Created conversation.
         """
+        conversation = ConversationsService()
         return result_wrapper(
-            await methods.create_conversation(
-                request, user_id))
+            await conversation.create(request, user_id))
 
     @app.get(
         EP_PREFIX + "/conversations",
@@ -446,7 +472,7 @@ def setup_routes(app: FastAPI) -> None:
         page: int = 1,
         page_size: int = 20,
         # TODO: In a real app, this would come from authentication
-        user_id: str = "default_user",
+        user_id: str = DEFAULT_USER_ID,
     ):
         """
         Get user conversations with pagination.
@@ -459,8 +485,9 @@ def setup_routes(app: FastAPI) -> None:
         Returns:
             ConversationList: Paginated conversation list.
         """
+        conversations = ConversationsService()
         return result_wrapper(
-            await methods.get_conversations(user_id, page, page_size)
+            await conversations.list(user_id, page, page_size)
         )
 
     @app.get(
@@ -471,7 +498,7 @@ def setup_routes(app: FastAPI) -> None:
     async def get_conversation(
         conversation_id: str,
         # TODO: In a real app, this would come from authentication
-        user_id: str = "default_user",
+        user_id: str = DEFAULT_USER_ID,
     ):
         """
         Get a specific conversation.
@@ -483,8 +510,9 @@ def setup_routes(app: FastAPI) -> None:
         Returns:
             Conversation: Conversation data.
         """
+        conversation = ConversationsService(conversation_id)
         return result_wrapper(
-            await methods.get_conversation(conversation_id, user_id)
+            await conversation.get(user_id)
         )
 
     @app.put(
@@ -496,7 +524,7 @@ def setup_routes(app: FastAPI) -> None:
         conversation_id: str,
         request: Optional[ConversationUpdate] = Body(default=None),
         # TODO: In a real app, this would come from authentication
-        user_id: str = "default_user",
+        user_id: str = DEFAULT_USER_ID,
     ):
         """
         Update a conversation.
@@ -509,9 +537,9 @@ def setup_routes(app: FastAPI) -> None:
         Returns:
             Conversation: Updated conversation.
         """
+        conversation = ConversationsService(conversation_id)
         return result_wrapper(
-            await methods.update_conversation(conversation_id, request,
-                                              user_id)
+            await conversation.update(request, user_id)
         )
 
     @app.delete(
@@ -521,7 +549,7 @@ def setup_routes(app: FastAPI) -> None:
     async def delete_conversation(
         conversation_id: str,
         # TODO: In a real app, this would come from authentication
-        user_id: str = "default_user",
+        user_id: str = DEFAULT_USER_ID,
     ):
         """
         Delete a conversation.
@@ -533,8 +561,9 @@ def setup_routes(app: FastAPI) -> None:
         Returns:
             Dict[str, str]: Deletion confirmation.
         """
+        conversation = ConversationsService(conversation_id)
         return result_wrapper(
-            await methods.delete_conversation(conversation_id, user_id)
+            await conversation.delete(user_id)
         )
 
     # Knowledge Base Management Endpoints
@@ -695,7 +724,7 @@ def setup_routes(app: FastAPI) -> None:
         tags=["File Generation"]
     )
     async def generate_file(
-        request:  Optional[FileGenerationRequest] = Body(default=None),
+        request: Optional[FileGenerationRequest] = Body(default=None),
     ):
         """
         Generate a file from content.
@@ -724,6 +753,40 @@ def setup_routes(app: FastAPI) -> None:
             FilePackage: File package information.
         """
         return result_wrapper(await methods.create_file_package(files))
+
+    # Settings Endpoints
+
+    @app.get(
+        EP_PREFIX + "/settings",
+        # response_model=SettingsResponse,
+        tags=["Settings"]
+    )
+    async def get_settings():
+        """
+        Get application settings.
+
+        Returns:
+            SettingsResponse: List of labels and variables.
+        """
+        return result_wrapper(await methods.get_settings())
+
+    @app.post(
+        EP_PREFIX + "/settings",
+        tags=["Settings"]
+    )
+    async def update_settings(
+        request: UpdateSettingsRequest = Body(...)
+    ):
+        """
+        Update application settings.
+
+        Args:
+            request: Update settings request.
+
+        Returns:
+            Dict[str, str]: Success message.
+        """
+        return result_wrapper(await methods.update_settings(request))
 
     @app.get(
         EP_PREFIX + "/download/file/{filename}",
@@ -784,6 +847,9 @@ def setup_routes(app: FastAPI) -> None:
     )
     async def generate_json_config(
         request: Optional[GenerationRequest] = Body(default=None),
+        # TODO: Use default user for now (in real app, this would come
+        # from auth)
+        user_id: str = DEFAULT_USER_ID,
     ):
         """
         Generate JSON configuration for GenericSuite.
@@ -800,7 +866,8 @@ def setup_routes(app: FastAPI) -> None:
         result = await methods.generate_json_config_endpoint(
             request.requirements,
             request.table_name,
-            request.config_type,
+            user_id=user_id,
+            config_type=request.config_type,
         )
         _ = DEBUG and log_debug(
             f"ENDPOINT >> generate_json_config | Result: {result}")
@@ -814,6 +881,9 @@ def setup_routes(app: FastAPI) -> None:
     )
     async def generate_python_code(
         request: Optional[GenerationRequest] = Body(default=None),
+        # TODO: Use default user for now (in real app, this would come
+        # from auth)
+        user_id: str = DEFAULT_USER_ID,
     ):
         """
         Generate Python code for GenericSuite.
@@ -827,10 +897,11 @@ def setup_routes(app: FastAPI) -> None:
         """
         return result_wrapper(
             await methods.generate_python_code_endpoint(
-                request.requirements,
-                request.tool_name,
-                request.description,
-                request.type,
+                requirements=request.requirements,
+                tool_name=request.tool_name,
+                description=request.description,
+                user_id=user_id,
+                type=request.type,
             )
         )
 
@@ -841,6 +912,8 @@ def setup_routes(app: FastAPI) -> None:
     )
     async def generate_frontend_code(
         request: Optional[GenerationRequest] = Body(default=None),
+        # TODO: In a real app, this would come from authentication
+        user_id: str = DEFAULT_USER_ID,
     ):
         """
         Generate ReactJS frontend code.
@@ -852,7 +925,38 @@ def setup_routes(app: FastAPI) -> None:
             List[GeneratedFile]: Generated frontend code files.
         """
         return result_wrapper(
-            await methods.generate_frontend_code_endpoint(request.requirements)
+            await methods.generate_frontend_code_endpoint(
+                requirements=request.requirements,
+                user_id=user_id,
+            )
+        )
+
+    @app.post(
+        EP_PREFIX + "/generate/backend-code",
+        # response_model=GeneratedFilesResponse,
+        tags=["Code Generation"],
+    )
+    async def generate_backend_code(
+        request: Optional[GenerationRequest] = Body(default=None),
+        # TODO: In a real app, this would come from authentication
+        user_id: str = DEFAULT_USER_ID,
+    ):
+        """
+        Generate backend code for specified framework.
+
+        Args:
+            requirements: Requirements for the backend code.
+            framework: Backend framework (fastapi, flask, chalice).
+
+        Returns:
+            List[GeneratedFile]: Generated backend code files.
+        """
+        return result_wrapper(
+            await methods.generate_backend_code_endpoint(
+                requirements=request.requirements,
+                user_id=user_id,
+                framework=request.framework,
+            )
         )
 
     @app.get(
@@ -872,31 +976,6 @@ def setup_routes(app: FastAPI) -> None:
         result = rc.get_repository_info()
         return success_wrapper(result)
 
-    @app.post(
-        EP_PREFIX + "/generate/backend-code",
-        # response_model=GeneratedFilesResponse,
-        tags=["Code Generation"],
-    )
-    async def generate_backend_code(
-        request: Optional[GenerationRequest] = Body(default=None),
-    ):
-        """
-        Generate backend code for specified framework.
-
-        Args:
-            requirements: Requirements for the backend code.
-            framework: Backend framework (fastapi, flask, chalice).
-
-        Returns:
-            List[GeneratedFile]: Generated backend code files.
-        """
-        return result_wrapper(
-            await methods.generate_backend_code_endpoint(
-                request.requirements,
-                request.framework
-            )
-        )
-
 
 # Create the application instance
 app = create_app()
@@ -904,9 +983,9 @@ app = create_app()
 
 def run_server():
     """Run the FastAPI server with uvicorn."""
-    host = os.getenv("SERVER_HOST", "0.0.0.0")
-    port = int(os.getenv("SERVER_PORT", "8000"))
-    debug = os.getenv("SERVER_DEBUG", "0") == "1"
+    host = get_envvar("SERVER_HOST", "0.0.0.0")
+    port = int(get_envvar("SERVER_PORT", "8002"))
+    debug = get_envvar("SERVER_DEBUG", "0") == "1"
 
     uvicorn.run(
         "genericsuite_codegen.api.main:app",

@@ -4,7 +4,7 @@
             "genericsuite-codegen": {
                 "url": "http://localhost:8070/mcp",
                 "headers": {
-                    "MCP_API_KEY": "ag-api-key-..."
+                    "Authorization": "Bearer sk-gsu-..."
                 }
             }
         }

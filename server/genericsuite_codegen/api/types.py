@@ -152,7 +152,7 @@ class QueryRequest(BaseModel):
     context_limit: int = Field(
         default=4000,
         ge=500,
-        le=8000,
+        le=2000000,
         description="Maximum context length for knowledge base retrieval"
     )
     include_sources: bool = Field(
@@ -188,68 +188,6 @@ class QueryResponse(BaseResponse):
         default=None,
         description="Conversation ID"
     )
-
-
-# Conversation Models
-
-class Message(BaseModel):
-    """Individual message in a conversation."""
-    id: str = Field(description="Unique message identifier")
-    role: str = Field(description="Message role (user/assistant)")
-    content: str = Field(description="Message content")
-    timestamp: datetime = Field(
-        default=dt.datetime.now(dt.UTC),
-        description="Message timestamp")
-    sources: Optional[List[str]] = Field(
-        default=None, description="Source documents for assistant messages")
-    task_type: Optional[str] = Field(
-        default=None, description="Type of task performed")
-    model_used: Optional[str] = Field(
-        default=None, description="Model used for generation")
-    token_usage: Optional[Dict[str, int]] = Field(
-        default=None, description="Token usage for this message")
-
-    @field_validator('role')
-    def validate_role(cls, v):
-        """Validate message role."""
-        if v not in ['user', 'assistant']:
-            raise ValueError('Role must be either "user" or "assistant"')
-        return v
-
-
-class ConversationCreate(BaseModel):
-    """Request model for creating a new conversation."""
-    title: Optional[str] = Field(
-        default=None, max_length=200, description="Conversation title")
-    initial_message: Optional[str] = Field(
-        default=None, description="Initial message to start the conversation")
-
-
-class ConversationUpdate(BaseModel):
-    """Request model for updating a conversation."""
-    title: Optional[str] = Field(
-        default=None, max_length=200, description="New conversation title")
-
-
-class Conversation(BaseModel):
-    """Conversation model."""
-    id: str = Field(description="Conversation ID")
-    title: str = Field(description="Conversation title")
-    messages: List[Message] = Field(
-        default_factory=list, description="Conversation messages")
-    created_at: datetime = Field(description="Creation timestamp")
-    updated_at: datetime = Field(description="Last update timestamp")
-    message_count: int = Field(
-        description="Number of messages in conversation")
-
-
-class ConversationList(BaseResponse):
-    """Response model for conversation list."""
-    conversations: List[Conversation] = Field(
-        description="List of conversations")
-    total: int = Field(description="Total number of conversations")
-    page: int = Field(description="Current page number")
-    page_size: int = Field(description="Number of items per page")
 
 
 # Knowledge Base Models
@@ -457,13 +395,15 @@ class KnowledgeBaseStatistics(BaseModel):
         description="Last updated")
 
 
-class ConversationStatistics(BaseModel):
-    total_conversations: int = Field(description="Total conversations")
-
-
 class SystemStatistics(BaseModel):
     uptime: str = Field(description="Uptime")
     memory_usage: str = Field(description="Memory usage")
+
+
+class ConversationStatistics(BaseModel):
+    total_conversations: int = Field(description="Total conversations")
+    error: Optional[str] = Field(
+        default=None, description="Error message if any")
 
 
 class Statistics(BaseModel):
@@ -474,3 +414,40 @@ class Statistics(BaseModel):
         description="Conversation statistics")
     agent: AgentModel = Field(description="Agent usage statistics")
     system: SystemStatistics = Field(description="System resource statistics")
+
+
+class LlmData(BaseModel):
+    input_tokens_price: Optional[float] = None
+    output_tokens_price: Optional[float] = None
+    context_window_size: Optional[int] = None
+
+
+# Settings Models
+
+class SettingItemType(str, Enum):
+    """Type of setting item."""
+    LABEL = "label"
+    VARIABLE = "variable"
+
+
+class SettingItem(BaseModel):
+    """Represents a single setting item (label or variable)."""
+    type: SettingItemType = Field(description="Item type (label/variable)")
+    name: Optional[str] = Field(
+        default=None, description="Environment variable name")
+    label: str = Field(description="Display label or comment text")
+    value: Optional[str] = Field(
+        default=None, description="Current value for variables")
+    select_options: Optional[List[str]] = Field(
+        default=None, description="Select options for variables")
+
+
+class SettingsResponse(BaseModel):
+    """Response model for settings listing."""
+    settings: List[SettingItem] = Field(description="List of settings items")
+
+
+class UpdateSettingsRequest(BaseModel):
+    """Request model for updating settings."""
+    settings: Dict[str, Any] = Field(
+        description="Dictionary of setting names and values")

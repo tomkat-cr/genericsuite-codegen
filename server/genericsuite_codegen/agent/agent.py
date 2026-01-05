@@ -6,53 +6,51 @@ integrating knowledge base search, code generation capabilities, and
 LLM provider configuration for GenericSuite development assistance.
 """
 
-import os
-import json
 from typing import Dict, Any, Optional, List, Tuple
 
 from pydantic_ai import Agent
 # from pydantic_ai import RunContext
-from pydantic_ai.models import Model
-from pydantic_ai.models.openai import OpenAIChatModel
-from pydantic_ai.providers.openai import OpenAIProvider
-from pydantic_ai.settings import ModelSettings
-
 from pydantic_ai.messages import (
     ModelRequest,
     ModelResponse,
     TextPart,
     UserPromptPart,
 )
+from pydantic_ai.settings import ModelSettings
 
+from genericsuite_codegen.agent.agent_super import (
+    AgentSuper,
+    create_agent_config_from_env,
+)
 from genericsuite_codegen.utilities.app_logger import (
     log_debug,
     log_warning,
     log_error,
-    log_info,
+    # log_info,
 )
+from genericsuite_codegen.utilities.env_vars import get_envvar
 
-from .types import AgentConfig, QueryRequest, AgentContext, AgentResponse
-from .tools import (
-    get_all_agent_tools,
+from genericsuite_codegen.agent.types import (
+    AgentConfig, QueryRequest, AgentContext, AgentResponse)
+from genericsuite_codegen.agent.tools import (
     KnowledgeBaseTool,
     validate_search_query,
     format_sources_for_attribution,
-    CONTEXT_DEFAULT_MAX_LENGTH
 )
-from .enhanced_search_types import EnhancedSearchConfig
-from .search_templates import SearchTemplateManager
-from .prompts import get_prompt_manager
+from genericsuite_codegen.agent.enhanced_search_types \
+    import EnhancedSearchConfig
+from genericsuite_codegen.agent.search_templates import SearchTemplateManager
+from genericsuite_codegen.agent.prompts import get_prompt_manager
+from genericsuite_codegen.agent.tools import get_all_agent_tools
 
-from .patch_openai_service_tier import patch_openai_service_tier
-from .patch_tokenizers import patch_tokenizers
-from .logfire import configure_logfire
+from genericsuite_codegen.agent.logfire import configure_logfire
 
 
-DEBUG = False
+DEBUG = True
 DEBUG_DETAILED = False
 
 
-class GenericSuiteAgent:
+class GenericSuiteAgent(AgentSuper):
     """
     Main AI agent for GenericSuite CodeGen using Pydantic AI.
 
@@ -73,7 +71,8 @@ class GenericSuiteAgent:
             enhanced_search_config: Enhanced search configuration.
                 If None, uses defaults.
         """
-        self.config = config or self._create_default_config()
+        super().__init__(config, enhanced_search_config)
+
         self.prompt_manager = get_prompt_manager()
 
         # Initialize enhanced search configuration
@@ -81,10 +80,6 @@ class GenericSuiteAgent:
             enhanced_search_config or
             self._create_default_enhanced_search_config()
         )
-
-        # Initialize LLM model
-        self.inference_args = {}
-        self.model = self._initialize_model()
 
         # Create Pydantic AI agent and knowledge base tool when needed
         self.kb_tool = None
@@ -94,297 +89,22 @@ class GenericSuiteAgent:
             'enabled' if self.enhanced_search_config.fallback_enabled
             else 'disabled'
         )
+
         _ = DEBUG and log_debug(
-            f"Agent - Initialized GenericSuite agent with the "
-            f"'{self.config.model_provider}' provider and enhanced search "
-            f"{enhanced_status}"
+            "GenericSuite Agent initialized, with "
+            f"Provider: '{self.config.model_provider}'"
+            f", Model: '{self.config.model_name}'"
+            ", Context window size: "
+            f"{self.llm_data.context_window_size} tokens"
+            ", Pricing: input USD: "
+            f"{self.llm_data.input_tokens_price}"
+            " | output USD: "
+            f"{self.llm_data.output_tokens_price}"
+            f", Enhanced search: {enhanced_status}"
         )
 
-        if os.getenv("LOGFIRE_ENABLED", "false").lower() == "true":
+        if get_envvar("LOGFIRE_ENABLED", "false").lower() == "true":
             configure_logfire()
-
-    def _create_default_config(self) -> AgentConfig:
-        """Create default configuration from environment variables."""
-        config_args = {
-            "model_api": os.getenv("LLM_API", "openai"),
-            "model_provider": os.getenv("LLM_PROVIDER", "openai"),
-            "model_name": os.getenv("LLM_MODEL_NAME", "gpt-5-nano"),
-            "temperature": float(os.getenv("LLM_TEMPERATURE", "0.5")),
-            "max_tokens": (
-                int(os.getenv("LLM_MAX_TOKENS", "4000"))
-                if os.getenv("LLM_MAX_TOKENS")
-                else None
-            ),
-            "timeout": int(os.getenv("LLM_TIMEOUT", "60")),
-            "api_key": None,
-        }
-
-        base_url = os.getenv("LLM_BASE_URL")
-        if base_url is not None and base_url != '':
-            config_args["base_url"] = base_url
-
-        agent_config = AgentConfig(**config_args)
-        _ = DEBUG and log_debug(
-            f"Agent - Default config: {agent_config}"
-        )
-        return agent_config
-
-    def _create_default_enhanced_search_config(self) -> EnhancedSearchConfig:
-        """Create default enhanced search configuration from environment."""
-        try:
-            # Initialize template manager to get templates
-            template_manager = SearchTemplateManager()
-            templates = template_manager.get_all_templates()
-
-            # Create enhanced search config
-            enhanced_config = EnhancedSearchConfig(
-                templates=templates,
-                local_repo_path=os.getenv(
-                    "ENHANCED_SEARCH_LOCAL_REPO_PATH", "local_repo_files"
-                ),
-                max_context_length=int(
-                    os.getenv("ENHANCED_SEARCH_MAX_CONTEXT_LENGTH", "10000")),
-                fallback_enabled=os.getenv(
-                    "ENHANCED_SEARCH_FALLBACK_ENABLED", "true"
-                ).lower() == "true",
-                search_result_limit=int(
-                    os.getenv("ENHANCED_SEARCH_RESULT_LIMIT", "10")
-                ),
-                context_determination_enabled=os.getenv(
-                    "ENHANCED_SEARCH_CONTEXT_DETERMINATION_ENABLED", "true"
-                ).lower() == "true",
-                document_retrieval_enabled=os.getenv(
-                    "ENHANCED_SEARCH_ENABLE_DOC_RETRIEVAL", "true"
-                ).lower() == "true",
-                similarity_threshold=float(
-                    os.getenv("ENHANCED_SEARCH_SIMILARITY_THRESHOLD", "0.7")
-                ),
-                merge_strategy=os.getenv(
-                    "ENHANCED_SEARCH_MERGE_STRATEGY", "prioritize_context"
-                )
-            )
-
-            _ = DEBUG and log_debug(
-                f"Agent - Enhanced search config: "
-                f"local_repo_path={enhanced_config.local_repo_path}, "
-                f"fallback_enabled={enhanced_config.fallback_enabled}, "
-                f"document_retrieval="
-                f"{enhanced_config.document_retrieval_enabled}"
-            )
-
-            return enhanced_config
-
-        except Exception as e:
-            log_warning(f"Failed to create enhanced search config: {e}")
-            # Return minimal config with fallback enabled
-            return EnhancedSearchConfig(
-                templates={},
-                local_repo_path="local_repo_files",
-                max_context_length=10000,
-                fallback_enabled=True
-            )
-
-    def _initialize_model(self) -> Model:
-        """
-        Initialize the LLM model based on configuration.
-
-        Returns:
-            Model: Configured Pydantic AI model.
-
-        Raises:
-            ValueError: If model configuration is invalid.
-        """
-        model_params = {
-            "api_key": os.getenv("OPENAI_API_KEY"),
-            "base_url": os.getenv("LLM_BASE_URL")
-        }
-        inference_params = {
-            "model_name": os.getenv("OPENAI_MODEL_NAME",
-                                    self.config.model_name),
-        }
-        if self.config.model_provider == "openai":
-            pass
-        elif self.config.model_provider == "huggingface":
-            model_params = {
-                "api_key": os.getenv("HF_TOKEN"),
-                "base_url": os.getenv("LLM_BASE_URL",
-                                      "https://router.huggingface.co/v1")
-            }
-            inference_params = {
-                "model_name": os.getenv("HF_MODEL_NAME",
-                                        self.config.model_name),
-            }
-        elif self.config.model_provider == "groq":
-            model_params = {
-                "api_key": os.getenv("GROQ_API_KEY"),
-                "base_url": os.getenv("LLM_BASE_URL",
-                                      "https://api.groq.com/openai/v1")
-            }
-            inference_params = {
-                "model_name": os.getenv("GROQ_MODEL_NAME",
-                                        self.config.model_name),
-            }
-        elif self.config.model_provider == "aimlapi":
-            model_params = {
-                "api_key": os.getenv("AIMLAPI_API_KEY"),
-                "base_url": os.getenv("LLM_BASE_URL",
-                                      "https://api.aimlapi.com/v1")
-            }
-            inference_params = {
-                "model_name": os.getenv("AIMLAPI_MODEL_NAME",
-                                        self.config.model_name),
-            }
-        elif self.config.model_provider == "openrouter":
-            model_params = {
-                "api_key": os.getenv("OPENROUTER_API_KEY"),
-                "base_url": os.getenv("LLM_BASE_URL",
-                                      "https://openrouter.ai/api/v1")
-            }
-            inference_params = {
-                "model_name": os.getenv("OPENROUTER_MODEL_NAME",
-                                        self.config.model_name),
-            }
-        elif self.config.model_provider == "together":
-            model_params = {
-                "api_key": os.getenv("TOGETHER_API_KEY"),
-                "base_url": os.getenv("LLM_BASE_URL",
-                                      "https://api.together.xyz/v1"),
-            }
-            inference_params = {
-                "model_name": os.getenv("TOGETHER_MODEL_NAME",
-                                        self.config.model_name),
-                "stop": json.loads(
-                    os.getenv("LLM_STOP",
-                              '["<|eot_id|>", "<|eom_id|>"]'))
-            }
-        elif self.config.model_provider == "nvidia":
-            model_params = {
-                "api_key": os.getenv("NVIDIA_API_KEY"),
-                "base_url": os.getenv(
-                    "LLM_BASE_URL",
-                    "https://integrate.api.nvidia.com/v1")
-            }
-            inference_params = {
-                "model_name": os.getenv("NVIDIA_MODEL_NAME",
-                                        self.config.model_name),
-            }
-        elif self.config.model_provider == "xai":
-            model_params = {
-                "api_key": os.getenv("XAI_API_KEY"),
-                "base_url": os.getenv("LLM_BASE_URL",
-                                      "https://api.x.ai/v1")
-            }
-            inference_params = {
-                "model_name": os.getenv("XAI_MODEL_NAME",
-                                        self.config.model_name),
-            }
-        elif self.config.model_provider == "rhymes":
-            model_params = {
-                "api_key": os.getenv("RHYMES_API_KEY"),
-                "base_url": os.getenv("LLM_BASE_URL",
-                                      "https://api.rhymes.ai/v1")
-            }
-            inference_params = {
-                "model_name": os.getenv("RHYMES_MODEL_NAME",
-                                        self.config.model_name),
-            }
-        elif self.config.model_provider == "ollama":
-            model_params = {
-                "base_url": os.getenv("LLM_BASE_URL",
-                                      "http://localhost:11434/v1")
-            }
-            inference_params = {
-                "model_name": os.getenv("OLLAMA_MODEL_NAME",
-                                        self.config.model_name),
-            }
-        else:
-            log_warning(
-                "Unsupported provider "
-                f"{self.config.model_provider}, falling back to OpenAI"
-            )
-
-        patch_tokenizers()
-        patch_openai_service_tier()
-
-        try:
-            if self.config.model_api == "openai":
-                return self._create_openai_model(
-                    model_params, inference_params)
-            elif self.config.model_api == "litellm":
-                return self._create_litellm_model(
-                    model_params, inference_params)
-            else:
-                log_warning(
-                    "Unsupported API "
-                    f"{self.config.model_api}, falling back to OpenAI"
-                )
-                return self._create_openai_model(model_params)
-
-        except Exception as e:
-            log_error(f"Failed to initialize model: {e}")
-            raise ValueError(f"Model initialization failed: {e}")
-
-    def _create_openai_model(
-        self,
-        model_params: dict,
-        inference_params: dict
-    ) -> OpenAIChatModel:
-        """Create OpenAI model configuration."""
-        if model_params is None:
-            model_params = {}
-        if inference_params is None:
-            inference_params = {}
-
-        self.inference_args["temperature"] = self.config.temperature
-        self.inference_args["timeout"] = self.config.timeout
-        if self.config.max_tokens:
-            self.inference_args["max_tokens"] = self.config.max_tokens
-        if self.config.stop:
-            self.inference_args["stop"] = self.config.stop
-
-        model_kwargs = {}
-
-        if self.config.api_key:
-            model_kwargs["api_key"] = self.config.api_key
-
-        if self.config.base_url is None or self.config.base_url == '':
-            model_kwargs["base_url"] = 'https://api.openai.com/v1'
-        else:
-            model_kwargs["base_url"] = self.config.base_url
-
-        model_kwargs.update(model_params)
-        self.inference_args.update(inference_params)
-
-        self.config.model_name = self.inference_args["model_name"]
-        self.config.base_url = model_kwargs["base_url"]
-
-        _ = DEBUG and log_debug(f"Agent - Model kwargs: {model_kwargs}"
-                                + f"\nInference Args: {self.inference_args}")
-
-        return OpenAIChatModel(
-            self.config.model_name,
-            provider=OpenAIProvider(**model_kwargs)
-        )
-
-    def _create_litellm_model(
-        self,
-        model_params: dict = None,
-        inference_params: dict = None
-    ) -> Model:
-        """Create LiteLLM model configuration."""
-        # TODO: Note: This would need to be implemented based on Pydantic AI's
-        # LiteLLM support. For now, fall back to OpenAI
-        try:
-            # type: ignore[import]
-            import litellm
-            _ = DEBUG and log_debug(f"LiteLLM loaded: {litellm}")
-            # LITELLM_AVAILABLE = True
-        except ImportError:
-            # LITELLM_AVAILABLE = False
-            log_warning("LiteLLM not available, using OpenAI only")
-
-        log_warning("LiteLLM integration not yet implemented, using OpenAI")
-        return self._create_openai_model(model_params, inference_params)
 
     def _create_agent(self) -> Agent:
         """
@@ -421,6 +141,7 @@ class GenericSuiteAgent:
         Args:
             request: Query request with user input and parameters.
             context: Optional agent context for personalization.
+            run_context: Optional run context for personalization.
 
         Returns:
             AgentResponse: Generated response with sources and metadata.
@@ -445,6 +166,9 @@ class GenericSuiteAgent:
             # Create task-specific prompt
             prompt = self._create_task_prompt(request, kb_context, sources)
 
+            _ = DEBUG and log_debug(
+                f">> Agent prompt: {prompt}")
+
             # Run agent with context
             run_context = self._create_run_context(context, request)
 
@@ -453,7 +177,9 @@ class GenericSuiteAgent:
             raise
         except Exception as e:
             log_error(
-                f"Query preparation failed for query: {request.query}: {e}")
+                "Query preparation failed for query:"
+                f"\n'{request.query}'"
+                f"\nError: {e}")
             raise RuntimeError(f"Failed to process query: {e}")
 
         try:
@@ -472,7 +198,8 @@ class GenericSuiteAgent:
                 message_history=run_context.get("history", [])
             )
 
-            _ = DEBUG and log_debug(f">> Agent result: {result}")
+            _ = DEBUG and log_debug(
+                f">> Agent result: {result}")
 
             # Format response
             response = self._format_response(
@@ -555,6 +282,7 @@ class GenericSuiteAgent:
                     query=request.query,
                     max_context_length=request.context_limit,
                     file_type_filter=file_type_filter,
+                    full_content=True
                 )
 
             return context, sources
@@ -649,7 +377,8 @@ class GenericSuiteAgent:
         return run_context
 
     def _format_response(
-        self, result: Any,
+        self,
+        agent_result: Any,
         request: QueryRequest,
         sources: List[str],
         context: str
@@ -658,7 +387,7 @@ class GenericSuiteAgent:
         Format the agent result into a structured response.
 
         Args:
-            result: Agent execution result.
+            agent_result: Agent execution result.
             request: Original query request.
             sources: Source document paths.
             context: Retrieved context.
@@ -666,10 +395,12 @@ class GenericSuiteAgent:
         Returns:
             AgentResponse: Formatted response.
         """
-        # Extract content from result
-        _ = DEBUG and log_debug(f">> _format_response | result: {result}")
-        content = str(result.output) if hasattr(
-            result, "output") else str(result)
+        _ = DEBUG and log_debug(
+            f">> _format_response | agent_result: {agent_result}")
+
+        # Extract content from agent_result
+        content = str(agent_result.output) if hasattr(
+            agent_result, "output") else str(agent_result)
 
         # Add source attribution if requested
         if request.include_sources and sources:
@@ -686,15 +417,16 @@ class GenericSuiteAgent:
 
         # Extract token usage if available
         token_usage = None
-        if hasattr(result, "usage") and result.usage:
-            # _ = DEBUG and log_debug(
-            log_info(
-                f">> Agent | _format_response | Token usage: {result.usage}")
+        if hasattr(agent_result, "usage") and agent_result.usage:
+            _ = DEBUG and log_debug(
+                ">> Agent | _format_response | Token usage:"
+                f" {agent_result.usage}")
             token_usage = {
-                "prompt_tokens": getattr(result.usage, "prompt_tokens", 0),
+                "prompt_tokens": getattr(agent_result.usage,
+                                         "prompt_tokens", 0),
                 "completion_tokens": getattr(
-                    result.usage, "completion_tokens", 0),
-                "total_tokens": getattr(result.usage, "total_tokens", 0),
+                    agent_result.usage, "completion_tokens", 0),
+                "total_tokens": getattr(agent_result.usage, "total_tokens", 0),
             }
 
         return AgentResponse(
@@ -722,9 +454,20 @@ class GenericSuiteAgent:
         Returns:
             AgentResponse: Generated JSON configuration.
         """
+        user_requirements = \
+            "1. Generate the table configuration for table(s)" \
+            + f" {table_name}: {requirements}." \
+            + "\n" \
+            + "2. Generate the form configuration for the table(s)." \
+            + ""
+        # + "\n" \
+        # + "3. Generate the menu configurations for the table(s)." \
+        # + "\n" \
+        # + "4. Generate the endpoints configurations for the table(s)." \
+        # + ""
+
         request = QueryRequest(
-            query=f"Generate a {config_type} configuration for table"
-            f" '{table_name}': {requirements}",
+            query=user_requirements,
             task_type="json",
             include_sources=True,
         )
@@ -990,30 +733,9 @@ def initialize_agent(
 # Utility functions
 
 
-def create_agent_config_from_env() -> AgentConfig:
-    """
-    Create agent configuration from environment variables.
-
-    Returns:
-        AgentConfig: Configuration from environment.
-    """
-    return AgentConfig(
-        model_api=os.getenv("LLM_API", "openai"),
-        model_provider=os.getenv("LLM_PROVIDER", "openai"),
-        model_name=os.getenv("LLM_MODEL_NAME", "gpt-4"),
-        temperature=float(os.getenv("LLM_TEMPERATURE", "0.1")),
-        max_tokens=(
-            int(os.getenv("LLM_MAX_TOKENS", "4000"))
-            if os.getenv("LLM_MAX_TOKENS")
-            else None
-        ),
-        timeout=int(os.getenv("LLM_TIMEOUT", "60")),
-        api_key=os.getenv("OPENAI_API_KEY"),
-        base_url=os.getenv("LLM_BASE_URL"),
-    )
-
-
-def create_enhanced_search_config_from_env() -> EnhancedSearchConfig:
+def create_enhanced_search_config_from_env(
+    config: AgentConfig = None,
+) -> EnhancedSearchConfig:
     """
     Create enhanced search configuration from environment variables.
 
@@ -1025,36 +747,39 @@ def create_enhanced_search_config_from_env() -> EnhancedSearchConfig:
         template_manager = SearchTemplateManager()
         templates = template_manager.get_all_templates()
 
+        if config is None:
+            config = create_agent_config_from_env()
+
         return EnhancedSearchConfig(
             templates=templates,
-            local_repo_path=os.getenv(
+            local_repo_path=get_envvar(
                 "LOCAL_REPO_DIR", "./local_repo_files"
             ),
             max_context_length=int(
-                os.getenv(
+                get_envvar(
                     "ENHANCED_SEARCH_MAX_CONTEXT_LENGTH", str(
-                        CONTEXT_DEFAULT_MAX_LENGTH)
+                        config.context_window_size)
                 )
             ),
-            fallback_enabled=os.getenv(
+            fallback_enabled=get_envvar(
                 "ENHANCED_SEARCH_FALLBACK_ENABLED", "true"
             ).lower() == "true",
-            context_determination_enabled=os.getenv(
+            context_determination_enabled=get_envvar(
                 "ENHANCED_SEARCH_CONTEXT_DETERMINATION_ENABLED",
                 "true"
             ).lower() == "true",
-            document_retrieval_enabled=os.getenv(
+            document_retrieval_enabled=get_envvar(
                 "ENHANCED_SEARCH_ENABLE_DOC_RETRIEVAL", "true"
             ).lower() == "true",
             search_result_limit=int(
-                os.getenv("ENHANCED_SEARCH_RESULT_LIMIT", "10")
+                get_envvar("ENHANCED_SEARCH_RESULT_LIMIT", "10")
             ),
             similarity_threshold=float(
-                os.getenv(
+                get_envvar(
                     "ENHANCED_SEARCH_SIMILARITY_THRESHOLD", "0.7"
                 )
             ),
-            merge_strategy=os.getenv(
+            merge_strategy=get_envvar(
                 "ENHANCED_SEARCH_MERGE_STRATEGY",
                 "prioritize_context"
             )
