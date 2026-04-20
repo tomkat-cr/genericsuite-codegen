@@ -102,3 +102,8 @@ kb-cron:
 run-telemetry:
 	bash ./scripts/telemetry_manager.sh run
 
+agents_md_link:
+	ln -s CLAUDE.md AGENTS.md
+
+sast-test:
+	bash node_modules/genericsuite-be-scripts/scripts/sast_test.sh

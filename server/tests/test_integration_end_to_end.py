@@ -200,7 +200,7 @@ class TestEndToEndIntegration:
         dual_result = await system['enhanced_search'].dual_search(
             user_query,
             context,
-            max_context_length=8000
+            max_context_length=2000000
         )
 
         # Verify dual search results
@@ -756,12 +756,12 @@ class TestMCPServerIntegration:
         # Verify tools are registered
         mcp_tools = mcp_server.mcp._tools
         expected_tools = [
-            "mcp_search_knowledge_base",
-            "mcp_generate_json_config",
-            "mcp_generate_langchain_tool",
-            "mcp_generate_mcp_tool",
-            "mcp_generate_frontend_code",
-            "mcp_generate_backend_code"
+            "search_knowledge_base",
+            "generate_json_config",
+            "generate_langchain_tool",
+            "generate_mcp_tool",
+            "generate_frontend_code",
+            "generate_backend_code"
         ]
 
         for expected_tool in expected_tools:

@@ -530,8 +530,8 @@ genericsuite-codegen/
 
 ## Kiro-Driven Development Approach
 
-* How we used Kiro to develop the project: [Kiro-Usage.md](./Kiro-Usage.md)
-* Kiro step-by-step process to develop the project: [Kiro-SDLC-Screenshots.md](./Kiro-SDLC-Screenshots.md).
+* How we used Kiro to develop the project: [Kiro-Usage.md](.kiro/docs/Kiro-Usage.md)
+* Kiro step-by-step process to develop the project: [Kiro-SDLC-Screenshots.md](.kiro/docs/Kiro-SDLC-Screenshots.md).
 
 ## License
 

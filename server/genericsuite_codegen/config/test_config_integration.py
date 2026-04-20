@@ -6,8 +6,11 @@ import tempfile
 import json
 from pathlib import Path
 
-from .config_loader import ConfigLoader, EnhancedSearchConfig
-from .config_validator import ConfigValidator, ValidationError
+from genericsuite_codegen.config.config_loader import (
+    ConfigLoader, EnhancedSearchConfig)
+from genericsuite_codegen.config.config_validator import (
+    ConfigValidator, ValidationError)
+from genericsuite_codegen.utilities.env_vars import get_envvar
 
 
 def test_config_loading():
@@ -25,7 +28,8 @@ def test_config_loading():
 
     # Test environment-specific configuration
     config_dev = loader.load_enhanced_search_config(environment="development")
-    assert config_dev.max_context_length == 15000  # Development has higher limit
+    assert config_dev.max_context_length \
+        == 15000  # Development has higher limit
     print("✓ Development configuration loaded successfully")
 
     # Test search templates loading
@@ -103,7 +107,7 @@ def test_environment_variable_override():
     # Save original values
     original_values = {}
     for key in test_env_vars:
-        original_values[key] = os.environ.get(key)
+        original_values[key] = get_envvar(key)
         os.environ[key] = test_env_vars[key]
 
     try:
@@ -113,7 +117,8 @@ def test_environment_variable_override():
         # Check that environment variables override defaults
         assert config.enabled is False  # Overridden by env var
         assert config.max_context_length == 5000  # Overridden by env var
-        assert config.local_repo_path == "test_repo_path"  # Overridden by env var
+        assert config.local_repo_path \
+            == "test_repo_path"  # Overridden by env var
         assert config.log_level == "ERROR"  # Overridden by env var
 
         print("✓ Environment variables correctly override configuration")
@@ -138,7 +143,7 @@ def test_config_file_creation():
         test_config = {
             "enhanced_search": {
                 "enabled": True,
-                "max_context_length": 8000
+                "max_context_length": 2000000
             },
             "logging": {
                 "level": "INFO"

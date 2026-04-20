@@ -232,3 +232,6 @@ deploy/docker_images/Dockerfile-Ollama.backup_*
 
 mcp-server/genericsuite_codegen
 server/genericsuite_codegen/assets/main_config.json
+
+# Claude Code
+.claude/settings.local.json

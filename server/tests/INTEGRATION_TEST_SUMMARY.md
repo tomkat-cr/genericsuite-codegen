@@ -42,10 +42,10 @@ This document summarizes the comprehensive integration tests implemented for the
 ### 3. MCP Server Integration Tests (`TestMCPServerIntegration`)
 
 #### ✅ MCP Integration Coverage
-- **Knowledge Base Search Tool**: Tests `mcp_search_knowledge_base` tool
-- **JSON Config Generation Tool**: Tests `mcp_generate_json_config` tool
-- **LangChain Tool Generation**: Tests `mcp_generate_langchain_tool` tool
-- **MCP Tool Generation**: Tests `mcp_generate_mcp_tool` tool
+- **Knowledge Base Search Tool**: Tests `search_knowledge_base` tool
+- **JSON Config Generation Tool**: Tests `generate_json_config` tool
+- **LangChain Tool Generation**: Tests `generate_langchain_tool` tool
+- **MCP Tool Generation**: Tests `generate_mcp_tool` tool
 - **Server Configuration**: Tests MCP server initialization and configuration
 - **Error Handling**: Tests MCP server error handling
 

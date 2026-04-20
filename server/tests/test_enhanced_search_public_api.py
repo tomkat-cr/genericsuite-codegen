@@ -73,7 +73,7 @@ class TestEnhancedVectorSearchPublicAPI:
         new_config = EnhancedSearchConfig(
             templates={},
             local_repo_path="new_path",
-            max_context_length=8000,
+            max_context_length=2000000,
             fallback_enabled=True
         )
 

@@ -30,7 +30,7 @@ Start planning using the context on the #BuildPrompt.md file
 
 - Click on the "Up Arrow" button.
 
-- Kiro started generating the [requirements.md](./.kiro/specs/genericsuite-codegen/requirements.md) file. 
+- Kiro started generating the [requirements.md](../specs/genericsuite-codegen/requirements.md) file. 
 
 ## Refining the initial prompt and refreshing the requirements.md
 
@@ -46,7 +46,7 @@ Start planning using the context on the #BuildPrompt.md file
 
 - Once the `requirements.md` file was ready, Kiro asks if you want to go to the next step, click on the `Move to the design phase` button.
 
-- Kiro started generating the [design.md](./.kiro/specs/genericsuite-codegen/design.md) file.
+- Kiro started generating the [design.md](../specs/genericsuite-codegen/design.md) file.
 
 ![Screenshot%202025-09-15%20at%2011.28.41 AM.png](./assets/sdlc_screenshots/Screenshot%202025-09-15%20at%2011.28.41 AM.png)
 
@@ -54,7 +54,7 @@ Start planning using the context on the #BuildPrompt.md file
 
 ![Screenshot%202025-09-15%20at%2011.28.58 AM.png](./assets/sdlc_screenshots/Screenshot%202025-09-15%20at%2011.28.58 AM.png)
 
-- Then Kiro generated the [tasks.md](./.kiro/specs/genericsuite-codegen/tasks.md) file.
+- Then Kiro generated the [tasks.md](../specs/genericsuite-codegen/tasks.md) file.
 
 ![Screenshot%202025-09-15%20at%2011.30.33 AM.png](./assets/sdlc_screenshots/Screenshot%202025-09-15%20at%2011.30.33 AM.png)
 
@@ -159,9 +159,9 @@ make dev
 
 - You should see the dashboard.
 
-![Dashboard](./assets/screenshots/genericsuite.codegen.ui.main.010.png)
+![Dashboard](../../assets/screenshots/genericsuite.codegen.ui.main.010.png)
 
-![Conversation](./assets/screenshots/genericsuite.codegen.ui.chat.020.png)
+![Conversation](../../assets/screenshots/genericsuite.codegen.ui.chat.020.png)
 
 ## Generating the steering documents
 

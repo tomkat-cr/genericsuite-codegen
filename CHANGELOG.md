@@ -17,6 +17,17 @@ This project adheres to [Semantic Versioning](http://semver.org/) and [Keep a Ch
 ### Security
 
 
+## [Unreleased] - Date
+
+### Added
+- AGENTS.md and CLAUDE.md files to provide context and instructions to AI agents [GS-303].
+- Add SAST testing [GS-315].
+- Implement comprehensive integration test suite for MCP server and core system components [GS-172].
+
+### Changed
+- `Kiro-Usage.md`, `Kiro-SDLC-Screenshots.md`, and referenced images moved to `.kiro/docs/`
+
+
 ## [1.4.0] - 2025-12-25
 
 ### Added
