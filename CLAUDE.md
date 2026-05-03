@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to AI Coding Assistants (Claude Code, Gemini CLI, Cursor, Antigravity, etc.) when working with code in this repository.
 
 ## What This Project Does
 
@@ -15,7 +15,6 @@ GenericSuite CodeGen is an AI-powered RAG system that generates JSON configurati
 ```bash
 make init-app-environment   # copies .env.example → .env and other config files
 make install                # installs all workspaces (Poetry + npm)
-make agents_md_link        # Link AGENTS.md and CLAUDE.md files
 ```
 
 Requires: Node.js 18+, Python 3.12+, Docker, and an `OPENAI_API_KEY` in `.env`.
@@ -145,7 +144,7 @@ Full list in `.env.example`.
 
 ## Important Notes
 
-- The `AGENTS.md` file (if present) is a symlink to `CLAUDE.md` — edit only `CLAUDE.md`.
+- The files `AGENTS.md`, `GEMINI.md`, etc. (if present) have only a referece to `@CLAUDE.md` — edit only `CLAUDE.md`.
 - Skills, commands, rules, and sub-agents are located in the `.claude/` directory.
 - **Authentication**: `DEFAULT_USER_ID` is used throughout as a placeholder — real auth is not yet implemented. TODOs exist in `endpoint_methods.py`.
 - **Knowledge base ingestion** filters files to the `BASE_LOCAL_PATH` subdirectory of the cloned repo and ignores `requirements.txt` files.
