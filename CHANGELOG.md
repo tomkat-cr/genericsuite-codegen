@@ -26,6 +26,7 @@ This project adheres to [Semantic Versioning](http://semver.org/) and [Keep a Ch
 
 ### Changed
 - `Kiro-Usage.md`, `Kiro-SDLC-Screenshots.md`, and referenced images moved to `.kiro/docs/`
+- Updated author information on `package.json`.
 
 
 ## [1.4.0] - 2025-12-25
