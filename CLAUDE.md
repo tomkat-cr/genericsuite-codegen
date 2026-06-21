@@ -145,7 +145,7 @@ Full list in `.env.example`.
 ## Important Notes
 
 - The files `AGENTS.md`, `GEMINI.md`, etc. (if present) have only a referece to `@CLAUDE.md` — edit only `CLAUDE.md`.
-- Skills, commands, rules, and sub-agents are located in the `.claude/` directory.
+- Skills live in `.ai/skills/` (source of truth); symlinked under `.agents/skills/`, `.claude/skills/`, `.codex/skills/`, `.gemini/skills/`, and `.devin/skills/`.
 - **Authentication**: `DEFAULT_USER_ID` is used throughout as a placeholder — real auth is not yet implemented. TODOs exist in `endpoint_methods.py`.
 - **Knowledge base ingestion** filters files to the `BASE_LOCAL_PATH` subdirectory of the cloned repo and ignores `requirements.txt` files.
 - **Dependency sync**: `deploy/dependency-sync/` contains a tool to keep `pyproject.toml` dependencies in sync with Dockerfiles. Run via `make sync-deps` from `deploy/`.

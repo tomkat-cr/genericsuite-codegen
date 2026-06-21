@@ -242,13 +242,13 @@ When implementing this project, make sure to:
 
 Follow these suggestions to generate JSON files, Python and ReactJS code:
 
-- [JSON files for GenericSuite tables configuration](genericsuite-basecamp/docs/Sample-Code/exampleapp/apps/config_dbdef) following the [Generic CRUD Editor Configuration Documentation](genericsuite-basecamp/docs/Configuration-Guide/Generic-CRUD-Editor-Configuration.md)
-- LangChain Tools following the [GenericSuite ExampleApp AI Agent](genericsuite-basecamp/docs/Sample-Code/exampleapp/apps/api-chalice/lib/models/ai_chatbot) application code examples
-- Application frontend starting code from [ExampleApp UI](/Users/carlosramirez/desarrollo/mediabros_repos/github/genericsuite-basecamp/docs/Sample-Code/exampleapp/apps/ui)
-- Application FastAPI backend starting code from [ExampleApp api-fastapi](/Users/carlosramirez/desarrollo/mediabros_repos/github/genericsuite-basecamp/docs/Sample-Code/exampleapp/apps/api-fastapi)
-- Application Flask backend starting code from [ExampleApp api-flask](/Users/carlosramirez/desarrollo/mediabros_repos/github/genericsuite-basecamp/docs/Sample-Code/exampleapp/apps/api-flask)
-- Application Chalice backend starting code from [ExampleApp api-chalice](/Users/carlosramirez/desarrollo/mediabros_repos/github/genericsuite-basecamp/docs/Sample-Code/exampleapp/apps/api-chalice)
-- Application FastMCP MCP server starting code from [ExampleApp mcp-server](/Users/carlosramirez/desarrollo/mediabros_repos/github/genericsuite-basecamp/docs/Sample-Code/exampleapp/apps/mcp-server)
+- [JSON files for GenericSuite tables configuration](genericsuite-basecamp/mkdocs_root/code/exampleapp/apps/config_dbdef) following the [Generic CRUD Editor Configuration Documentation](genericsuite-basecamp/mkdocs_root/en/Configuration-Guide/Generic-CRUD-Editor-Configuration.md)
+- LangChain Tools following the [GenericSuite ExampleApp AI Agent](genericsuite-basecamp/mkdocs_root/code/exampleapp/apps/api-chalice/lib/models/ai_chatbot) application code examples
+- Application frontend starting code from [ExampleApp UI](genericsuite-basecamp/mkdocs_root/code/exampleapp/apps/ui)
+- Application FastAPI backend starting code from [ExampleApp api-fastapi](genericsuite-basecamp/mkdocs_root/code/exampleapp/apps/api-fastapi)
+- Application Flask backend starting code from [ExampleApp api-flask](genericsuite-basecamp/mkdocs_root/code/exampleapp/apps/api-flask)
+- Application Chalice backend starting code from [ExampleApp api-chalice](genericsuite-basecamp/mkdocs_root/code/exampleapp/apps/api-chalice)
+- Application FastMCP MCP server starting code from [ExampleApp mcp-server](genericsuite-basecamp/mkdocs_root/code/exampleapp/apps/mcp-server)
 
 ## Context7 MCP Server prompts
 

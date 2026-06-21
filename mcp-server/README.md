@@ -152,7 +152,7 @@ Retrieve complete documents from local storage (available as Agent tool).
 
 ```json
 {
-  "document_path": "local_repo_files/genericsuite-basecamp/docs/Configuration-Guide/Generic-CRUD-Editor-Configuration.md"
+  "document_path": "local_repo_files/genericsuite-basecamp/mkdocs_root/en/Configuration-Guide/Generic-CRUD-Editor-Configuration.md"
 }
 ```
 

@@ -40,7 +40,7 @@ This document provides comprehensive examples of the enhanced vector search capa
     "user_results": [
       {
         "content": "User management typically requires fields for identification, contact, and authorization...",
-        "source": "local_repo_files/genericsuite-basecamp/docs/general-patterns.md",
+        "source": "local_repo_files/genericsuite-basecamp/mkdocs_root/en/general-patterns.md",
         "score": 0.85,
         "metadata": {
           "file_type": "md",
@@ -51,7 +51,7 @@ This document provides comprehensive examples of the enhanced vector search capa
     "context_results": [
       {
         "content": "{\n  \"table_name\": \"users\",\n  \"fields\": [\n    {\n      \"name\": \"name\",\n      \"type\": \"string\",\n      \"required\": true,\n      \"validation\": \"min_length:2\"\n    },\n    {\n      \"name\": \"email\",\n      \"type\": \"email\",\n      \"required\": true,\n      \"unique\": true\n    },\n    {\n      \"name\": \"role\",\n      \"type\": \"select\",\n      \"options\": [\"admin\", \"user\", \"viewer\"]\n    }\n  ]\n}",
-        "source": "local_repo_files/genericsuite-basecamp/docs/Sample-Code/table-configs/users.json",
+        "source": "local_repo_files/genericsuite-basecamp/mkdocs_root/code/genericsuite-configs/frontend/users.json",
         "score": 0.95,
         "metadata": {
           "file_type": "json",
@@ -62,7 +62,7 @@ This document provides comprehensive examples of the enhanced vector search capa
     "merged_results": [
       {
         "content": "GenericSuite table configuration with user management fields...",
-        "source": "local_repo_files/genericsuite-basecamp/docs/Sample-Code/table-configs/users.json",
+        "source": "local_repo_files/genericsuite-basecamp/mkdocs_root/code/genericsuite-configs/frontend/users.json",
         "score": 0.95,
         "priority": "contextual",
         "metadata": {
@@ -73,7 +73,7 @@ This document provides comprehensive examples of the enhanced vector search capa
       },
       {
         "content": "User management typically requires fields for identification...",
-        "source": "local_repo_files/genericsuite-basecamp/docs/general-patterns.md",
+        "source": "local_repo_files/genericsuite-basecamp/mkdocs_root/en/general-patterns.md",
         "score": 0.85,
         "priority": "user",
         "metadata": {
@@ -112,21 +112,21 @@ This document provides comprehensive examples of the enhanced vector search capa
     "user_results": [
       {
         "content": "JWT authentication requires token validation, user lookup, and session management...",
-        "source": "local_repo_files/genericsuite-basecamp/docs/Backend-Development/authentication.md",
+        "source": "local_repo_files/genericsuite-basecamp/mkdocs_root/en/Backend-Development/authentication.md",
         "score": 0.88
       }
     ],
     "context_results": [
       {
         "content": "from langchain.tools import BaseTool\nfrom typing import Optional, Type\nfrom pydantic import BaseModel, Field\n\nclass UserAuthTool(BaseTool):\n    name = \"user_auth\"\n    description = \"Authenticate users using JWT tokens\"\n    \n    def _run(self, token: str) -> dict:\n        # GenericSuite authentication pattern\n        return self.validate_jwt_token(token)",
-        "source": "local_repo_files/genericsuite-basecamp/docs/Sample-Code/langchain-tools/auth_tool.py",
+        "source": "local_repo_files/genericsuite-basecamp/mkdocs_root/en/Sample-Code/langchain-tools/auth_tool.py",
         "score": 0.92
       }
     ],
     "merged_results": [
       {
         "content": "GenericSuite LangChain authentication tool implementation...",
-        "source": "local_repo_files/genericsuite-basecamp/docs/Sample-Code/langchain-tools/auth_tool.py",
+        "source": "local_repo_files/genericsuite-basecamp/mkdocs_root/en/Sample-Code/langchain-tools/auth_tool.py",
         "score": 0.92,
         "priority": "contextual"
       }
@@ -157,7 +157,7 @@ This document provides comprehensive examples of the enhanced vector search capa
     "context_results": [
       {
         "content": "import React, { useState } from 'react';\nimport { useAIChat } from '@genericsuite/ai-hooks';\n\nconst ChatInterface = () => {\n  const { messages, sendMessage, isLoading } = useAIChat();\n  \n  return (\n    <div className=\"chat-container\">\n      {/* GenericSuite AI chat pattern */}\n    </div>\n  );\n};",
-        "source": "local_repo_files/genericsuite-basecamp/docs/Sample-Code/frontend-ai/chat-interface.jsx",
+        "source": "local_repo_files/genericsuite-basecamp/mkdocs_root/en/Sample-Code/frontend-ai/chat-interface.jsx",
         "score": 0.94
       }
     ]
@@ -174,7 +174,7 @@ This document provides comprehensive examples of the enhanced vector search capa
 {
   "tool": "retrieve_document_from_local_storage",
   "parameters": {
-    "document_path": "local_repo_files/genericsuite-basecamp/docs/Configuration-Guide/Generic-CRUD-Editor-Configuration.md"
+    "document_path": "local_repo_files/genericsuite-basecamp/mkdocs_root/en/Configuration-Guide/Generic-CRUD-Editor-Configuration.md"
   }
 }
 ```
@@ -182,7 +182,7 @@ This document provides comprehensive examples of the enhanced vector search capa
 **Tool Response:**
 ```json
 {
-  "path": "local_repo_files/genericsuite-basecamp/docs/Configuration-Guide/Generic-CRUD-Editor-Configuration.md",
+  "path": "local_repo_files/genericsuite-basecamp/mkdocs_root/en/Configuration-Guide/Generic-CRUD-Editor-Configuration.md",
   "content": "# Generic CRUD Editor Configuration\n\nThis document describes how to configure the Generic CRUD Editor for your tables.\n\n## Table Configuration\n\nThe table configuration defines the structure and behavior of your data tables:\n\n```json\n{\n  \"table_name\": \"users\",\n  \"display_name\": \"User Management\",\n  \"fields\": [\n    {\n      \"name\": \"id\",\n      \"type\": \"integer\",\n      \"primary_key\": true,\n      \"auto_increment\": true\n    },\n    {\n      \"name\": \"name\",\n      \"type\": \"string\",\n      \"required\": true,\n      \"validation\": {\n        \"min_length\": 2,\n        \"max_length\": 100\n      }\n    }\n  ]\n}\n```\n\n## Field Types\n\nSupported field types include:\n- `string`: Text fields with validation\n- `integer`: Numeric fields\n- `email`: Email validation\n- `select`: Dropdown options\n- `boolean`: True/false values\n- `date`: Date picker\n- `datetime`: Date and time picker\n\n## Validation Rules\n\nEach field can have validation rules:\n- `required`: Field must have a value\n- `unique`: Value must be unique in the table\n- `min_length`/`max_length`: String length constraints\n- `min_value`/`max_value`: Numeric constraints\n- `pattern`: Regular expression validation\n\n## UI Configuration\n\nCustomize the user interface:\n- `display_name`: Human-readable table name\n- `description`: Table description\n- `icon`: Table icon\n- `color`: Theme color\n- `permissions`: Access control settings",
   "file_type": "md",
   "size": 2048,
@@ -204,9 +204,9 @@ This document provides comprehensive examples of the enhanced vector search capa
   "tool": "retrieve_multiple_documents_from_local_storage",
   "parameters": {
     "document_paths": [
-      "local_repo_files/genericsuite-basecamp/docs/Sample-Code/table-configs/users.json",
-      "local_repo_files/genericsuite-basecamp/docs/Sample-Code/table-configs/products.json",
-      "local_repo_files/genericsuite-basecamp/docs/Configuration-Guide/field-types.md"
+      "local_repo_files/genericsuite-basecamp/mkdocs_root/code/genericsuite-configs/frontend/users.json",
+      "local_repo_files/genericsuite-basecamp/mkdocs_root/code/genericsuite-configs/frontend/products.json",
+      "local_repo_files/genericsuite-basecamp/mkdocs_root/en/Configuration-Guide/field-types.md"
     ]
   }
 }
@@ -217,21 +217,21 @@ This document provides comprehensive examples of the enhanced vector search capa
 {
   "documents": [
     {
-      "path": "local_repo_files/genericsuite-basecamp/docs/Sample-Code/table-configs/users.json",
+      "path": "local_repo_files/genericsuite-basecamp/mkdocs_root/code/genericsuite-configs/frontend/users.json",
       "content": "{\n  \"table_name\": \"users\",\n  \"display_name\": \"User Management\",\n  \"fields\": [\n    {\n      \"name\": \"id\",\n      \"type\": \"integer\",\n      \"primary_key\": true\n    },\n    {\n      \"name\": \"name\",\n      \"type\": \"string\",\n      \"required\": true\n    },\n    {\n      \"name\": \"email\",\n      \"type\": \"email\",\n      \"required\": true,\n      \"unique\": true\n    },\n    {\n      \"name\": \"role\",\n      \"type\": \"select\",\n      \"options\": [\"admin\", \"user\", \"viewer\"]\n    }\n  ]\n}",
       "file_type": "json",
       "size": 512,
       "last_modified": "2024-01-10T14:20:00Z"
     },
     {
-      "path": "local_repo_files/genericsuite-basecamp/docs/Sample-Code/table-configs/products.json",
+      "path": "local_repo_files/genericsuite-basecamp/mkdocs_root/code/genericsuite-configs/frontend/products.json",
       "content": "{\n  \"table_name\": \"products\",\n  \"display_name\": \"Product Catalog\",\n  \"fields\": [\n    {\n      \"name\": \"id\",\n      \"type\": \"integer\",\n      \"primary_key\": true\n    },\n    {\n      \"name\": \"name\",\n      \"type\": \"string\",\n      \"required\": true\n    },\n    {\n      \"name\": \"price\",\n      \"type\": \"decimal\",\n      \"required\": true,\n      \"validation\": {\n        \"min_value\": 0\n      }\n    }\n  ]\n}",
       "file_type": "json",
       "size": 384,
       "last_modified": "2024-01-12T09:15:00Z"
     },
     {
-      "path": "local_repo_files/genericsuite-basecamp/docs/Configuration-Guide/field-types.md",
+      "path": "local_repo_files/genericsuite-basecamp/mkdocs_root/en/Configuration-Guide/field-types.md",
       "content": "# Field Types Reference\n\n## String Fields\n- Basic text input\n- Validation: min_length, max_length, pattern\n- Example: `{\"type\": \"string\", \"validation\": {\"min_length\": 2}}`\n\n## Email Fields\n- Automatic email validation\n- Unique constraint support\n- Example: `{\"type\": \"email\", \"unique\": true}`\n\n## Select Fields\n- Dropdown with predefined options\n- Single or multiple selection\n- Example: `{\"type\": \"select\", \"options\": [\"option1\", \"option2\"]}`",
       "file_type": "md",
       "size": 768,
@@ -254,7 +254,7 @@ This document provides comprehensive examples of the enhanced vector search capa
 {
   "tool": "get_document_metadata",
   "parameters": {
-    "document_path": "local_repo_files/genericsuite-basecamp/docs/large-document.md"
+    "document_path": "local_repo_files/genericsuite-basecamp/mkdocs_root/en/large-document.md"
   }
 }
 ```
@@ -262,7 +262,7 @@ This document provides comprehensive examples of the enhanced vector search capa
 **Tool Response:**
 ```json
 {
-  "path": "local_repo_files/genericsuite-basecamp/docs/large-document.md",
+  "path": "local_repo_files/genericsuite-basecamp/mkdocs_root/en/large-document.md",
   "file_type": "md",
   "size": 15728640,
   "last_modified": "2024-01-20T11:30:00Z",
@@ -308,8 +308,8 @@ This document provides comprehensive examples of the enhanced vector search capa
   "context_used": {
     "contextual_search": "examples of how to create a JSON table configuration files in Genericsuite",
     "documents_retrieved": [
-      "local_repo_files/genericsuite-basecamp/docs/Configuration-Guide/Generic-CRUD-Editor-Configuration.md",
-      "local_repo_files/genericsuite-basecamp/docs/Sample-Code/table-configs/orders.json"
+      "local_repo_files/genericsuite-basecamp/mkdocs_root/en/Configuration-Guide/Generic-CRUD-Editor-Configuration.md",
+      "local_repo_files/genericsuite-basecamp/mkdocs_root/code/genericsuite-configs/frontend/orders.json"
     ],
     "patterns_applied": [
       "auto_generated_ids",
@@ -339,8 +339,8 @@ This document provides comprehensive examples of the enhanced vector search capa
   "context_used": {
     "contextual_search": "examples of how to create a MCP server tool in Genericsuite",
     "documents_retrieved": [
-      "local_repo_files/genericsuite-basecamp/docs/Sample-Code/mcp-tools/file_operations.py",
-      "local_repo_files/genericsuite-basecamp/docs/Backend-Development/mcp-patterns.md"
+      "local_repo_files/genericsuite-basecamp/mkdocs_root/en/Sample-Code/mcp-tools/file_operations.py",
+      "local_repo_files/genericsuite-basecamp/mkdocs_root/en/Backend-Development/mcp-patterns.md"
     ]
   }
 }

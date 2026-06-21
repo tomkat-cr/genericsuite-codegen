@@ -28,8 +28,8 @@ def test_document_retrieval_tool():
     test_cases = [
         # Valid document paths (adjust these based on your actual files)
         "genericsuite-basecamp/README.md",
-        "genericsuite-basecamp/docs/index.md",
-        "genericsuite-basecamp/docs/Configuration-Guide/index.md",
+        "genericsuite-basecamp/mkdocs_root/en/index.md",
+        "genericsuite-basecamp/mkdocs_root/en/Configuration-Guide/index.md",
     ]
 
     print("\n--- Testing Single Document Retrieval ---")

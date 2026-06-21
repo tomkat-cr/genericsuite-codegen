@@ -109,7 +109,7 @@ Generate JSON configuration with contextual GenericSuite patterns.
   "context_used": {
     "contextual_search": "examples of how to create a JSON table configuration files in Genericsuite",
     "documents_retrieved": [
-      "local_repo_files/genericsuite-basecamp/docs/Configuration-Guide/Generic-CRUD-Editor-Configuration.md"
+      "local_repo_files/genericsuite-basecamp/mkdocs_root/en/Configuration-Guide/Generic-CRUD-Editor-Configuration.md"
     ],
     "patterns_applied": ["table_structure", "field_validation", "ui_configuration"]
   }
@@ -241,7 +241,7 @@ The document retrieval tool is automatically available to the AI agent during co
 {
   "tool": "retrieve_document_from_local_storage",
   "parameters": {
-    "document_path": "local_repo_files/genericsuite-basecamp/docs/Configuration-Guide/Generic-CRUD-Editor-Configuration.md"
+    "document_path": "local_repo_files/genericsuite-basecamp/mkdocs_root/en/Configuration-Guide/Generic-CRUD-Editor-Configuration.md"
   }
 }
 ```
@@ -249,7 +249,7 @@ The document retrieval tool is automatically available to the AI agent during co
 **Tool Response:**
 ```json
 {
-  "path": "local_repo_files/genericsuite-basecamp/docs/Configuration-Guide/Generic-CRUD-Editor-Configuration.md",
+  "path": "local_repo_files/genericsuite-basecamp/mkdocs_root/en/Configuration-Guide/Generic-CRUD-Editor-Configuration.md",
   "content": "Complete document content...",
   "file_type": "md",
   "size": 15420,
