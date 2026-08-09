@@ -4,7 +4,7 @@
 
 [![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/tomkat-cr/genericsuite-codegen)
 [![Python](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/downloads/)
-[![Node.js](https://img.shields.io/badge/node.js-20%2B-green.svg)](https://nodejs.org/)
+[![Node.js](https://img.shields.io/badge/node.js-26%2B-green.svg)](https://nodejs.org/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 GenericSuite CodeGen is an AI-powered RAG (Retrieval-Augmented Generation) system that generates JSON configuration files, Python tools, and application code following GenericSuite patterns. It combines a FastAPI backend with a React frontend and includes MCP (Model Context Protocol) server capabilities for seamless integration with AI development workflows.
@@ -83,9 +83,9 @@ GenericSuite CodeGen leverages AI and knowledge base search to assist developers
 ### Prerequisites
 
 - **Python**: 3.12 or higher
-- **Node.js**: 18.0 or higher
-- **npm**: 8.0 or higher
-- **Docker**: For containerized deployment
+- **Node.js**: 26 or higher
+- **npm**: 11 or higher
+- **Docker** or **Podman**: For containerized deployment
 - **OpenAI API Key**: For AI functionality
 - **CRON**: For scheduled tasks
 

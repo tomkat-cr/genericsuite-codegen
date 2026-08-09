@@ -315,9 +315,9 @@ Using the Context7 MCP server, search for the "genericsuite basecamp" registered
 .example - Example files
 .gitignore - Git ignore file
 .ini - Initialization files
-.nvmrc - Node Version Manager
-.npmrc - NPM configuration
-.python-version - Python version specification
+.nvmrc - Node.js Version Manager file
+.npmrc - NPM configuration file
+.python-version - Python version specification file
 .toml - TOML configuration files
 .yaml / .yml - YAML configuration files
 

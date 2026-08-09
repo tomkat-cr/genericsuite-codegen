@@ -17,7 +17,7 @@ make init-app-environment   # copies .env.example → .env and other config file
 make install                # installs all workspaces (Poetry + npm)
 ```
 
-Requires: Node.js 18+, Python 3.12+, Docker, and an `OPENAI_API_KEY` in `.env`.
+Requires: Node.js 26+, Python 3.12+, Make, Docker/Podman, and an `OPENAI_API_KEY` in `.env`.
 
 ## Development Commands
 
