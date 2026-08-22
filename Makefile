@@ -1,4 +1,4 @@
-.PHONY: help up down restart logs build clean status
+.PHONY: help up run run-db-only down restart hard-restart logs logs-f server-logs clean-docker docker-prune status install build start dev dev-local-basecamp clean list-scripts init-app-environment py-env-activate py-env-remove rebuild-ui kb-cron run-telemetry sast-test
 
 # Default target
 help:
@@ -64,7 +64,7 @@ build:
 start:
 	npm run start
 
-dev:
+dev: install
 	npm run dev
 
 dev-local-basecamp:

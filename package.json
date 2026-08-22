@@ -34,7 +34,7 @@
   ],
   "devDependencies": {
     "concurrently": "^9.2.1",
-    "genericsuite-be-scripts": "file:../genericsuite-be-scripts"
+    "genericsuite-be-scripts": "github:tomkat-cr/genericsuite-be-scripts#develop"
   },
   "engines": {
     "node": ">=18.0.0",

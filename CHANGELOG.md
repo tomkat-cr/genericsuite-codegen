@@ -17,7 +17,7 @@ This project adheres to [Semantic Versioning](http://semver.org/) and [Keep a Ch
 ### Security
 
 
-## [Unreleased] - YYYY-MM-DD
+## [1.5.0] - 2026-08-21
 
 ### Added
 - AGENTS.md, GEMINI.md, and CLAUDE.md files to provide context and instructions to AI Coding Assistants [GS-303].
@@ -31,6 +31,8 @@ This project adheres to [Semantic Versioning](http://semver.org/) and [Keep a Ch
 ### Security
 - Migrate to Python 3.14 [GS-337].
 - Bump Node.js version in .nvmrc to 26 [GS-339].
+- Bump Vite to version 8.2.2 and vite-plugin-require to version "^1.3.0" to fix code injection via imports keys ([GHSA-r5fr-rjxr-66jc](https://github.com/lodash/lodash/security/advisories/GHSA-r5fr-rjxr-66jc), [CVE-2026-4800](https://github.com/advisories/GHSA-r5fr-rjxr-66jc), [879aaa9](https://github.com/lodash/lodash/commit/879aaa93132d78c2f8d20c60279da9f8b21576d6)), and an incomplete patch for [CVE-2021-23337](https://github.com/advisories/GHSA-35jh-r3h4-6jhm) [GS-219].
+- Bump black to version "^26.5.1" to fix [CVE-2024-21503](https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2024-21503) [GS-219].
 
 
 ## [1.4.0] - 2025-12-25
