@@ -1487,7 +1487,7 @@ fi
 copy_lib
 
 if [ "$MCP_INSPECTOR" = "1" ]; then
-    npx @modelcontextprotocol/inspector \
+    npx -y @modelcontextprotocol/inspector \
         poetry \
         run \
         env $POETRY_ARGS $PYTHON_CMD mcp_server.py
