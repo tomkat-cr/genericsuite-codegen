@@ -21,8 +21,8 @@ python-multipart = "^0.0.20"
 python-dotenv = "^1.0.0"
 httpx = "^0.28.1"
 aiofiles = "^23.2.0"
-gitpython = "3.1.45"
-fastmcp = "^2.12.2"
+gitpython = "3.1.58"
+fastmcp = ">=2.12.2,<4.0.0"
 pypdf = "^6.0.0"
 
 [tool.poetry.group.dev.dependencies]
