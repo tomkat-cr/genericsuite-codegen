@@ -8,11 +8,13 @@ export interface Message {
   content: string
   timestamp: string
   sources?: Array<string>
-  // sources?: Array<{
-  //   title: string
-  //   path: string
-  //   similarity: number
-  // }>
+  task_type?: string
+  model_used?: string
+  token_usage?: {
+    prompt_tokens: number
+    completion_tokens: number
+    total_tokens: number
+  }
 }
 
 export interface Conversation {
@@ -55,6 +57,27 @@ export interface QueryRequest {
   include_sources?: boolean
 }
 
+export enum SettingItemType {
+  LABEL = 'label',
+  VARIABLE = 'variable'
+}
+
+export interface SettingItem {
+  type: SettingItemType
+  name?: string
+  label: string
+  value?: string
+  select_options?: string[]
+}
+
+export interface SettingsResponse {
+  settings: SettingItem[]
+}
+
+export interface UpdateSettingsRequest {
+  settings: { [key: string]: string }
+}
+
 export const debug = process.env.VITE_DEBUG === '1'
 export const baseUrl = process.env.VITE_API_BASE_URL
 
@@ -62,20 +85,20 @@ class ApiService {
 
   private async handleResponse<T>(response: Response): Promise<ApiResponse<T>> {
     try {
-      if (response.ok) {
+      if (response.ok && response.status === 200) {
         const data = await response.json()
-        return { success: true, data }
+        return { success: true, data: typeof data.data !== 'undefined' ? data.data : data }
       } else {
         const errorData = await response.json().catch(() => ({}))
-        return { 
-          success: false, 
-          error: errorData.detail || `HTTP ${response.status}: ${response.statusText}` 
+        return {
+          success: false,
+          error: errorData.detail || `HTTP ${response.status}: ${response.statusText}`
         }
       }
     } catch (error) {
-      return { 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Unknown error occurred' 
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error occurred'
       }
     }
   }
@@ -118,6 +141,20 @@ class ApiService {
 
   async queryAgent(request: QueryRequest) {
     const response = await fetch(`${baseUrl}/query`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request)
+    })
+    return this.handleResponse(response)
+  }
+
+  async getSettings(): Promise<ApiResponse<SettingsResponse>> {
+    const response = await fetch(`${baseUrl}/settings`)
+    return this.handleResponse<SettingsResponse>(response)
+  }
+
+  async updateSettings(request: UpdateSettingsRequest): Promise<ApiResponse<any>> {
+    const response = await fetch(`${baseUrl}/settings`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(request)

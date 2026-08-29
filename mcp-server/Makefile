@@ -17,7 +17,7 @@ help:
 
 # Install dependencies
 install:
-	poetry install
+	@echo "MCP server dependencies installed with the server workspace"
 
 requirements:
 	poetry export -f requirements.txt --output requirements.txt --without-hashes

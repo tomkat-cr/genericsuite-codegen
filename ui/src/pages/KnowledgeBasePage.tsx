@@ -1,58 +1,36 @@
-import { useState, useCallback, useEffect } from 'react'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Progress } from '@/components/ui/progress'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Badge } from '@/components/ui/badge'
-import { Input } from '@/components/ui/input'
-import { RefreshCw, Upload, Database, FileText, AlertCircle, CheckCircle, Info } from 'lucide-react'
+import { useEffect, useState } from 'react'
 
-import { baseUrl } from '@/lib/api'
-import { debug } from '@/lib/api'
+import { KnowledgeBaseAlerts, alertTimeout } from '@/components/KnowledgeBase/Alerts'
+import { DocumentUpload } from '@/components/KnowledgeBase/DocumentUpload'
+import { IngestionStatus, KnowledgeBaseStats, UpdateProgress } from '@/components/KnowledgeBase/interfaces'
+import { KnowledgeBaseSearch } from '@/components/KnowledgeBase/KnowledgeBaseSearch'
+import { KnowledgeBaseStatus } from '@/components/KnowledgeBase/KnowledgeBaseStatus'
+import { AlertElement } from '@/components/KnowledgeBase/types'
+
+import { baseUrl, debug } from '@/lib/api'
 
 const remoteRepoUrl: string = process.env.VITE_REMOTE_REPO_URL || ''
-const alertTimeout: number = 10000
-
-interface KnowledgeBaseStats {
-  documentCount: number
-  lastUpdated: string
-  repositoryUrl: string
-  status: 'healthy' | 'updating' | 'error'
-}
-
-interface UpdateProgress {
-  stage: string
-  progress: number
-  message: string
-}
-
-const IngestionStatus = {
-    not_started: "Not started",
-    cloning: "Cloning",
-    processing_files: "Processing files",
-    chunking: "Chunking",
-    generating_embeddings: "Generating embeddings",
-    storing_vectors: "Storing vectors",
-    completed: "Completed",
-    failed: "Failed",
-}
+const remoteRepoBranch: string = process.env.VITE_REMOTE_REPO_BRANCH || ''
 
 export function KnowledgeBasePage() {
   const [stats, setStats] = useState<KnowledgeBaseStats>({
     documentCount: 0,
     lastUpdated: 'Never',
     repositoryUrl: remoteRepoUrl,
+    repositoryBranch: remoteRepoBranch,
     status: 'healthy'
   })
-  
+
   const [isUpdating, setIsUpdating] = useState(false)
   const [updateProgress, setUpdateProgress] = useState<UpdateProgress | null>(null)
   const [uploadFiles, setUploadFiles] = useState<FileList | null>(null)
   const [isUploading, setIsUploading] = useState(false)
-  const [alerts, setAlerts] = useState<Array<{id: string, type: 'success' | 'error' | 'info', message: string}>>([])
+  const [alerts, setAlerts] = useState<Array<AlertElement>>([])
 
   const addAlert = (type: 'success' | 'error' | 'info', message: string) => {
     const id = Date.now().toString()
+    if (debug) console.log('addAlert | id', id)
+    if (alerts.some(alert => alert.message === message)) return
     setAlerts(prev => [...prev, { id, type, message }])
     setTimeout(() => {
       setAlerts(prev => prev.filter(alert => alert.id !== id))
@@ -60,9 +38,9 @@ export function KnowledgeBasePage() {
   }
 
   const getProgress = async () => {
-    // if (!isUpdating) return
-    const response = await fetch(`${baseUrl}/knowledge-base/progress`)
-    const resultData = await response.json()
+    const response = await fetch(`${baseUrl}/update-knowledge-base/progress`)
+    const result = await response.json()
+    const resultData = result.data
     if (debug) console.log('getProgress | result', resultData)
     setUpdateProgress({
       stage: IngestionStatus[resultData.status as keyof typeof IngestionStatus],
@@ -73,19 +51,17 @@ export function KnowledgeBasePage() {
       ...prev,
       documentCount: resultData.total_files ?? prev.documentCount,
       lastUpdated: new Date().toLocaleString(),
-      status: ['completed', 'not_started'].indexOf(resultData.status) !== -1 ? 'healthy' : resultData.status.includes('failed') ? 'error' : 'updating'
+      status: resultData.status === 'completed' ? 'healthy' : resultData.status === 'failed' ? 'error' : ['not_started', 'scheduled'].indexOf(resultData.status) !== -1 ? 'scheduled' : 'updating'
     }))
     if (stats.status === 'updating' && !isUpdating) {
       setIsUpdating(true)
     }
-    if (resultData.status.includes('completed')) {
-      setUpdateProgress(null)
+    if (resultData.status === 'completed' && isUpdating) {
       setIsUpdating(false)
-      if (updateProgress !== null) {
-        addAlert('success', 'Knowledge base updated successfully!')
-      }
+      setUpdateProgress(null)
+      addAlert('success', 'Knowledge base updated successfully!')
     }
-    if (resultData.status.includes('failed')) {
+    if (resultData.status === 'failed' && isUpdating) {
       setIsUpdating(false)
       setUpdateProgress(null)
       addAlert('error', 'Failed to update knowledge base. Please try again. Error: ' + resultData.error_message)
@@ -96,11 +72,6 @@ export function KnowledgeBasePage() {
     if (debug) console.log('Component mounted, calling getProgress')
     getProgress()
   }, [])
-
-  // useEffect(() => {
-  //   if (debug) console.log('isUpdating changed [1], calling getProgress')
-  //   getProgress()
-  // }, [isUpdating])
 
   // If it's updating, refresh every 5 seconds
   useEffect(() => {
@@ -116,24 +87,8 @@ export function KnowledgeBasePage() {
   const handleUpdateKnowledgeBase = async () => {
     setIsUpdating(true)
     setStats(prev => ({ ...prev, status: 'updating' }))
-    
     try {
-      // Simulate progress updates
-      // const stages = [
-      //   { stage: 'Cloning repository', progress: 20, message: 'Downloading latest documentation...' },
-      //   { stage: 'Processing documents', progress: 50, message: 'Extracting text from files...' },
-      //   { stage: 'Generating embeddings', progress: 80, message: 'Creating vector embeddings...' },
-      //   { stage: 'Updating database', progress: 100, message: 'Storing in knowledge base...' }
-      // ]
-
-      // for (const stage of stages) {
-      //   setUpdateProgress(stage)
-      //   await new Promise(resolve => setTimeout(resolve, 1500))
-      // }
-
       const forceRefresh = false
-
-      // Make actual API call
       const response = await fetch(`${baseUrl}/update-knowledge-base`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -142,14 +97,10 @@ export function KnowledgeBasePage() {
         })
       })
 
-      if (response.ok) {
-        const resultData = await response.json()
+      if (response.ok && response.status === 200) {
+        const result = await response.json()
+        const resultData = result.data
         if (debug) console.log('update-knowledge-base | resultData', resultData)
-        if (!resultData.success) {
-          setStats(prev => ({ ...prev, status: 'error' }))
-          addAlert('error', resultData.error ?? 'Failed to update knowledge base [1]')
-          return
-        }
         setStats(prev => ({
           ...prev,
           documentCount: resultData.statistics.total_documents ?? prev.documentCount,
@@ -158,14 +109,16 @@ export function KnowledgeBasePage() {
         }))
         addAlert('success', resultData.status ?? 'Knowledge base updated successfully! [2]')
       } else {
-        throw new Error('Failed to update knowledge base')
+        // throw new Error('Failed to update knowledge base')
+        setStats(prev => ({ ...prev, status: 'error' }))
+        addAlert('error', (response.statusText ?? 'Failed to update knowledge base') + ' [' + response.status + ']')
+        setIsUpdating(false)
+        return
       }
     } catch (error) {
       setStats(prev => ({ ...prev, status: 'error' }))
       addAlert('error', 'Failed to update knowledge base. Please try again.')
-    // } finally {
-    //   setIsUpdating(false)
-    //   setUpdateProgress(null)
+      setIsUpdating(false)
     }
   }
 
@@ -184,7 +137,7 @@ export function KnowledgeBasePage() {
         body: formData
       })
 
-      if (response.ok) {
+      if (response.ok && response.status === 200) {
         const result = await response.json()
         setStats(prev => ({
           ...prev,
@@ -205,41 +158,6 @@ export function KnowledgeBasePage() {
     }
   }
 
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-  }, [])
-
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    const files = e.dataTransfer.files
-    if (files.length > 0) {
-      setUploadFiles(files)
-    }
-  }, [])
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'healthy': return <CheckCircle className="h-4 w-4 text-green-500" />
-      case 'updating': return <RefreshCw className="h-4 w-4 text-blue-500 animate-spin" />
-      case 'error': return <AlertCircle className="h-4 w-4 text-red-500" />
-      default: return <Info className="h-4 w-4 text-gray-500" />
-    }
-  }
-
-  const getStatusBadge = (status: string) => {
-    const variants = {
-      healthy: 'default',
-      updating: 'secondary',
-      error: 'destructive'
-    } as const
-    
-    return (
-      <Badge variant={variants[status as keyof typeof variants] || 'secondary'}>
-        {status.charAt(0).toUpperCase() + status.slice(1)}
-      </Badge>
-    )
-  }
-
   return (
     <div className="space-y-6">
       <div>
@@ -250,174 +168,28 @@ export function KnowledgeBasePage() {
       </div>
 
       {/* Alerts */}
-      {alerts.map(alert => (
-        <Alert key={alert.id} className={alert.type === 'error' ? 'border-red-200 bg-red-50' : alert.type === 'success' ? 'border-green-200 bg-green-50' : ''}>
-          <AlertDescription className={alert.type === 'error' ? 'text-red-800' : alert.type === 'success' ? 'text-green-800' : ''}>
-            {alert.message}
-          </AlertDescription>
-        </Alert>
-      ))}
+      <KnowledgeBaseAlerts
+        alerts={alerts}
+      />
 
       {/* Knowledge Base Status */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Database className="h-5 w-5" />
-            Knowledge Base Status
-          </CardTitle>
-          <CardDescription>
-            Current status and statistics of the knowledge base
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium">Status</span>
-                {getStatusIcon(stats.status)}
-              </div>
-              {getStatusBadge(stats.status)}
-            </div>
-            <div className="space-y-2">
-              <span className="text-sm font-medium">Documents</span>
-              <div className="text-2xl font-bold">{stats.documentCount.toLocaleString()}</div>
-            </div>
-            <div className="space-y-2">
-              <span className="text-sm font-medium">Last Updated</span>
-              <div className="text-sm text-muted-foreground">{stats.lastUpdated}</div>
-            </div>
-          </div>
-          <div className="space-y-2">
-            <span className="text-sm font-medium">Repository URL</span>
-            <div className="text-sm text-muted-foreground font-mono bg-muted p-2 rounded">
-              {stats.repositoryUrl}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Update Progress */}
-      {isUpdating && updateProgress && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <RefreshCw className="h-5 w-5 animate-spin" />
-              Updating Knowledge Base
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span>{updateProgress.stage}</span>
-                <span>{updateProgress.progress}%</span>
-              </div>
-              <Progress value={updateProgress.progress} />
-              <p className="text-sm text-muted-foreground">{updateProgress.message}</p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Repository Update */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <RefreshCw className="h-5 w-5" />
-            Update Repository
-          </CardTitle>
-          <CardDescription>
-            Refresh the knowledge base with the latest GenericSuite documentation
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Button 
-            onClick={handleUpdateKnowledgeBase} 
-            disabled={isUpdating}
-            className="w-full md:w-auto"
-          >
-            {isUpdating ? (
-              <>
-                <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                Updating...
-              </>
-            ) : (
-              <>
-                <RefreshCw className="mr-2 h-4 w-4" />
-                Update Knowledge Base
-              </>
-            )}
-          </Button>
-        </CardContent>
-      </Card>
+      <KnowledgeBaseStatus
+        handleUpdateKnowledgeBase={handleUpdateKnowledgeBase}
+        stats={stats}
+        isUpdating={isUpdating}
+        updateProgress={updateProgress}
+      />
 
       {/* Document Upload */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Upload className="h-5 w-5" />
-            Upload Additional Documents
-          </CardTitle>
-          <CardDescription>
-            Add custom documents to enhance the knowledge base context
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div
-            className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-8 text-center hover:border-muted-foreground/50 transition-colors"
-            onDragOver={handleDragOver}
-            onDrop={handleDrop}
-          >
-            <FileText className="mx-auto h-12 w-12 text-muted-foreground/50 mb-4" />
-            <div className="space-y-2">
-              <p className="text-sm font-medium">
-                Drag and drop files here, or click to select
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Supports: PDF, TXT, MD, and code files (.py, .js, .ts, .jsx, .tsx, .json)
-              </p>
-            </div>
-            <Input
-              id="file-upload"
-              type="file"
-              multiple
-              accept=".pdf,.txt,.md,.py,.js,.ts,.jsx,.tsx,.json"
-              className="mt-4"
-              onChange={(e) => setUploadFiles(e.target.files)}
-            />
-          </div>
-          
-          {uploadFiles && uploadFiles.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-sm font-medium">Selected files:</p>
-              <div className="space-y-1">
-                {Array.from(uploadFiles).map((file, index) => (
-                  <div key={index} className="text-sm text-muted-foreground flex items-center gap-2">
-                    <FileText className="h-4 w-4" />
-                    {file.name} ({(file.size / 1024).toFixed(1)} KB)
-                  </div>
-                ))}
-              </div>
-              <Button 
-                onClick={handleFileUpload} 
-                disabled={isUploading}
-                className="w-full md:w-auto"
-              >
-                {isUploading ? (
-                  <>
-                    <Upload className="mr-2 h-4 w-4 animate-spin" />
-                    Uploading...
-                  </>
-                ) : (
-                  <>
-                    <Upload className="mr-2 h-4 w-4" />
-                    Upload {uploadFiles.length} file(s)
-                  </>
-                )}
-              </Button>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <DocumentUpload
+        handleFileUpload={handleFileUpload}
+        setUploadFiles={setUploadFiles}
+        uploadFiles={uploadFiles}
+        isUploading={isUploading}
+      />
+
+      {/* Knowledge Base Search */}
+      <KnowledgeBaseSearch />
     </div>
   )
 }

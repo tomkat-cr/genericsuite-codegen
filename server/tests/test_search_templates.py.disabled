@@ -1,0 +1,361 @@
+"""
+Unit tests for SearchTemplateManager.
+"""
+
+import pytest
+import json
+import tempfile
+from pathlib import Path
+from unittest.mock import patch, mock_open
+
+from genericsuite_codegen.agent.search_templates import SearchTemplateManager
+from genericsuite_codegen.agent.enhanced_search_types import (
+    SearchTemplate,
+    TemplateLoadError,
+    ConfigurationError
+)
+
+
+class TestSearchTemplateManager:
+    """Test cases for SearchTemplateManager."""
+
+    def test_init_no_config_file(self):
+        """Test initialization without config file uses default templates."""
+        manager = SearchTemplateManager()
+
+        # Should have default templates
+        assert len(manager.templates) > 0
+        assert "json" in manager.templates
+        assert "langchain" in manager.templates
+        assert "mcp" in manager.templates
+
+        # Check template structure
+        json_template = manager.templates["json"]
+        assert isinstance(json_template, SearchTemplate)
+        assert json_template.code_type == "json"
+        assert "JSON table configuration" in json_template.template
+        assert json_template.file_type_filter == "json"
+
+    def test_init_with_valid_config_file(self, mock_template_config_file):
+        """Test initialization with valid config file."""
+        manager = SearchTemplateManager(mock_template_config_file)
+
+        # Should load templates from file
+        assert len(manager.templates) >= 2
+        assert "json" in manager.templates
+        assert "python" in manager.templates
+
+        # Check loaded template
+        json_template = manager.templates["json"]
+        assert json_template.template == "JSON configuration examples"
+        assert json_template.file_type_filter == "json"
+        assert json_template.priority == 1
+
+    def test_init_with_invalid_config_file(self, mock_invalid_template_config_file):
+        """Test initialization with invalid config file falls back to defaults."""
+        manager = SearchTemplateManager(mock_invalid_template_config_file)
+
+        # Should fall back to default templates
+        assert len(manager.templates) > 0
+        assert "json" in manager.templates
+
+        # Should be default template, not from invalid file
+        json_template = manager.templates["json"]
+        assert "JSON table configuration" in json_template.template
+
+    def test_init_with_nonexistent_config_file(self):
+        """Test initialization with non-existent config file uses defaults."""
+        manager = SearchTemplateManager("nonexistent.json")
+
+        # Should fall back to default templates
+        assert len(manager.templates) > 0
+        assert "json" in manager.templates
+
+    def test_load_templates_from_file_success(self, mock_template_config_file):
+        """Test successful template loading from file."""
+        manager = SearchTemplateManager()
+        templates = manager._load_templates_from_file(
+            mock_template_config_file)
+
+        assert len(templates) == 2
+        assert "json" in templates
+        assert "python" in templates
+
+        json_template = templates["json"]
+        assert json_template.template == "JSON configuration examples"
+        assert json_template.file_type_filter == "json"
+        assert json_template.priority == 1
+
+    def test_load_templates_from_file_invalid_json(self, mock_invalid_template_config_file):
+        """Test template loading with invalid JSON raises error."""
+        manager = SearchTemplateManager()
+
+        with pytest.raises(TemplateLoadError, match="Invalid JSON"):
+            manager._load_templates_from_file(
+                mock_invalid_template_config_file)
+
+    def test_load_templates_from_file_missing_templates_key(self, tmp_path):
+        """Test template loading with missing 'templates' key."""
+        config_file = tmp_path / "no_templates.json"
+        config_file.write_text('{"other_key": "value"}')
+
+        manager = SearchTemplateManager()
+
+        with pytest.raises(TemplateLoadError, match="Missing 'templates' key"):
+            manager._load_templates_from_file(str(config_file))
+
+    def test_load_templates_from_file_invalid_template_structure(self, tmp_path):
+        """Test template loading with invalid template structure."""
+        config_data = {
+            "templates": {
+                "invalid": {
+                    "missing_required_fields": True
+                }
+            }
+        }
+
+        config_file = tmp_path / "invalid_structure.json"
+        config_file.write_text(json.dumps(config_data))
+
+        manager = SearchTemplateManager()
+
+        with pytest.raises(TemplateLoadError, match="Invalid template structure"):
+            manager._load_templates_from_file(str(config_file))
+
+    def test_validate_template_structure_valid(self):
+        """Test template structure validation with valid template."""
+        manager = SearchTemplateManager()
+        template_data = {
+            "template": "Test template",
+            "file_type_filter": "py",
+            "priority": 1
+        }
+
+        # Should not raise exception
+        manager._validate_template_structure("test", template_data)
+
+    def test_validate_template_structure_missing_template(self):
+        """Test template structure validation with missing template field."""
+        manager = SearchTemplateManager()
+        template_data = {
+            "file_type_filter": "py",
+            "priority": 1
+        }
+
+        with pytest.raises(TemplateLoadError, match="Missing required field 'template'"):
+            manager._validate_template_structure("test", template_data)
+
+    def test_validate_template_structure_invalid_priority(self):
+        """Test template structure validation with invalid priority."""
+        manager = SearchTemplateManager()
+        template_data = {
+            "template": "Test template",
+            "file_type_filter": "py",
+            "priority": "invalid"
+        }
+
+        with pytest.raises(TemplateLoadError, match="Invalid priority"):
+            manager._validate_template_structure("test", template_data)
+
+    def test_get_template_existing(self):
+        """Test getting existing template."""
+        manager = SearchTemplateManager()
+
+        template = manager.get_template("json")
+        assert template is not None
+        assert "JSON table configuration" in template
+
+    def test_get_template_nonexistent(self):
+        """Test getting non-existent template returns None."""
+        manager = SearchTemplateManager()
+
+        template = manager.get_template("nonexistent")
+        assert template is None
+
+    def test_get_template_case_insensitive(self):
+        """Test getting template is case insensitive."""
+        manager = SearchTemplateManager()
+
+        template_lower = manager.get_template("json")
+        template_upper = manager.get_template("JSON")
+
+        assert template_lower == template_upper
+
+    def test_get_all_templates(self):
+        """Test getting all templates."""
+        manager = SearchTemplateManager()
+
+        all_templates = manager.get_all_templates()
+
+        assert isinstance(all_templates, dict)
+        assert len(all_templates) > 0
+        assert "json" in all_templates
+        assert all(isinstance(template, SearchTemplate)
+                   for template in all_templates.values())
+
+    def test_reload_templates_success(self, mock_template_config_file):
+        """Test successful template reloading."""
+        manager = SearchTemplateManager(mock_template_config_file)
+        original_count = len(manager.templates)
+
+        # Modify config file
+        config_data = {
+            "templates": {
+                "json": {
+                    "template": "Updated JSON template",
+                    "file_type_filter": "json",
+                    "priority": 1
+                },
+                "new_type": {
+                    "template": "New template type",
+                    "file_type_filter": "txt",
+                    "priority": 2
+                }
+            }
+        }
+
+        Path(mock_template_config_file).write_text(
+            json.dumps(config_data, indent=2))
+
+        manager.reload_templates()
+
+        # Should have updated templates
+        assert len(manager.templates) >= 2
+        assert manager.templates["json"].template == "Updated JSON template"
+        assert "new_type" in manager.templates
+
+    def test_reload_templates_no_config_file(self):
+        """Test template reloading without config file."""
+        manager = SearchTemplateManager()
+        original_templates = manager.templates.copy()
+
+        manager.reload_templates()
+
+        # Should still have default templates
+        assert len(manager.templates) == len(original_templates)
+
+    def test_reload_templates_invalid_file(self, mock_invalid_template_config_file):
+        """Test template reloading with invalid file falls back to defaults."""
+        manager = SearchTemplateManager(mock_invalid_template_config_file)
+
+        # Should have default templates after failed reload
+        manager.reload_templates()
+        assert len(manager.templates) > 0
+        assert "json" in manager.templates
+
+    def test_has_template_existing(self):
+        """Test checking for existing template."""
+        manager = SearchTemplateManager()
+
+        assert manager.has_template("json") is True
+        assert manager.has_template("langchain") is True
+
+    def test_has_template_nonexistent(self):
+        """Test checking for non-existent template."""
+        manager = SearchTemplateManager()
+
+        assert manager.has_template("nonexistent") is False
+
+    def test_get_template_by_code_type(self):
+        """Test getting template by code type."""
+        manager = SearchTemplateManager()
+
+        template = manager.get_template_by_code_type("json")
+        assert template is not None
+        assert template.code_type == "json"
+
+    def test_get_template_by_code_type_nonexistent(self):
+        """Test getting template by non-existent code type."""
+        manager = SearchTemplateManager()
+
+        template = manager.get_template_by_code_type("nonexistent")
+        assert template is None
+
+    def test_get_templates_by_priority(self):
+        """Test getting templates sorted by priority."""
+        manager = SearchTemplateManager()
+
+        templates = manager.get_templates_by_priority()
+
+        assert isinstance(templates, list)
+        assert len(templates) > 0
+
+        # Should be sorted by priority (ascending)
+        priorities = [template.priority for template in templates]
+        assert priorities == sorted(priorities)
+
+    def test_get_templates_by_file_type(self):
+        """Test getting templates by file type filter."""
+        manager = SearchTemplateManager()
+
+        py_templates = manager.get_templates_by_file_type("py")
+        json_templates = manager.get_templates_by_file_type("json")
+
+        assert isinstance(py_templates, list)
+        assert isinstance(json_templates, list)
+
+        # Check that all returned templates have correct file type
+        for template in py_templates:
+            assert template.file_type_filter == "py"
+
+        for template in json_templates:
+            assert template.file_type_filter == "json"
+
+    def test_default_templates_structure(self):
+        """Test that default templates have correct structure."""
+        manager = SearchTemplateManager()
+
+        # Check that all default templates are valid
+        for code_type, template in manager.DEFAULT_TEMPLATES.items():
+            assert isinstance(template, SearchTemplate)
+            assert template.code_type == code_type
+            assert isinstance(template.template, str)
+            assert len(template.template) > 0
+            assert isinstance(template.priority, int)
+            assert template.priority > 0
+
+    def test_template_equality(self):
+        """Test SearchTemplate equality comparison."""
+        template1 = SearchTemplate(
+            code_type="test",
+            template="Test template",
+            file_type_filter="txt",
+            priority=1
+        )
+
+        template2 = SearchTemplate(
+            code_type="test",
+            template="Test template",
+            file_type_filter="txt",
+            priority=1
+        )
+
+        template3 = SearchTemplate(
+            code_type="test",
+            template="Different template",
+            file_type_filter="txt",
+            priority=1
+        )
+
+        assert template1 == template2
+        assert template1 != template3
+
+    @patch('builtins.open', side_effect=PermissionError("Permission denied"))
+    def test_load_templates_permission_error(self, mock_file):
+        """Test template loading with permission error."""
+        manager = SearchTemplateManager()
+
+        with pytest.raises(TemplateLoadError, match="Permission denied"):
+            manager._load_templates_from_file("test.json")
+
+    def test_config_file_path_property(self, mock_template_config_file):
+        """Test config file path property."""
+        manager = SearchTemplateManager(mock_template_config_file)
+
+        assert manager.config_file_path == mock_template_config_file
+
+    def test_config_file_path_none(self):
+        """Test config file path property when no config file."""
+        manager = SearchTemplateManager()
+
+        assert manager.config_file_path is None

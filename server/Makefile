@@ -33,9 +33,16 @@ start: dev
 start-from_root:
 	cd server && bash ./run-server.sh run
 
+run-local-db:
+	cd ../deploy && CONTAINER_TO_RUN="gscodegen-mongo gscodegen-mongo-express" make up && cd ../server
+
+down-local-db:
+	cd ../deploy && make down && cd ../server
+
 # Run tests
-test:
-	poetry run pytest
+test: down-local-db run-local-db
+	bash ./run-server.sh test
+	make down-local-db
 
 # Clean up
 clean:

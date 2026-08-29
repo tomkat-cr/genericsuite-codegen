@@ -68,8 +68,24 @@ cd ui && make format && make lint
 cd mcp-server && make format && make lint && make test
 ```
 
+## MCP Integration
+- **MCP Server**: Model Context Protocol server for AI tool integration
+- **Configuration**: `.kiro/settings/mcp.json` for Kiro integration
+- **Transport**: STDIO transport recommended for Kiro
+- **Tools**: Knowledge base search, code generation, document retrieval
+
+### MCP Configuration
+```bash
+# Configure MCP server for Kiro
+# Edit .kiro/settings/mcp.json with server configuration
+# Use absolute paths for command and cwd settings
+# Set appropriate autoApprove tools for workflow efficiency
+```
+
 ## Environment Requirements
-- **Node.js**: 18.0+
+- **Node.js**: 26+
 - **Python**: 3.12+
-- **Docker**: For containerized deployment
+- **Docker** or **Podman**: For containerized deployment
 - **OpenAI API Key**: Required for AI functionality
+- **Make**: For development and deployment
+- **MCP Client**: Kiro, Claude Desktop, or other MCP-compatible tools

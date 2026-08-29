@@ -1,0 +1,48 @@
+{
+  "enhanced_search": {
+    "enabled": true,
+    "max_context_length": 10000,
+    "fallback_enabled": true,
+    "dual_search_enabled": true,
+    "context_determination_enabled": true,
+    "document_retrieval_enabled": true
+  },
+  "local_storage": {
+    "local_repo_path": "local_repo_files",
+    "max_file_size_mb": 10,
+    "allowed_file_extensions": [
+      ".md", ".py", ".js", ".jsx", ".ts", ".tsx", ".json", ".yaml", ".yml", 
+      ".txt", ".rst", ".html", ".css", ".sh", ".toml", ".cfg", ".ini"
+    ],
+    "excluded_directories": [
+      ".git", "__pycache__", "node_modules", ".pytest_cache", 
+      "dist", "build", ".vscode", ".idea"
+    ]
+  },
+  "search_performance": {
+    "max_concurrent_searches": 5,
+    "search_timeout_seconds": 30,
+    "cache_enabled": true,
+    "cache_ttl_seconds": 3600
+  },
+  "context_determination": {
+    "confidence_threshold": 0.6,
+    "default_context": "generic",
+    "context_keywords": {
+      "json": ["json", "configuration", "config", "table", "schema"],
+      "langchain": ["langchain", "tool", "chain", "agent"],
+      "mcp": ["mcp", "server", "protocol", "model context"],
+      "frontend": ["react", "component", "ui", "frontend", "client"],
+      "backend": ["fastapi", "api", "server", "backend", "endpoint"],
+      "frontend_ai": ["react", "ai", "chat", "llm", "frontend"],
+      "backend_ai": ["fastapi", "ai", "agent", "llm", "backend"]
+    }
+  },
+  "logging": {
+    "level": "INFO",
+    "log_search_queries": true,
+    "log_document_retrieval": true,
+    "log_context_determination": true,
+    "log_performance_metrics": true
+  }
+}

@@ -5,17 +5,10 @@ This module provides embedding generation using OpenAI and HuggingFace models
 with configurable model selection and dimension validation.
 """
 
-import os
 from typing import List, Dict, Any, Optional
 from datetime import datetime
-import logging
 import asyncio
 from abc import ABC, abstractmethod
-
-from .types import (
-    EmbeddingModel,
-    EmbeddedChunk,
-)
 
 try:
     import openai
@@ -29,7 +22,22 @@ except ImportError:
     SentenceTransformer = None
     torch = None
 
-logger = logging.getLogger(__name__)
+from genericsuite_codegen.utilities.app_logger import (
+    log_debug,
+    log_warning,
+    log_error,
+)
+from genericsuite_codegen.utilities.env_vars import get_envvar
+
+from genericsuite_codegen.document_processing.types import (
+    EmbeddingModel,
+    EmbeddedChunk,
+)
+
+DEBUG = True
+
+EMBEDDINGS_PROVIDER = get_envvar('EMBEDDINGS_PROVIDER', 'openai')
+EMBEDDINGS_MODEL = get_envvar('EMBEDDINGS_MODEL', 'text-embedding-3-small')
 
 
 class EmbeddingProvider(ABC):
@@ -100,8 +108,8 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
                               "pip install openai")
 
         self.model = model
-        self.api_key = api_key or os.getenv('OPENAI_API_KEY')
-        self.base_url = base_url or os.getenv('OPENAI_BASE_URL')
+        self.api_key = api_key or get_envvar('OPENAI_API_KEY')
+        self.base_url = base_url or get_envvar('OPENAI_BASE_URL')
 
         if not self.api_key:
             raise ValueError("OpenAI API key not provided. Set OPENAI_API_KEY"
@@ -116,8 +124,8 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
 
         # Validate model
         if model not in self.MODEL_CONFIGS:
-            logger.warning(f"Unknown OpenAI model {model}. Using "
-                           "default configuration.")
+            log_warning(f"Unknown OpenAI model {model}. Using "
+                        "default configuration.")
             self.model_config = {
                 'dimension': 1536,
                 'max_tokens': 8192,
@@ -138,7 +146,7 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
             )
             return response.data[0].embedding
         except Exception as e:
-            logger.error(f"Error generating OpenAI embedding: {e}")
+            log_error(f"Error generating OpenAI embedding: {e}")
             raise
 
     def generate_embeddings(self, texts: List[str]) -> List[List[float]]:
@@ -155,7 +163,7 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
             )
             return [data.embedding for data in response.data]
         except Exception as e:
-            logger.error(f"Error generating OpenAI embeddings: {e}")
+            log_error(f"Error generating OpenAI embeddings: {e}")
             raise
 
     def get_embedding_dimension(self) -> int:
@@ -230,8 +238,9 @@ class HuggingFaceEmbeddingProvider(EmbeddingProvider):
                 " Install with: pip install sentence-transformers")
 
         self.model_name = model
-        logger.info("Initializing HuggingFace embedding provider with "
-                    f"model: {model}")
+        _ = DEBUG and log_debug(
+            "Initializing HuggingFace embedding provider with "
+            f"model: '{model}'")
 
         # Determine device
         if device is None:
@@ -253,9 +262,10 @@ class HuggingFaceEmbeddingProvider(EmbeddingProvider):
 
             self.model = SentenceTransformer(model, device=device,
                                              **model_kwargs)
-            logger.info(f"Loaded HuggingFace model {model} on device {device}")
+            _ = DEBUG and log_debug(
+                f"Loaded HuggingFace model {model} on device {device}")
         except Exception as e:
-            logger.error(f"Error loading HuggingFace model {model}: {e}")
+            log_error(f"Error loading HuggingFace model {model}: {e}")
             raise
 
         # Get model configuration
@@ -263,11 +273,11 @@ class HuggingFaceEmbeddingProvider(EmbeddingProvider):
             self.model_config = self.MODEL_CONFIGS[model]
         else:
             # Try to infer configuration
-            logger.warning(f"Unknown HuggingFace model {model}. "
-                           "Inferring configuration.")
+            log_warning(f"Unknown HuggingFace model {model}. "
+                        "Inferring configuration.")
             try:
                 # Generate a test embedding to get dimension
-                logger.info(
+                _ = DEBUG and log_debug(
                     "Generating a test embedding to get model configuration")
                 test_embedding = self.model.encode("test")
                 self.model_config = {
@@ -275,7 +285,7 @@ class HuggingFaceEmbeddingProvider(EmbeddingProvider):
                     'max_tokens': 512  # Conservative default
                 }
             except Exception as e:
-                logger.error(f"Could not infer model configuration: {e}")
+                log_error(f"Could not infer model configuration: {e}")
                 self.model_config = {
                     'dimension': 384,
                     'max_tokens': 512
@@ -283,30 +293,31 @@ class HuggingFaceEmbeddingProvider(EmbeddingProvider):
 
     def generate_embedding(self, text: str) -> List[float]:
         """Generate embedding for a single text."""
-        logger.info(f"Generating HuggingFace embedding for text: {text}")
+        _ = DEBUG and log_debug(
+            f"Generating HuggingFace embedding for text: {text}")
         if not self.validate_text_length(text):
-            logger.warning(f"Text may be too long for model {self.model_name}")
+            log_warning(f"Text may be too long for model {self.model_name}")
 
         try:
-            logger.info(f">> Starting to encode text: {text}")
+            _ = DEBUG and log_debug(f">> Starting to encode text: {text}")
             embedding = self.model.encode([text], convert_to_tensor=False)
-            logger.info(f">> Finished encoding text: {text}")
+            _ = DEBUG and log_debug(f">> Finished encoding text: {text}")
             return embedding[0].tolist()
         except Exception as e:
-            logger.error(f"Error generating HuggingFace embedding [1]: {e}")
+            log_error(f"Error generating HuggingFace embedding [1]: {e}")
             raise
 
     def generate_embeddings(self, texts: List[str]) -> List[List[float]]:
         """Generate embeddings for multiple texts."""
-        logger.info("Generating HuggingFace embedding(s) for "
-                    f"{len(texts)} texts")
+        _ = DEBUG and log_debug("Generating HuggingFace embedding(s) for "
+                                f"{len(texts)} texts")
         try:
             embeddings = self.model.encode(
                 texts, convert_to_tensor=False,
                 batch_size=32)
             return [embedding.tolist() for embedding in embeddings]
         except Exception as e:
-            logger.error(f"Error generating HuggingFace embeddings [2]: {e}")
+            log_error(f"Error generating HuggingFace embeddings [2]: {e}")
             raise
 
     def get_embedding_dimension(self) -> int:
@@ -341,13 +352,14 @@ class EmbeddingGenerator:
         """
         # Get configuration from environment if not provided
         if provider is None:
-            provider = os.getenv('EMBEDDINGS_PROVIDER', 'huggingface').lower()
+            provider = get_envvar('EMBEDDINGS_PROVIDER', 'huggingface').lower()
 
         if model is None:
             if provider == 'openai':
-                model = os.getenv('EMBEDDINGS_MODEL', 'text-embedding-3-small')
+                model = get_envvar('EMBEDDINGS_MODEL',
+                                   'text-embedding-3-small')
             else:
-                model = os.getenv('EMBEDDINGS_MODEL', 'thenlper/gte-small')
+                model = get_envvar('EMBEDDINGS_MODEL', 'thenlper/gte-small')
 
         self.provider_name = provider
         self.model_name = model
@@ -362,8 +374,9 @@ class EmbeddingGenerator:
         else:
             raise ValueError(f"Unknown embedding provider: {provider}")
 
-        logger.info(f"Initialized {provider} embedding provider with "
-                    f"model {model}")
+        _ = DEBUG and log_debug(
+            f"Initialized '{provider}' embedding provider with "
+            f"model: '{model}'")
 
     def generate_embeddings_for_chunks(self, chunks) -> List[EmbeddedChunk]:
         """
@@ -378,8 +391,9 @@ class EmbeddingGenerator:
         if not chunks:
             return []
 
-        logger.info(f"Generating embeddings for {len(chunks)} chunks "
-                    f"using {self.provider_name}")
+        _ = DEBUG and log_debug(
+            f"Generating embeddings for {len(chunks)} chunks "
+            f"using {self.provider_name}")
 
         # Extract texts from chunks
         texts = [chunk.content for chunk in chunks]
@@ -421,19 +435,19 @@ class EmbeddingGenerator:
 
                     embedded_chunks.append(embedded_chunk)
 
-                logger.debug(
+                _ = DEBUG and log_debug(
                     "Generated embeddings for batch "
                     f"{i//batch_size + 1}/"
                     f"{(len(chunks) + batch_size - 1)//batch_size}")
 
             except Exception as e:
-                logger.error("Error generating embeddings for batch "
-                             f"starting at index {i}: {e}")
+                log_error("Error generating embeddings for batch "
+                          f"starting at index {i}: {e}")
                 # Continue with next batch instead of failing completely
                 continue
 
-        logger.info("Successfully generated embeddings for "
-                    f"{len(embedded_chunks)}/{len(chunks)} chunks")
+        _ = DEBUG and log_debug("Successfully generated embeddings for "
+                                f"{len(embedded_chunks)}/{len(chunks)} chunks")
         return embedded_chunks
 
     def generate_query_embedding(self, query: str) -> List[float]:
@@ -480,15 +494,12 @@ def create_embedding_generator(
 def get_available_providers() -> Dict[str, List[str]]:
     """Get available embedding providers and their models."""
     providers = {}
-
     if openai is not None:
         providers['openai'] = list(
             OpenAIEmbeddingProvider.MODEL_CONFIGS.keys())
-
     if SentenceTransformer is not None:
         providers['huggingface'] = list(
             HuggingFaceEmbeddingProvider.MODEL_CONFIGS.keys())
-
     return providers
 
 
@@ -521,3 +532,49 @@ async def generate_embeddings_async(
         return generator.generate_embeddings_for_chunks(chunks)
 
     return await loop.run_in_executor(None, _generate)
+
+
+def get_embeddings_model_dimension(provider: str, model: str) -> int:
+    """Get the dimension of embeddings for a specific provider and model."""
+    generator = EmbeddingGenerator(provider=provider, model=model)
+    return generator.get_embedding_dimension()
+
+
+def get_embeddings_dimension() -> int:
+    """
+    Get the dimension of embeddings for the configured provider
+    and model.
+    """
+    provider = EMBEDDINGS_PROVIDER
+    model = EMBEDDINGS_MODEL
+    dimension = get_embeddings_model_dimension(provider, model)
+    _ = DEBUG and log_debug(
+        ">> embeddings.py | get_embeddings_dimension "
+        + f"| Provider: {provider} | Model: {model} | Dimension: {dimension}"
+    )
+    return dimension
+
+
+def get_embedding_config() -> Dict[str, Any]:
+    """
+    Get embedding configuration from environment.
+
+    Returns:
+        Dict[str, Any]: Embedding configuration.
+    """
+    dimension = get_embeddings_dimension()
+    log_debug(
+        ">> embeddings.py | get_embedding_config | "
+        + f"Provider: {EMBEDDINGS_PROVIDER} | Model: {EMBEDDINGS_MODEL}"
+        + f" | Dimension: {dimension}")
+    return {
+        "provider": EMBEDDINGS_PROVIDER,
+        "model": EMBEDDINGS_MODEL,
+        "api_key": (
+            get_envvar("OPENAI_API_KEY")
+            if EMBEDDINGS_PROVIDER == "openai"
+            else get_envvar("HF_TOKEN")
+            if EMBEDDINGS_PROVIDER == "huggingface"
+            else None),
+        "dimension": dimension
+    }

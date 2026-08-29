@@ -5,17 +5,17 @@ This test demonstrates the complete workflow of the database manager
 including connection, schema initialization, and vector operations.
 """
 
-import os
+# import os
 import asyncio
 # from datetime import datetime
 # from typing import List
 
-from genericsuite_codegen.database import (
-    DatabaseManager,
-    # create_embedded_chunk,
-    health_check,
-    # initialize_database
-)
+# from genericsuite_codegen.database import (
+#     DatabaseManager,
+#     # create_embedded_chunk,
+#     health_check,
+#     # initialize_database
+# )
 
 
 # async def test_database_workflow():
@@ -23,7 +23,7 @@ from genericsuite_codegen.database import (
 #     print("Testing database workflow...")
 
 #     # Set test environment
-#     os.environ["MONGODB_URI"] = "mongodb://localhost:27017/"
+#     os.environ["APP_DB_URI"] = "mongodb://localhost:27017/"
 
 #     try:
 #         # Test health check without connection
@@ -75,8 +75,8 @@ def test_vector_operations():
             [0.9, 1.0, 1.1, 1.2]
         ]
 
-        assert validate_embedding_dimensions(embeddings, 4) == True
-        assert validate_embedding_dimensions(embeddings, 3) == False
+        assert validate_embedding_dimensions(embeddings, 4) is True
+        assert validate_embedding_dimensions(embeddings, 3) is False
 
         print("✓ Vector validation tests passed")
 
@@ -105,7 +105,7 @@ async def main():
     print("Running database integration tests...\n")
 
     try:
-        await test_database_workflow()
+        # await test_database_workflow()
         test_vector_operations()
 
         print("\n🎉 All integration tests passed!")

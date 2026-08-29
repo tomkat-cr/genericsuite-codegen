@@ -1,5 +1,5 @@
-import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { defineConfig } from 'vite'
 // import vitePluginRequire from 'vite-plugin-require';
 import { resolve } from 'path'
 
@@ -15,17 +15,18 @@ export default defineConfig({
     },
   },
   server: {
-    port: 3000,
+    port: Number(process.env.UI_PORT || 3002),
     host: true,
   },
   define: {
     'process.env': {
-        UI_PORT: (process.env.UI_PORT || ''),
-        UI_SECURE_PORT: (process.env.UI_SECURE_PORT || ''),
-        UI_APP_DOMAIN_NAME: (process.env.UI_APP_DOMAIN_NAME || ''),
-        VITE_API_BASE_URL: (process.env.UI_API_BASE_URL || ''),
-        VITE_DEBUG: (process.env.UI_DEBUG || ''),
-        VITE_REMOTE_REPO_URL: (process.env.REMOTE_REPO_URL || ''),
+      UI_PORT: (process.env.UI_PORT || ''),
+      UI_SECURE_PORT: (process.env.UI_SECURE_PORT || ''),
+      UI_APP_DOMAIN_NAME: (process.env.UI_APP_DOMAIN_NAME || ''),
+      VITE_API_BASE_URL: (process.env.UI_API_BASE_URL || ''),
+      VITE_DEBUG: (process.env.UI_DEBUG || ''),
+      VITE_REMOTE_REPO_URL: (process.env.REMOTE_REPO_URL || ''),
+      VITE_REMOTE_REPO_BRANCH: (process.env.REMOTE_REPO_BRANCH || ''),
     },
   },
   build: {

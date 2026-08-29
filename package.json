@@ -3,6 +3,8 @@
   "version": "1.0.0",
   "description": "Generic Suite CodeGen",
   "private": true,
+  "author": "Carlos J. Ramirez <info@genericsuite.com>",
+  "license": "MIT",
   "workspaces": [
     "server",
     "ui",
@@ -30,10 +32,9 @@
     "codegen",
     "genericsuite"
   ],
-  "author": "Carlos J. Ramirez",
-  "license": "MIT",
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "concurrently": "^9.2.1",
+    "genericsuite-be-scripts": "github:tomkat-cr/genericsuite-be-scripts#develop"
   },
   "engines": {
     "node": ">=18.0.0",

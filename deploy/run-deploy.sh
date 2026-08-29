@@ -88,6 +88,9 @@ OTHER_DOCKER_COMPOSE_PARAMS=""
 if [ $(is_docker_port_in_use 27017 gscodegen-mongo) = "0" ]; then
     if [ "$USE_LOCAL_MONGODB" != "0" ]; then
         OTHER_DOCKER_COMPOSE_PARAMS="${OTHER_DOCKER_COMPOSE_PARAMS} --profile use_local_mongodb"
+    else
+        echo ""
+        echo "WARNING: Port 27017 is in use by any running docker container different than 'gscodegen-mongo'"
     fi
 fi
 
@@ -96,6 +99,9 @@ fi
 if [ $(is_docker_port_in_use 8081 gscodegen-mongo-express) = "0" ]; then
     if [ "$USE_LOCAL_MONGODB" != "0" ]; then
         OTHER_DOCKER_COMPOSE_PARAMS="${OTHER_DOCKER_COMPOSE_PARAMS} --profile use_local_mongodb_express"
+    else
+        echo ""
+        echo "WARNING: Port 8081 is in use by any running docker container different than 'gscodegen-mongo-express'"
     fi
 fi
 
@@ -105,8 +111,8 @@ if [ "$USE_LOCAL_MONGODB" != "0" ]; then
     export MONGODB_HOST_PORT=27017
     # export MONGODB_USER=root
     # export MONGODB_PASSWORD=example
-    # export MONGODB_URI=mongodb://$MONGODB_USER:$MONGODB_PASSWORD@$MONGODB_HOST_NAME:$MONGODB_HOST_PORT
-    export MONGODB_URI=mongodb://$MONGODB_HOST_NAME:$MONGODB_HOST_PORT/?directConnection=true
+    # export APP_DB_URI=mongodb://$MONGODB_USER:$MONGODB_PASSWORD@$MONGODB_HOST_NAME:$MONGODB_HOST_PORT
+    export APP_DB_URI=mongodb://$MONGODB_HOST_NAME:$MONGODB_HOST_PORT/?directConnection=true
 fi
 
 # Override environment variables for Deployment

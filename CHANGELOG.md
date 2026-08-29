@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/) and [Keep a Changelog](http://keepachangelog.com/).
 
 
-## [Unreleased] - Date
+## [Unreleased] - YYYY-MM-DD
 
 ### Added
 
@@ -15,6 +15,107 @@ This project adheres to [Semantic Versioning](http://semver.org/) and [Keep a Ch
 ### Removed
 
 ### Security
+
+
+## [1.5.0] - 2026-08-21
+
+### Added
+- AGENTS.md, GEMINI.md, and CLAUDE.md files to provide context and instructions to AI Coding Assistants [GS-303].
+- Add SAST testing [GS-315].
+- Implement comprehensive integration test suite for MCP server and core system components [GS-172].
+
+### Changed
+- `Kiro-Usage.md`, `Kiro-SDLC-Screenshots.md`, and referenced images moved to `.kiro/docs/`
+- Updated author information on `package.json`.
+
+### Security
+- Migrate to Python 3.14 [GS-337].
+- Bump Node.js version in .nvmrc to 26 [GS-339].
+- Bump Vite to version 8.2.2 and vite-plugin-require to version "^1.3.0" to fix code injection via imports keys ([GHSA-r5fr-rjxr-66jc](https://github.com/lodash/lodash/security/advisories/GHSA-r5fr-rjxr-66jc), [CVE-2026-4800](https://github.com/advisories/GHSA-r5fr-rjxr-66jc), [879aaa9](https://github.com/lodash/lodash/commit/879aaa93132d78c2f8d20c60279da9f8b21576d6)), and an incomplete patch for [CVE-2021-23337](https://github.com/advisories/GHSA-35jh-r3h4-6jhm) [GS-219].
+- Bump black to version "^26.5.1" to fix [CVE-2024-21503](https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2024-21503) [GS-219].
+
+
+## [1.4.0] - 2025-12-25
+
+### Added
+- CRON process to update the knowledge base.
+- Settings page to configure the AI providers and other settings.
+- Settings stored in the JSON file, if the envvar is not set there, defaults to the .env file variables.
+- Huggingface, Groq AI/ML API, Together.ai, OpenRouter, Nvidia, XAI, Ollama and Rhymes providers.
+- TOGETHER_STOP environment variable to stop tokens.
+- Rename LLM_MODEL_NAME to AI provider specific environment variables: OPENAI_API_KEY, OPENAI_MODEL_NAME, HF_TOKEN, HF_MODEL_NAME, GROQ_API_KEY, GROQ_MODEL_NAME, TOGETHER_API_KEY, TOGETHER_MODEL_NAME, OPENROUTER_API_KEY, OPENROUTER_MODEL_NAME, NVIDIA_API_KEY, NVIDIA_MODEL_NAME, XAI_API_KEY, XAI_MODEL_NAME, RHYMES_API_KEY, RHYMES_MODEL_NAME, and OLLAMA_MODEL_NAME.
+- Rename LLM_BASE_URL to AI provider specific environment variables: OPENAI_BASE_URL, HF_BASE_URL, GROQ_BASE_URL, TOGETHER_BASE_URL, OPENROUTER_BASE_URL, NVIDIA_BASE_URL, XAI_BASE_URL, RHYMES_BASE_URL, and OLLAMA_BASE_URL.
+- Logfire integration.
+- Script to start and stop the Logfire Telemetry container.
+- UI: Knowledge Base Search.
+- UI: CRUD editor JSON config files validation tool.
+- TEMP_BASE_WEB_URL envvar and "make dev-local-basecamp" to support path translation for sources using the local GenericSuite (Basecamp) web documentation.
+- DOCUMENT_RETRIEVAL_MAX_FILE_SIZE_MB envvar to limit the file size for retrieval.
+- APP_LOGGER_OPTIONS envvar to silent the logger startup debug messages on the batch server.
+- Add the "exc_info" parameter to log_error() function to log the exception traceback.
+- MAX_PROMPT_LENGTH envvar to limit the prompt length.
+- MCP_SERVER_DEBUG envvar to enable debug mode.
+- Bearer token support in MCP server and security check on all tools and resources.
+- ConversationsService class to add conversation history to other tools different than Agent queries, e.g. JSON config and Python code generation.
+- "server/genericsuite_codegen/assets/llm_models_data.json" file to store the AI models data, including the context window size and token pricing.
+- File name exclusions to the Ingestion process to ignore "requirements.txt" files.
+
+### Changed
+- Rename "/knowledge-base/status" endpoint to "/update-knowledge-base/status".
+- Rename "/knowledge-base/progress" endpoint to "/update-knowledge-base/progress".
+- Rename MONGODB_URI and MONGODB_DB_NAME envvars to APP_DB_URI and APP_DB_NAME.
+- Rename LLM_MODEL envvar to LLM_MODEL_NAME.
+- All logging is now configurable centralized in app_logger.py.
+- "utilities.py" moved from "server/genericsuite_codegen/ai" to "server/genericsuite_codegen/utilities".
+- "model_api" added to AgentConfig model.
+- Reduce noise from external (pymongo) and internal libraries (debug messages on uvicorn).
+- UI: Timestamps are now displayed in local time.
+- UI: task_type, model_used and token_usage are now displayed in the chat interface when debugging is enabled.
+- UI: "KnowledgeBasePage.tsx" was splited to separate components.
+- Ingestion: filter files from the cloned repo that are not under the "docs" directory (BASE_LOCAL_PATH). Also copy the files "CrudEditorConfigInterface.ts" and "crud_editor_config_classes.py" once the repo is updated.
+- Rename DEFAULT_MAX_CONTEXT_LENGTH envvar to CONTEXT_DEFAULT_MAX_LENGTH.
+- Rename the CORS_ORIGINS envvar to CORS_ORIGIN.
+- Rename MCP server tools removing the "mcp_" prefix to the function names.
+- Change ports 8000, 8070, 3000 and 3001 to 8002, 8072, 3002 and 3003 respectively.
+- Change enhanced search max_context_length and context_limit from 8000 to 2000000.
+- Separate AI tools in individual files.
+
+### Fixed
+- Logger debug set correctly when DEBUG envvar is set to 1.
+- UI: API calls issue because of the additional "data" property in the response.
+- The JSON config generation to include both frontend and backend files following the GenericSuite rules.
+- Issue with extract_code_blocks() separating the blocks between backticks ` that are prefixed/suffixed with other texts.
+
+### Removed
+- LLM_API_KEY envvar, replaced by AI provider specific variables.
+- MONGODB_HOST_NAME, MONGODB_HOST_PORT, MONGODB_USER, MONGODB_PASSWORD envvars from ".env.example" file.
+
+
+## [1.3.0] - 2025-10-01
+
+### Added
+- Enhanced Search Types: Comprehensive type definitions for dual search operations and context-aware generation
+  - `CodeGenerationContext` for code generation context information
+  - `DualSearchResult` for dual vector search results
+  - `DocumentContent` and `DocumentMetadata` for document handling
+  - `SearchTemplate` and `EnhancedSearchConfig` for configurable search templates
+- Complete API models for enhanced search operations
+- Exception hierarchy for enhanced search error handling
+- API /v1 to all endpoints.
+- Remote repository branch with the REMOTE_REPO_BRANCH environment variable.
+
+### Changed
+- MCP server main file "start_mcp_server.py" moved from "mcp-server/" to "server/".
+- Server test runs with local MongoDB and "run-server.sh test".
+
+### Fixed
+- UI API call error handling verifying the response status.
+
+### Security
+- Update dependencies according to Github Dependabot suggestions:
+  - Change: Bump Vite to version 5.4.20 and Black to version 24.10.0 in package-lock.json, poetry.lock, and pyproject.toml files.
+  - Change: Adjust Python version requirement for Black to >=3.9.
+  - Change: Update content hashes in lock files for consistency.
 
 
 ## [1.2.0] - 2025-09-30

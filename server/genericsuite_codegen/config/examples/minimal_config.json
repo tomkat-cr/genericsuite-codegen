@@ -1,0 +1,14 @@
+{
+  "enhanced_search": {
+    "enabled": true,
+    "max_context_length": 5000,
+    "fallback_enabled": true
+  },
+  "local_storage": {
+    "local_repo_path": "local_repo_files",
+    "max_file_size_mb": 5
+  },
+  "logging": {
+    "level": "WARNING"
+  }
+}

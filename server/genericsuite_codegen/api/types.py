@@ -7,9 +7,16 @@ response formatting, and data transfer objects in the GenericSuite CodeGen API.
 
 from typing import Dict, Any, List, Optional
 from datetime import datetime
+import datetime as dt
 from enum import Enum
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import (
+    BaseModel,
+    # ConfigDict,
+    Field,
+    field_validator,
+    field_serializer,
+)
 
 from genericsuite_codegen.agent.types import (
     AgentModel,
@@ -48,15 +55,14 @@ class LLMProvider(str, Enum):
 
 class BaseResponse(BaseModel):
     """Base response model with common fields."""
-    model_config = ConfigDict(
-        json_encoders={
-            datetime: lambda v: v.isoformat()
-        }
-    )
-
     timestamp: datetime = Field(
-        default_factory=datetime.utcnow,
+        default=dt.datetime.now(dt.UTC),
         description="Response timestamp")
+
+    @field_serializer('timestamp')
+    def serialize_timestamp(self, value: datetime) -> str:
+        """Serialize datetime to ISO format string."""
+        return value.isoformat()
 
 
 class ErrorResponse(BaseResponse):
@@ -146,7 +152,7 @@ class QueryRequest(BaseModel):
     context_limit: int = Field(
         default=4000,
         ge=500,
-        le=8000,
+        le=2000000,
         description="Maximum context length for knowledge base retrieval"
     )
     include_sources: bool = Field(
@@ -182,63 +188,6 @@ class QueryResponse(BaseResponse):
         default=None,
         description="Conversation ID"
     )
-
-
-# Conversation Models
-
-class Message(BaseModel):
-    """Individual message in a conversation."""
-    id: str = Field(description="Unique message identifier")
-    role: str = Field(description="Message role (user/assistant)")
-    content: str = Field(description="Message content")
-    timestamp: datetime = Field(
-        default_factory=datetime.utcnow, description="Message timestamp")
-    sources: Optional[List[str]] = Field(
-        default=None, description="Source documents for assistant messages")
-    token_usage: Optional[Dict[str, int]] = Field(
-        default=None, description="Token usage for this message")
-
-    @field_validator('role')
-    def validate_role(cls, v):
-        """Validate message role."""
-        if v not in ['user', 'assistant']:
-            raise ValueError('Role must be either "user" or "assistant"')
-        return v
-
-
-class ConversationCreate(BaseModel):
-    """Request model for creating a new conversation."""
-    title: Optional[str] = Field(
-        default=None, max_length=200, description="Conversation title")
-    initial_message: Optional[str] = Field(
-        default=None, description="Initial message to start the conversation")
-
-
-class ConversationUpdate(BaseModel):
-    """Request model for updating a conversation."""
-    title: Optional[str] = Field(
-        default=None, max_length=200, description="New conversation title")
-
-
-class Conversation(BaseModel):
-    """Conversation model."""
-    id: str = Field(description="Conversation ID")
-    title: str = Field(description="Conversation title")
-    messages: List[Message] = Field(
-        default_factory=list, description="Conversation messages")
-    created_at: datetime = Field(description="Creation timestamp")
-    updated_at: datetime = Field(description="Last update timestamp")
-    message_count: int = Field(
-        description="Number of messages in conversation")
-
-
-class ConversationList(BaseResponse):
-    """Response model for conversation list."""
-    conversations: List[Conversation] = Field(
-        description="List of conversations")
-    total: int = Field(description="Total number of conversations")
-    page: int = Field(description="Current page number")
-    page_size: int = Field(description="Number of items per page")
 
 
 # Knowledge Base Models
@@ -292,6 +241,7 @@ class KnowledgeBaseStatus(BaseResponse):
     document_count: int = Field(description="Total number of documents")
     chunk_count: int = Field(description="Total number of chunks")
     repository_url: str = Field(description="Current repository URL")
+    repository_branch: str = Field(description="Current repository branch")
     repository_commit: Optional[str] = Field(
         default=None, description="Current repository commit hash")
     error_message: Optional[str] = Field(
@@ -430,27 +380,30 @@ class SearchResult(BaseModel):
         default_factory=dict, description="Additional metadata")
 
 
-class SearchResponse(BaseResponse):
-    """Search response model."""
-    results: List[SearchResult] = Field(description="Search results")
-    total_results: int = Field(description="Total number of results found")
-    query: str = Field(description="Original search query")
-    execution_time: float = Field(
-        description="Query execution time in seconds")
+# class SearchResponse(BaseResponse):
+#     """Search response model."""
+#     results: List[SearchResult] = Field(description="Search results")
+#     total_results: int = Field(description="Total number of results found")
+#     query: str = Field(description="Original search query")
+#     execution_time: float = Field(
+#         description="Query execution time in seconds")
 
 
 class KnowledgeBaseStatistics(BaseModel):
     total_chunks: int = Field(description="Total chunks")
-    last_updated: Optional[datetime] = Field(description="Last updated")
-
-
-class ConversationStatistics(BaseModel):
-    total_conversations: int = Field(description="Total conversations")
+    last_updated: Optional[datetime] = Field(
+        description="Last updated")
 
 
 class SystemStatistics(BaseModel):
     uptime: str = Field(description="Uptime")
     memory_usage: str = Field(description="Memory usage")
+
+
+class ConversationStatistics(BaseModel):
+    total_conversations: int = Field(description="Total conversations")
+    error: Optional[str] = Field(
+        default=None, description="Error message if any")
 
 
 class Statistics(BaseModel):
@@ -461,3 +414,40 @@ class Statistics(BaseModel):
         description="Conversation statistics")
     agent: AgentModel = Field(description="Agent usage statistics")
     system: SystemStatistics = Field(description="System resource statistics")
+
+
+class LlmData(BaseModel):
+    input_tokens_price: Optional[float] = None
+    output_tokens_price: Optional[float] = None
+    context_window_size: Optional[int] = None
+
+
+# Settings Models
+
+class SettingItemType(str, Enum):
+    """Type of setting item."""
+    LABEL = "label"
+    VARIABLE = "variable"
+
+
+class SettingItem(BaseModel):
+    """Represents a single setting item (label or variable)."""
+    type: SettingItemType = Field(description="Item type (label/variable)")
+    name: Optional[str] = Field(
+        default=None, description="Environment variable name")
+    label: str = Field(description="Display label or comment text")
+    value: Optional[str] = Field(
+        default=None, description="Current value for variables")
+    select_options: Optional[List[str]] = Field(
+        default=None, description="Select options for variables")
+
+
+class SettingsResponse(BaseModel):
+    """Response model for settings listing."""
+    settings: List[SettingItem] = Field(description="List of settings items")
+
+
+class UpdateSettingsRequest(BaseModel):
+    """Request model for updating settings."""
+    settings: Dict[str, Any] = Field(
+        description="Dictionary of setting names and values")

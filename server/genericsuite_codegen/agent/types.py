@@ -1,5 +1,6 @@
 from typing import List, Dict, Any, Optional
 from datetime import datetime
+import datetime as dt
 
 from dataclasses import dataclass
 from pydantic import BaseModel, Field
@@ -71,7 +72,7 @@ class JSONConfigRequest(BaseModel):
         default=True, description="Include example values and comments")
 
 
-class JSONConfigResult(BaseModel):
+class JSONConfigResultRecord(BaseModel):
     """Result model for JSON configuration generation."""
     configuration: Dict[str, Any] = Field(
         description="Generated JSON configuration")
@@ -82,6 +83,13 @@ class JSONConfigResult(BaseModel):
         default_factory=dict, description="Example configurations")
     sources: List[str] = Field(
         default_factory=list, description="Source documents used")
+    filename: str = Field(description="Filename of the configuration")
+
+
+class JSONConfigResult(BaseModel):
+    """Result model for JSON configuration generation."""
+    records: List[JSONConfigResultRecord] = Field(
+        description="List of JSON configuration records")
 
 
 # Create Context Retrieval Tool
@@ -223,21 +231,38 @@ class AgentModel(BaseModel):
 class AgentConfig(BaseModel):
     """Configuration for the GenericSuite AI agent."""
 
-    model_provider: str = Field(
-        default="openai", description="LLM provider (openai, litellm)"
+    model_api: str = Field(
+        default="openai",
+        description="LLM API (openai, litellm)"
     )
-    model_name: str = Field(default="gpt-4", description="Model name to use")
+    model_provider: str = Field(
+        default="openai",
+        description="LLM provider (openai, huggingface,"
+        " aimlapi, together, xai, nvidia, rhymes, ollama)"
+    )
+    model_name: str = Field(
+        default="gpt-4o-mini",
+        description="Model name to use")
     temperature: float = Field(
-        default=0.1, description="Model temperature (0.0 to 1.0)"
+        default=0.1,
+        description="Model temperature (0.0 to 1.0)"
     )
     max_tokens: Optional[int] = Field(
-        default=None, description="Maximum tokens for responses"
+        default=None,
+        description="Maximum tokens for responses"
     )
-    timeout: int = Field(default=60, description="Request timeout in seconds")
+    timeout: int = Field(
+        default=60,
+        description="Request timeout in seconds")
+    stop: Optional[List[str]] = Field(
+        default=None,
+        description="Stop sequences for the model")
     api_key: Optional[str] = Field(
-        default=None, description="API key for the provider")
+        default=None,
+        description="API key for the provider")
     base_url: Optional[str] = Field(
-        default=None, description="Custom base URL for API")
+        default=None,
+        description="Custom base URL for API")
 
 
 class QueryRequest(BaseModel):
@@ -252,7 +277,8 @@ class QueryRequest(BaseModel):
         default=None, description="Backend framework for code generation"
     )
     context_limit: int = Field(
-        default=4000, description="Maximum context length")
+        default=None,
+        description="Maximum context length")
     include_sources: bool = Field(
         default=True, description="Include source attribution in response"
     )
@@ -267,7 +293,7 @@ class AgentResponse(BaseModel):
     )
     task_type: str = Field(description="Type of task performed")
     timestamp: datetime = Field(
-        default_factory=datetime.utcnow, description="Response timestamp"
+        default=dt.datetime.now(dt.UTC), description="Response timestamp"
     )
     model_used: str = Field(description="Model used for generation")
     token_usage: Optional[Dict[str, int]] = Field(

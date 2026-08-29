@@ -5,6 +5,10 @@ Debug script to test knowledge base search functionality.
 This script will help diagnose why the system isn't finding things in
 the documentation.
 """
+import os
+import sys
+import asyncio
+from dotenv import load_dotenv
 
 from genericsuite_codegen.agent.tools import KnowledgeBaseTool
 from genericsuite_codegen.document_processing.embeddings import \
@@ -13,11 +17,6 @@ from genericsuite_codegen.database.setup import (
     get_database_manager,
     health_check
 )
-import os
-import sys
-import asyncio
-import logging
-from dotenv import load_dotenv
 
 # Load environment variables from .env file
 load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
@@ -25,10 +24,7 @@ load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
 # Add the server directory to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
 
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+DEBUG = False
 
 
 async def test_database_connection():

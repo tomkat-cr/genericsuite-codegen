@@ -11,14 +11,19 @@ from pathlib import Path
 from typing import List, Set, Optional, Dict, Any
 from dataclasses import dataclass
 from datetime import datetime
-import logging
 
 try:
     import pypdf
 except ImportError:
     pypdf = None
 
-logger = logging.getLogger(__name__)
+from genericsuite_codegen.utilities.app_logger import (
+    log_debug,
+    log_warning,
+    log_error,
+)
+
+DEBUG = False
 
 
 @dataclass
@@ -115,7 +120,7 @@ class FileFilter:
                     if line and not line.startswith('#'):
                         patterns.append(line)
         except Exception as e:
-            logger.warning(
+            log_warning(
                 f"Could not read .gitignore file {gitignore_path}: {e}")
 
         return patterns
@@ -254,7 +259,7 @@ class TextProcessor(BaseProcessor):
                     continue
 
             if content is None:
-                logger.warning(
+                log_warning(
                     f"Could not decode file {file_path} with any encoding")
                 return None
 
@@ -286,7 +291,7 @@ class TextProcessor(BaseProcessor):
             return self._create_document(file_path, content, file_type)
 
         except Exception as e:
-            logger.error(f"Error processing text file {file_path}: {e}")
+            log_error(f"Error processing text file {file_path}: {e}")
             return None
 
 
@@ -300,7 +305,7 @@ class PDFProcessor(BaseProcessor):
     def process(self, file_path: Path) -> Optional[Document]:
         """Process a PDF file."""
         if pypdf is None:
-            logger.error("pypdf not available. Cannot process PDF files.")
+            log_error("pypdf not available. Cannot process PDF files.")
             return None
 
         try:
@@ -317,19 +322,19 @@ class PDFProcessor(BaseProcessor):
                             content += f"\n--- Page {page_num + 1} ---\n"
                             content += page_text
                     except Exception as e:
-                        logger.warning(
+                        log_warning(
                             f"Could not extract text from page {page_num + 1}"
                             f" of {file_path}: {e}")
 
             if not content.strip():
-                logger.warning(
+                log_warning(
                     f"No text content extracted from PDF {file_path}")
                 return None
 
             return self._create_document(file_path, content, 'pdf')
 
         except Exception as e:
-            logger.error(f"Error processing PDF file {file_path}: {e}")
+            log_error(f"Error processing PDF file {file_path}: {e}")
             return None
 
 
@@ -364,7 +369,7 @@ class DocumentProcessorManager:
             if processor.can_process(file_path):
                 return processor.process(file_path)
 
-        logger.warning(f"No processor found for file {file_path}")
+        log_warning(f"No processor found for file {file_path}")
         return None
 
     def process_repository(self) -> List[Document]:
@@ -372,7 +377,7 @@ class DocumentProcessorManager:
         documents = []
         files_to_process = self.get_all_files()
 
-        logger.info(
+        _ = DEBUG and log_debug(
             f"Processing {len(files_to_process)} files from {self.repo_path}")
 
         for file_path in files_to_process:
@@ -380,13 +385,14 @@ class DocumentProcessorManager:
                 document = self.process_file(file_path)
                 if document:
                     documents.append(document)
-                    logger.debug(f"Processed: {file_path}")
+                    _ = DEBUG and log_debug(f"Processed: {file_path}")
                 else:
-                    logger.warning(f"Failed to process: {file_path}")
+                    log_warning(f"Failed to process: {file_path}")
             except Exception as e:
-                logger.error(f"Error processing file {file_path}: {e}")
+                log_error(f"Error processing file {file_path}: {e}")
 
-        logger.info(f"Successfully processed {len(documents)} documents")
+        _ = DEBUG and log_debug(
+            f"Successfully processed {len(documents)} documents")
         return documents
 
     def get_file_stats(self) -> Dict[str, Any]:
@@ -406,7 +412,7 @@ class DocumentProcessorManager:
                     extension, 0) + 1
                 stats['total_size'] += file_path.stat().st_size
             except Exception as e:
-                logger.warning(f"Could not get stats for {file_path}: {e}")
+                log_warning(f"Could not get stats for {file_path}: {e}")
 
         return stats
 

@@ -1,4 +1,4 @@
-.PHONY: help up down restart logs build clean status
+.PHONY: help up run run-db-only down restart hard-restart logs logs-f server-logs clean-docker docker-prune status install build start dev dev-local-basecamp clean list-scripts init-app-environment py-env-activate py-env-remove rebuild-ui kb-cron run-telemetry sast-test
 
 # Default target
 help:
@@ -11,8 +11,8 @@ up:
 run: up
 
 run-db-only:
-	# To run only the containerized database:
-	CONTAINER_TO_RUN=gscodegen-mongo make run
+	# To run only the local containerized database:
+	CONTAINER_TO_RUN="gscodegen-mongo gscodegen-mongo-express" make run
 
 # Stop all services
 down:
@@ -64,8 +64,11 @@ build:
 start:
 	npm run start
 
-dev: run-db-only
+dev: install
 	npm run dev
+
+dev-local-basecamp:
+	TEMP_BASE_WEB_URL="http://127.0.0.1:8015" make dev
 
 clean:
 	npm run clean
@@ -92,3 +95,12 @@ py-env-remove:
 
 rebuild-ui:
 	cd ui && make build && cd .. && docker restart gscodegen-client
+
+kb-cron:
+	bash ./scripts/kb_cron.sh
+
+run-telemetry:
+	bash ./scripts/telemetry_manager.sh run
+
+sast-test:
+	bash node_modules/genericsuite-be-scripts/scripts/sast_test.sh

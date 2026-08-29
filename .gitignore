@@ -229,4 +229,16 @@ deploy/docker-compose.yml
 deploy/nginx.conf
 deploy/docker_images/Dockerfile-Python.backup_*
 deploy/docker_images/Dockerfile-Ollama.backup_*
+
 mcp-server/genericsuite_codegen
+server/genericsuite_codegen/assets/main_config.json
+
+# Claude Code
+.claude/settings.local.json
+
+# AI Agents
+.claude
+.agents
+.codex
+.cursor
+.gemini

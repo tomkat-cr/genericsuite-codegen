@@ -69,7 +69,7 @@ The system combines document ingestion, vector search, AI agent capabilities, an
 - **AI Framework**: Pydantic AI for agent implementation
 - **Database**: MongoDB Vector Search with `pymongo` Python dependency
 - **Embeddings**: OpenAI embeddings API and HuggingFace `sentence-transformers` (configurable by EMBEDDINGS_PROVIDER and EMBEDDINGS_MODEL envvars)
-- **LLM Provider**: OpenAI API and LiteLLM for LLM integration (configurable LLM_API, LLM_PROVIDER, and LLM_MODEL envvars)
+- **LLM Provider**: OpenAI API and LiteLLM for LLM integration (configurable LLM_API, LLM_PROVIDER, and LLM_MODEL_NAME envvars)
 - **UI**: ReactJS, ShadCn, Vite
 - **Document Processing**: Simple text processing with PyPDF2 for PDF extraction
 
@@ -101,7 +101,7 @@ genericsuite-codegen/          # Main project directory
 │   ├── mcp_server.py
 │   ├── run_mcp_server.sh
 │   └── tests/
-│       └── test_mcp_server.py
+│       └── run_mcp_server_test.py
 ├── server/                       # Server (Python + FastAPI)
 │   ├── Makefile
 │   ├── package.json
@@ -182,7 +182,7 @@ Create a `.env.example` file with the following variables:
 - APP_DOMAIN_NAME: The domain name for the application. Defaults to `localhost`
 - APP_NAME: The name of the application. Defaults to `GenericSuite CodeGen`
 
-- MONGODB_URI: The MongoDB connection string. Defaults to `mongodb://root:example@mongo:27017/`
+- APP_DB_URI: The MongoDB connection string. Defaults to `mongodb://root:example@mongo:27017/`
 - REMOTE_REPO_URL: remote repository URL to be git-cloned. Defaults to `https://github.com/tomkat-cr/genericsuite-basecamp.git`
 - LOCAL_REPO_DIR: The local directory where the repository will be cloned. Defaults to "/code/local_repo_files"
 
@@ -191,7 +191,7 @@ Create a `.env.example` file with the following variables:
 
 - LLM_API: The LLM API provider (e.g., "openai", "litellm"). Defaults to "litellm"
 - LLM_PROVIDER: The LLM provider (e.g., "openai", "ollama", "anthropic", "vertexai", "bedrock"). Defaults to "ollama"
-- LLM_MODEL: The LLM model (e.g., "gpt-5-nano"). Defaults to "gpt-oss-20b"
+- LLM_MODEL_NAME: The LLM model (e.g., "gpt-5-nano"). Defaults to "gpt-oss-20b"
 - LLM_TEMPERATURE: The llm temperature. Defaults to 0.5
 - LLM_MAX_TOKENS: The llm max_tokens. Defaults to 2024
 - LLM_TOP_P: The llm top_p. Defaults to 1.0
@@ -242,13 +242,13 @@ When implementing this project, make sure to:
 
 Follow these suggestions to generate JSON files, Python and ReactJS code:
 
-- [JSON files for GenericSuite tables configuration](genericsuite-basecamp/docs/Sample-Code/exampleapp/apps/config_dbdef) following the [Generic CRUD Editor Configuration Documentation](genericsuite-basecamp/docs/Configuration-Guide/Generic-CRUD-Editor-Configuration.md)
-- LangChain Tools following the [GenericSuite ExampleApp AI Agent](genericsuite-basecamp/docs/Sample-Code/exampleapp/apps/api-chalice/lib/models/ai_chatbot) application code examples
-- Application frontend starting code from [ExampleApp UI](/Users/carlosramirez/desarrollo/mediabros_repos/github/genericsuite-basecamp/docs/Sample-Code/exampleapp/apps/ui)
-- Application FastAPI backend starting code from [ExampleApp api-fastapi](/Users/carlosramirez/desarrollo/mediabros_repos/github/genericsuite-basecamp/docs/Sample-Code/exampleapp/apps/api-fastapi)
-- Application Flask backend starting code from [ExampleApp api-flask](/Users/carlosramirez/desarrollo/mediabros_repos/github/genericsuite-basecamp/docs/Sample-Code/exampleapp/apps/api-flask)
-- Application Chalice backend starting code from [ExampleApp api-chalice](/Users/carlosramirez/desarrollo/mediabros_repos/github/genericsuite-basecamp/docs/Sample-Code/exampleapp/apps/api-chalice)
-- Application FastMCP MCP server starting code from [ExampleApp mcp-server](/Users/carlosramirez/desarrollo/mediabros_repos/github/genericsuite-basecamp/docs/Sample-Code/exampleapp/apps/mcp-server)
+- [JSON files for GenericSuite tables configuration](genericsuite-basecamp/mkdocs_root/code/exampleapp/apps/config_dbdef) following the [Generic CRUD Editor Configuration Documentation](genericsuite-basecamp/mkdocs_root/en/Configuration-Guide/Generic-CRUD-Editor-Configuration.md)
+- LangChain Tools following the [GenericSuite ExampleApp AI Agent](genericsuite-basecamp/mkdocs_root/code/exampleapp/apps/api-chalice/lib/models/ai_chatbot) application code examples
+- Application frontend starting code from [ExampleApp UI](genericsuite-basecamp/mkdocs_root/code/exampleapp/apps/ui)
+- Application FastAPI backend starting code from [ExampleApp api-fastapi](genericsuite-basecamp/mkdocs_root/code/exampleapp/apps/api-fastapi)
+- Application Flask backend starting code from [ExampleApp api-flask](genericsuite-basecamp/mkdocs_root/code/exampleapp/apps/api-flask)
+- Application Chalice backend starting code from [ExampleApp api-chalice](genericsuite-basecamp/mkdocs_root/code/exampleapp/apps/api-chalice)
+- Application FastMCP MCP server starting code from [ExampleApp mcp-server](genericsuite-basecamp/mkdocs_root/code/exampleapp/apps/mcp-server)
 
 ## Context7 MCP Server prompts
 
@@ -315,9 +315,9 @@ Using the Context7 MCP server, search for the "genericsuite basecamp" registered
 .example - Example files
 .gitignore - Git ignore file
 .ini - Initialization files
-.nvmrc - Node Version Manager
-.npmrc - NPM configuration
-.python-version - Python version specification
+.nvmrc - Node.js Version Manager file
+.npmrc - NPM configuration file
+.python-version - Python version specification file
 .toml - TOML configuration files
 .yaml / .yml - YAML configuration files
 
@@ -821,15 +821,15 @@ services:
       - APP_DOMAIN_NAME=${APP_DOMAIN_NAME}
       - APP_NAME=${APP_NAME}
       - SERVER_DEBUG=${SERVER_DEBUG}
-      - MONGODB_URI=${MONGODB_URI}
+      - APP_DB_URI=${APP_DB_URI}
       - REMOTE_REPO_URL=${REMOTE_REPO_URL}
       - LOCAL_REPO_DIR=${LOCAL_REPO_DIR}
       - HF_TOKEN=${HF_TOKEN}
       - OPENAI_BASE_URL=${OPENAI_BASE_URL}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - LLM_API=${LLM_MODEL}
-      - LLM_PROVIDER=${LLM_MODEL}
-      - LLM_MODEL=${LLM_MODEL}
+      - LLM_API=${LLM_MODEL_NAME}
+      - LLM_PROVIDER=${LLM_MODEL_NAME}
+      - LLM_MODEL_NAME=${LLM_MODEL_NAME}
       - LLM_TEMPERATURE=${LLM_TEMPERATURE}
       - LLM_MAX_TOKENS=${LLM_MAX_TOKENS}
       - LLM_TOP_P=${LLM_TOP_P}
@@ -1487,7 +1487,7 @@ fi
 copy_lib
 
 if [ "$MCP_INSPECTOR" = "1" ]; then
-    npx @modelcontextprotocol/inspector \
+    npx -y @modelcontextprotocol/inspector \
         poetry \
         run \
         env $POETRY_ARGS $PYTHON_CMD mcp_server.py
@@ -1880,19 +1880,16 @@ build-preview: build preview
     "tailwind-merge": "^3.2.0"
   },
   "devDependencies": {
-    "@babel/cli": "^7.24.5",
     "@babel/core": "^7.24.5",
     "@babel/plugin-proposal-class-properties": "^7.18.6",
     "@babel/plugin-proposal-private-property-in-object": "^7.21.11",
     "@babel/plugin-syntax-jsx": "^7.24.1",
     "@babel/preset-env": "^7.24.5",
     "@babel/preset-react": "^7.24.1",
-    "@babel/preset-stage-0": "^7.8.3",
     "@babel/preset-typescript": "^7.24.1",
     "@tailwindcss/vite": "^4.1.11",
     "@testing-library/jest-dom": "^5.17.0",
     "@testing-library/react": "^13.4.0",
-    "@testing-library/user-event": "^13.5.0",
     "@types/jest": "^29.5.12",
     "@types/node": "^22.15.3",
     "@types/react": "^18.3.2",
@@ -1901,19 +1898,13 @@ build-preview: build preview
     "babel-jest": "^29.7.0",
     "babel-loader": "^9.1.3",
     "babel-plugin-css-modules-transform": "^1.6.2",
-    "css-loader": "^7.1.1",
-    "file-loader": "^6.2.0",
     "jest": "^29.7.0",
     "jest-environment-jsdom": "^29.7.0",
-    "path": "^0.12.7",
-    "postcss": "^8.4.38",
-    "postcss-loader": "^8.1.1",
+    "postcss": "^8.5.25",
     "react-error-overlay": "^6.0.9",
     "react-test-renderer": "^18.3.1",
-    "style-loader": "^4.0.0",
     "tailwindcss": "^4.1.5",
     "tw-animate-css": "^1.2.9",
-    "url-loader": "^4.1.1",
     "vite": "^5.4.19",
     "vite-plugin-require": "^1.2.14",
     "whatwg-fetch": "^3.6.20"

@@ -10,7 +10,6 @@ from typing import List, Dict, Any, Optional, Callable
 import os
 from pathlib import Path
 from datetime import datetime
-import logging
 import json
 import shutil
 
@@ -19,11 +18,22 @@ try:
 except ImportError:
     git = None
 
-from .processors import DocumentProcessorManager, Document
-from .chunker import DocumentChunker, DocumentChunk, chunk_document
-from .embeddings import EmbeddingGenerator, EmbeddedChunk
-from .enums import IngestionStatus
-from .types import (
+from genericsuite_codegen.utilities.app_logger import (
+    log_debug,
+    log_warning,
+    log_error,
+)
+from genericsuite_codegen.utilities.env_vars import get_envvar
+from genericsuite_codegen.utilities.utilities import get_last_url_element
+
+from genericsuite_codegen.document_processing.processors import (
+    DocumentProcessorManager, Document)
+from genericsuite_codegen.document_processing.chunker import (
+    DocumentChunker, DocumentChunk, chunk_document)
+from genericsuite_codegen.document_processing.embeddings import (
+    EmbeddingGenerator, EmbeddedChunk)
+from genericsuite_codegen.document_processing.enums import IngestionStatus
+from genericsuite_codegen.document_processing.types import (
     IngestionProgress,
     IngestionRepositoryInfo,
     IngestionStatistics,
@@ -33,11 +43,9 @@ from .types import (
 
 DEBUG = True
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO if DEBUG else logging.WARNING)
-
-PROGRESS_FILE_DIR = os.getenv("SERVER_PROGRESS_FILE_DIR",
-                              os.getenv("LOCAL_REPO_DIR", "/tmp"))
+BASE_LOCAL_PATH = get_envvar("BASE_LOCAL_PATH", '')
+PROGRESS_FILE_DIR = get_envvar("SERVER_PROGRESS_FILE_DIR",
+                               get_envvar("LOCAL_REPO_DIR", "/tmp"))
 PROGRESS_FILE_PATH = PROGRESS_FILE_DIR + "/ingestion_progress.json"
 
 
@@ -52,7 +60,8 @@ class RepositoryCloner:
             raise ImportError(
                 "GitPython not installed. Install with: pip install GitPython")
 
-    def clone_repository(self, repo_url: str, force_refresh: bool = True
+    def clone_repository(self, repo_url: str, repo_branch: str,
+                         force_refresh: bool = True
                          ) -> Dict[str, Any]:
         """
         Clone or update a repository.
@@ -83,51 +92,57 @@ class RepositoryCloner:
             # Handle existing directory
             if self.local_dir.exists():
                 if force_refresh:
-                    logger.info(
+                    _ = DEBUG and log_debug(
                         f"Removing existing directory: {self.local_dir}")
                     shutil.rmtree(self.local_dir)
                 else:
                     # Try to update existing repository
                     try:
                         repo = git.Repo(self.local_dir)
-                        logger.info(
+                        _ = DEBUG and log_debug(
                             f"Updating existing repository: {self.local_dir}")
                         repo.remotes.origin.pull()
                         return response
 
                     except Exception as e:
-                        logger.warning(
+                        log_warning(
                             f"Could not update existing repository: {e}")
-                        logger.info("Removing and re-cloning...")
+                        _ = DEBUG and log_debug("Removing and re-cloning...")
                         shutil.rmtree(self.local_dir)
 
             # Clone repository
-            logger.info(f"Cloning repository {repo_url} to {self.local_dir}")
+            _ = DEBUG and log_debug(
+                f"Cloning repository {repo_url}#{repo_branch}"
+                f" to {self.local_dir}")
             try:
-                git.Repo.clone_from(repo_url, self.local_dir)
+                git.Repo.clone_from(
+                    url=repo_url,
+                    to_path=str(self.local_dir),
+                    branch=repo_branch
+                )
             except Exception as e:
-                logger.error(f"Error cloning repository: {e}")
+                log_error(f"Error cloning repository: {e}")
                 response['success'] = False
                 response['error_message'] = str(e)
                 return response
 
-            logger.info("Repository cloned successfully")
+            _ = DEBUG and log_debug("Repository cloned successfully")
             return response
 
         except Exception as e:
-            logger.error(f"Error cloning repository: {e}")
+            log_error(f"Error cloning repository: {e}")
             return False
 
     def get_repository_info(self) -> IngestionRepositoryInfo:
         """Get information about the cloned repository."""
         if not self.local_dir.exists():
-            logger.error(f"Local directory: '{self.local_dir}' does not exist")
+            log_error(f"Local directory: '{self.local_dir}' does not exist")
             return {'path': str(self.local_dir)}
 
         try:
             repo = git.Repo(self.local_dir)
         except Exception as e:
-            logger.warning(f"GIT: Could not get repository info: {e}")
+            log_warning(f"GIT: Could not get repository info: {e}")
             return {'path': str(self.local_dir)}
 
         try:
@@ -144,11 +159,12 @@ class RepositoryCloner:
                 ),
                 is_dirty=repo.is_dirty()
             )
-            logger.info(f"get_repository_info | Repository info: {repo_info}")
+            _ = DEBUG and log_debug(
+                f"get_repository_info | Repository info: {repo_info}")
             return repo_info
 
         except Exception as e:
-            logger.warning(
+            log_warning(
                 f"IngestionRepositoryInfo: Could not get repository info: {e}")
             return {'path': str(self.local_dir)}
 
@@ -158,6 +174,7 @@ class DocumentIngestionOrchestrator:
 
     def __init__(self,
                  repo_url: str,
+                 repo_branch: str,
                  local_dir: str,
                  database_manager,
                  embedding_provider: Optional[str] = None,
@@ -178,12 +195,18 @@ class DocumentIngestionOrchestrator:
             progress_callback: Optional callback for progress updates
         """
         self.repo_url = repo_url
+        self.repo_branch = repo_branch
         self.local_dir = local_dir
         self.database_manager = database_manager
         self.embedding_provider = embedding_provider
         self.embedding_model = embedding_model
         self.chunking_strategy = chunking_strategy
         self.progress_callback = progress_callback
+
+        self.filename_exclusions = [
+            ".git",
+            "requirements.txt",
+        ]
 
         # Initialize components
         self.cloner = RepositoryCloner(local_dir)
@@ -195,7 +218,7 @@ class DocumentIngestionOrchestrator:
         self.progress = IngestionProgress(
             status=IngestionStatus.NOT_STARTED,
             current_step="Initializing",
-            total_steps=6,  # clone, process, chunk, embed, store, complete
+            total_steps=7,  # clone, process, chunk, embed, store, copy, complete  # noqa: E501
             completed_steps=0
         )
 
@@ -203,18 +226,11 @@ class DocumentIngestionOrchestrator:
 
     def _remove_progress_file(self):
         """Remove progress file."""
-        try:
-            os.remove(PROGRESS_FILE_PATH)
-        except Exception as e:
-            logger.error(f"Error removing progress file: {e}")
+        remove_progress_file()
 
     def _save_progress(self):
         """Save progress to file."""
-        try:
-            with open(PROGRESS_FILE_PATH, "w") as f:
-                json.dump(self.progress.to_dict(), f)
-        except Exception as e:
-            logger.error(f"Error saving progress to file: {e}")
+        save_progress_to_file(self.progress)
 
     def _update_progress(self,
                          status: Optional[IngestionStatus] = None,
@@ -241,19 +257,19 @@ class DocumentIngestionOrchestrator:
             try:
                 self.progress_callback(self.progress)
             except Exception as e:
-                logger.warning(f"Error in progress callback: {e}")
+                log_warning(f"Error in progress callback: {e}")
 
         self._save_progress()
 
     def cleanup_existing_vectors(self) -> bool:
         """Clean up existing vectors to prevent duplicates."""
         try:
-            logger.info("Cleaning up existing vectors...")
+            _ = DEBUG and log_debug("Cleaning up existing vectors...")
             self.database_manager.delete_all_vectors()
-            logger.info("Existing vectors cleaned up successfully")
+            _ = DEBUG and log_debug("Existing vectors cleaned up successfully")
             return True
         except Exception as e:
-            logger.error(f"Error cleaning up existing vectors: {e}")
+            log_error(f"Error cleaning up existing vectors: {e}")
             return False
 
     def clone_repository(self, force_refresh: bool = True) -> bool:
@@ -264,7 +280,7 @@ class DocumentIngestionOrchestrator:
         )
 
         cloner_response = self.cloner.clone_repository(
-            self.repo_url, force_refresh)
+            self.repo_url, self.repo_branch, force_refresh)
 
         if cloner_response['success']:
             self._update_progress(increment_completed=True)
@@ -286,7 +302,7 @@ class DocumentIngestionOrchestrator:
 
         try:
             # Initialize processor manager
-            logger.info(
+            _ = DEBUG and log_debug(
                 f"process_files | Processing files in {self.local_dir}")
             self.processor_manager = DocumentProcessorManager(self.local_dir)
 
@@ -300,31 +316,48 @@ class DocumentIngestionOrchestrator:
             documents = []
             files_to_process = self.processor_manager.get_all_files()
 
+            _ = DEBUG and log_debug(
+                "DocumentIngestionOrchestrator | process_files"
+                f" | BASE_LOCAL_PATH: {BASE_LOCAL_PATH}")
+
             for i, file_path in enumerate(files_to_process):
                 self._update_progress(
                     current_file=str(file_path),
                     processed_files=i
                 )
 
+                if not f"{file_path}".startswith(BASE_LOCAL_PATH):
+                    _ = DEBUG and log_debug(
+                        "DocumentIngestionOrchestrator | process_files"
+                        f" | Skipping file: {file_path}")
+                    continue
+
+                file_name = get_last_url_element(str(file_path))
+                if file_name in self.filename_exclusions:
+                    _ = DEBUG and log_debug(
+                        "DocumentIngestionOrchestrator | process_files"
+                        f" | Skipping file: {file_path}")
+                    continue
+
                 try:
                     document = self.processor_manager.process_file(file_path)
                     if document:
                         documents.append(document)
                 except Exception as e:
-                    logger.warning(f"Error processing file {file_path}: {e}")
+                    log_warning(f"Error processing file {file_path}: {e}")
 
             self._update_progress(
                 processed_files=len(files_to_process),
                 increment_completed=True
             )
 
-            logger.info(
+            _ = DEBUG and log_debug(
                 f"Processed {len(documents)} documents from"
                 f" {len(files_to_process)} files")
             return documents
 
         except Exception as e:
-            logger.error(f"Error processing files: {e}")
+            log_error(f"Error processing files: {e}")
             self._update_progress(
                 status=IngestionStatus.FAILED,
                 error_message=f"Error processing files: {e}"
@@ -354,7 +387,7 @@ class DocumentIngestionOrchestrator:
                         document, strategy=self.chunking_strategy)
                     all_chunks.extend(chunks)
                 except Exception as e:
-                    logger.warning(
+                    log_warning(
                         f"Error chunking document {document.path}: {e}")
 
             self._update_progress(
@@ -363,13 +396,13 @@ class DocumentIngestionOrchestrator:
                 increment_completed=True
             )
 
-            logger.info(
+            _ = DEBUG and log_debug(
                 f"Created {len(all_chunks)} chunks from"
                 f" {len(documents)} documents")
             return all_chunks
 
         except Exception as e:
-            logger.error(f"Error chunking documents: {e}")
+            log_error(f"Error chunking documents: {e}")
             self._update_progress(
                 status=IngestionStatus.FAILED,
                 error_message=f"Error chunking documents: {e}"
@@ -400,12 +433,12 @@ class DocumentIngestionOrchestrator:
                 increment_completed=True
             )
 
-            logger.info(
+            _ = DEBUG and log_debug(
                 f"Generated embeddings for {len(embedded_chunks)} chunks")
             return embedded_chunks
 
         except Exception as e:
-            logger.error(f"Error generating embeddings: {e}")
+            log_error(f"Error generating embeddings: {e}")
             self._update_progress(
                 status=IngestionStatus.FAILED,
                 error_message=f"Error generating embeddings: {e}"
@@ -424,7 +457,7 @@ class DocumentIngestionOrchestrator:
 
             if success:
                 self._update_progress(increment_completed=True)
-                logger.info(
+                _ = DEBUG and log_debug(
                     f"Stored {len(embedded_chunks)} vectors in database")
             else:
                 self._update_progress(
@@ -435,12 +468,80 @@ class DocumentIngestionOrchestrator:
             return success
 
         except Exception as e:
-            logger.error(f"Error storing vectors: {e}")
+            log_error(f"Error storing vectors: {e}")
             self._update_progress(
                 status=IngestionStatus.FAILED,
                 error_message=f"Error storing vectors: {e}"
             )
             return False
+
+    def copy_files_to_destination(self) -> bool:
+        """Copy files to destination directories."""
+        self._update_progress(
+            status=IngestionStatus.COPYING_FILES,
+            current_step="Copying files to destination"
+        )
+
+        try:
+            project_base_path = os.path.dirname(
+                os.path.dirname(
+                    os.path.dirname(
+                        os.path.dirname(
+                            os.path.abspath(__file__)))))
+
+            _ = DEBUG and log_debug(
+                "copy_files_to_destination | Copying files from"
+                f" '{self.local_dir}' to '{project_base_path}'")
+
+            # Process files
+            files_to_process = [
+                {
+                    "source": "Configuration-Guide/CrudEditorConfigInterface.ts",  # noqa: E501
+                    "destination": "ui/public/CrudEditorConfigInterface.ts"
+                },
+                {
+                    "source": "Configuration-Guide/crud_editor_config_classes.py",  # noqa: E501
+                    "destination": "server/genericsuite_codegen/agent/crud_editor_config_classes.py"  # noqa: E501
+                },
+            ]
+
+            # Get file statistics
+            self._update_progress(
+                total_files=len(files_to_process)
+            )
+
+            for i, src_dest in enumerate(files_to_process):
+                self._update_progress(
+                    current_file=str(src_dest['source']),
+                    processed_files=i
+                )
+
+                try:
+                    # Copy file
+                    src_path = BASE_LOCAL_PATH + "/" + src_dest['source']
+                    dest_path = project_base_path + \
+                        "/" + src_dest['destination']
+                    shutil.copyfile(src_path, dest_path)
+                except Exception as e:
+                    log_warning(
+                        f"Error copying file {src_path} to {dest_path}: {e}")
+
+            self._update_progress(
+                processed_files=len(files_to_process),
+                increment_completed=True
+            )
+
+            _ = DEBUG and log_debug(
+                f"Copied {len(files_to_process)} files")
+            return True
+
+        except Exception as e:
+            log_error(f"Error processing files: {e}")
+            self._update_progress(
+                status=IngestionStatus.FAILED,
+                error_message=f"Error processing files: {e}"
+            )
+            return []
 
     def run_full_ingestion(self, force_refresh: bool = True) -> Dict[str, Any]:
         """
@@ -458,48 +559,65 @@ class DocumentIngestionOrchestrator:
         try:
             # Step 1: Clean up existing vectors if force refresh
             if force_refresh:
-                logger.info(
-                    "run_full_ingestion | Step 1/6: Cleaning up existing"
+                _ = DEBUG and log_debug(
+                    "run_full_ingestion | Step 1/7: Cleaning up existing"
                     " vectors...")
                 if not self.cleanup_existing_vectors():
                     return self._get_failure_result(
                         "Failed to clean up existing vectors")
 
             # Step 2: Clone repository
-            logger.info("run_full_ingestion | Step 2/6: Cloning repository...")
+            _ = DEBUG and log_debug(
+                "run_full_ingestion | Step 2/7: Cloning repository...")
             if not self.clone_repository(force_refresh):
                 return self._get_failure_result("Failed to clone repository")
 
             # Step 3: Process files
-            logger.info("run_full_ingestion | Step 3/6: Processing files...")
+            _ = DEBUG and log_debug(
+                "run_full_ingestion | Step 3/7: Processing files...")
             documents = self.process_files()
             if not documents:
                 return self._get_failure_result("No documents processed")
 
             # Step 4: Chunk documents
-            logger.info("run_full_ingestion | Step 4/6: Chunking documents...")
+            _ = DEBUG and log_debug(
+                "run_full_ingestion | Step 4/7: Chunking documents...")
             chunks = self.chunk_documents(documents)
             if not chunks:
                 return self._get_failure_result("No chunks created")
 
             # Step 5: Generate embeddings
-            logger.info(
-                "run_full_ingestion | Step 5/6: Generating embeddings...")
+            _ = DEBUG and log_debug(
+                "run_full_ingestion | Step 5/7: Generating embeddings...")
             embedded_chunks = self.generate_embeddings(chunks)
             if not embedded_chunks:
                 return self._get_failure_result("No embeddings generated")
 
             # Step 6: Store vectors
-            logger.info("run_full_ingestion | Step 6/6: Storing vectors...")
+            _ = DEBUG and log_debug(
+                "run_full_ingestion | Step 6/7: Storing vectors...")
             if not self.store_vectors(embedded_chunks):
                 return self._get_failure_result("Failed to store vectors")
 
+            # Bonus task: Copy files to destination
+            _ = DEBUG and log_debug(
+                "run_full_ingestion | "
+                "Step 7/7: Copying files to destination...")
+            if not self.copy_files_to_destination():
+                return self._get_failure_result(
+                    "Failed to copy files to destination")
+
             # Complete
-            logger.info(
-                "run_full_ingestion | Step 7: Ingestion completed "
+            _ = DEBUG and log_debug(
+                "run_full_ingestion | Step 8: Ingestion completed "
                 "successfully")
+
             self.progress.completed_at = datetime.now()
+            self.progress.total_files = len(documents)
+
             self._update_progress(
+                total_files=self.progress.total_files,
+                processed_files=self.progress.total_files,
                 status=IngestionStatus.COMPLETED,
                 current_step="Ingestion completed successfully",
                 increment_completed=True
@@ -511,7 +629,7 @@ class DocumentIngestionOrchestrator:
             return self._get_success_result(documents, chunks, embedded_chunks)
 
         except Exception as e:
-            logger.error(f"Unexpected error during ingestion: {e}")
+            log_error(f"Unexpected error during ingestion: {e}")
             self.progress.completed_at = datetime.now()
             self._update_progress(
                 status=IngestionStatus.FAILED,
@@ -573,6 +691,23 @@ class DocumentIngestionOrchestrator:
         return load_progress_from_file()
 
 
+def remove_progress_file():
+    """Remove progress file."""
+    try:
+        os.remove(PROGRESS_FILE_PATH)
+    except Exception as e:
+        log_error(f"Error removing progress file: {e}")
+
+
+def save_progress_to_file(progress: IngestionProgress):
+    """Save progress to file."""
+    try:
+        with open(PROGRESS_FILE_PATH, "w") as f:
+            json.dump(progress.model_dump(), f)
+    except Exception as e:
+        log_error(f"Error saving progress to file: {e}")
+
+
 def load_progress_from_file():
     """Load progress from file."""
     try:
@@ -587,18 +722,20 @@ def load_progress_from_file():
                 completed_steps=0
             )
     except Exception as e:
-        logger.error(f"Error loading progress from file: {e}")
+        log_error(f"Error loading progress from file: {e}")
         return None
 
 
 # Convenience functions
 def create_ingestion_orchestrator(repo_url: str,
+                                  repo_branch: str,
                                   local_dir: str,
                                   database_manager,
                                   **kwargs) -> DocumentIngestionOrchestrator:
     """Create a document ingestion orchestrator."""
     return DocumentIngestionOrchestrator(
         repo_url=repo_url,
+        repo_branch=repo_branch,
         local_dir=local_dir,
         database_manager=database_manager,
         **kwargs
@@ -606,6 +743,7 @@ def create_ingestion_orchestrator(repo_url: str,
 
 
 def run_ingestion(repo_url: str,
+                  repo_branch: str,
                   local_dir: str,
                   database_manager,
                   force_refresh: bool = True,
@@ -613,6 +751,7 @@ def run_ingestion(repo_url: str,
     """Run complete document ingestion workflow."""
     orchestrator = create_ingestion_orchestrator(
         repo_url=repo_url,
+        repo_branch=repo_branch,
         local_dir=local_dir,
         database_manager=database_manager,
         **kwargs

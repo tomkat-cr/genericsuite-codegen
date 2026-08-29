@@ -1,29 +1,29 @@
-import { useState } from 'react'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Textarea } from '@/components/ui/textarea'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { 
-  Code, 
-  Download, 
-  FileText, 
-  Settings, 
-  Wand2, 
-  Copy, 
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Textarea } from '@/components/ui/textarea'
+import {
   Check,
-  Package,
+  Code,
+  Copy,
   Database,
-  Wrench,
+  Download,
+  FileText,
   Globe,
+  Loader2,
+  Package,
   Server,
-  Loader2
+  Settings,
+  Wand2,
+  Wrench
 } from 'lucide-react'
+import { useState } from 'react'
 
 import { baseUrl, debug } from '@/lib/api'
 
@@ -107,11 +107,16 @@ export function CodeGenerationPage() {
         body: JSON.stringify(request)
       })
 
-      if (!response.ok) {
-        throw new Error('Failed to generate code')
+      if (!response.ok || response.status !== 200) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(
+          'Failed to generate code. ' +
+          (errorData.detail || `HTTP ${response.status}: ${response.statusText}`)
+        )
       }
 
-      const result = await response.json()
+      const resultComplete = await response.json()
+      const result = resultComplete.data
       if (debug) console.log('generateCode | result', result)
       
       const files: GeneratedFile[] = result.files || []

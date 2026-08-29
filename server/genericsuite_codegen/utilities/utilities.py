@@ -1,0 +1,682 @@
+"""
+Shared utility functions for the FastAPI application.
+
+This module provides common utilities for logging, configuration,
+request handling, and other shared functionality across the API.
+"""
+
+import uuid
+import time
+from typing import Dict, Any, Optional
+import datetime
+import json
+import re
+
+from genericsuite_codegen.api.types import (
+    AppInfo,
+    ErrorResponse,
+    SuccessResponse,
+    StandardGsErrorResponse,
+    StandardGsResponse,
+)
+from genericsuite_codegen.utilities.rate_limiter import RateLimiter
+from genericsuite_codegen.utilities.app_logger import (
+    log_debug,
+)
+from genericsuite_codegen.utilities.env_vars import get_envvar
+
+DEBUG = False
+
+DEFAULT_USER_ID = "default_user"
+MSG_ERROR_INVALID_KEY = "Invalid API key"
+
+BASE_LOCAL_PATH = get_envvar("BASE_LOCAL_PATH", '')
+ALT_BASE_LOCAL_PATH = get_envvar("ALT_BASE_LOCAL_PATH", '')
+BASE_WEB_URL = get_envvar("BASE_WEB_URL", '')
+TEMP_BASE_WEB_URL = get_envvar("TEMP_BASE_WEB_URL")
+
+DEFAULT_LLM_PROVIDER = get_envvar("DEFAULT_LLM_PROVIDER", "openai")
+DEFAULT_LLM_MODEL_NAME = get_envvar("DEFAULT_LLM_MODEL_NAME", "gpt-4o-mini")
+DEFAULT_LLM_TEMPERATURE = float(get_envvar("DEFAULT_LLM_TEMPERATURE", "0.1"))
+CONTEXT_DEFAULT_MAX_LENGTH = int(get_envvar(
+    "ENHANCED_SEARCH_MAX_CONTEXT_LENGTH", get_envvar(
+        "CONTEXT_DEFAULT_MAX_LENGTH", "10000"
+    )
+))
+
+
+def std_response(
+    error: bool = False,
+    error_message: str = None,
+    status_code: int = 200,
+    result: any = None,
+    resultset: any = None,
+) -> StandardGsResponse:
+    return StandardGsResponse(
+        error=error,
+        error_message=error_message,
+        status_code=status_code,
+        result=result,
+        resultset=resultset,
+    )
+
+
+def std_error_response(
+    status_code: int = 500,
+    detail: str = 'Internal Server error'
+) -> StandardGsErrorResponse:
+    return StandardGsErrorResponse(
+        error=True,
+        error_message=detail,
+        status_code=status_code,
+    )
+
+
+def get_app_info() -> AppInfo:
+    """
+    Get application information.
+
+    Returns:
+        AppInfo: Application information object.
+    """
+    return AppInfo(
+        name=get_envvar("APP_NAME", "GenericSuite CodeGen"),
+        version="1.0.0",  # Should match pyproject.toml
+        description="RAG AI system for GenericSuite documentation and"
+                    " code generation",
+        docs_url="/docs",
+        health_url="/health"
+    )
+
+
+def create_correlation_id() -> str:
+    """
+    Create a unique correlation ID for request tracking.
+
+    Returns:
+        str: Unique correlation ID.
+    """
+    return str(uuid.uuid4())
+
+
+def log_request_response(
+    method: str,
+    url: str,
+    correlation_id: str,
+    event_type: str,
+    status_code: Optional[int] = None,
+    duration: Optional[float] = None,
+    user_id: Optional[str] = None
+) -> None:
+    """
+    Log request and response information.
+
+    Args:
+        method: HTTP method.
+        url: Request URL.
+        correlation_id: Request correlation ID.
+        event_type: Type of event (request/response).
+        status_code: HTTP status code (for responses).
+        duration: Request duration in seconds (for responses).
+        user_id: User ID if available.
+    """
+    log_data = {
+        "correlation_id": correlation_id,
+        "method": method,
+        "url": url,
+        "event_type": event_type,
+        "timestamp": get_utcnow_iso()
+    }
+
+    if status_code is not None:
+        log_data["status_code"] = status_code
+
+    if duration is not None:
+        log_data["duration"] = duration
+
+    if user_id:
+        log_data["user_id"] = user_id
+
+    _ = DEBUG and log_debug(json.dumps(log_data))
+
+
+def validate_environment() -> Dict[str, Any]:
+    """
+    Validate required environment variables.
+
+    Returns:
+        Dict[str, Any]: Validation results with missing variables and warnings.
+    """
+    required_vars = [
+        "APP_DB_URI",
+        "APP_DB_NAME",
+    ]
+
+    optional_vars = [
+        "LLM_PROVIDER",
+        "HF_TOKEN",
+        "OPENAI_API_KEY",
+        "EMBEDDINGS_PROVIDER",
+        "EMBEDDINGS_MODEL"
+    ]
+
+    missing_required = []
+    missing_optional = []
+
+    for var in required_vars:
+        if not get_envvar(var):
+            missing_required.append(var)
+
+    for var in optional_vars:
+        if not get_envvar(var):
+            missing_optional.append(var)
+
+    return {
+        "valid": len(missing_required) == 0,
+        "missing_required": missing_required,
+        "missing_optional": missing_optional,
+        "warnings": []
+    }
+
+
+def get_database_config() -> Dict[str, Any]:
+    """
+    Get database configuration from environment.
+
+    Returns:
+        Dict[str, Any]: Database configuration.
+    """
+    return {
+        "uri": get_envvar("APP_DB_URI", "mongodb://localhost:27017/"),
+        "database_name": get_envvar("DATABASE_NAME", "genericsuite_codegen"),
+        "connection_timeout": int(get_envvar("DB_CONNECTION_TIMEOUT", "10")),
+        "server_selection_timeout":
+            int(get_envvar("DB_SERVER_SELECTION_TIMEOUT", "5"))
+    }
+
+
+def get_agent_config() -> Dict[str, Any]:
+    """
+    Get agent configuration from environment.
+
+    Returns:
+        Dict[str, Any]: Agent configuration.
+    """
+    return {
+        "provider": get_envvar("LLM_PROVIDER", DEFAULT_LLM_PROVIDER),
+        "model": get_envvar("LLM_MODEL_NAME", DEFAULT_LLM_MODEL_NAME),
+        "temperature": float(get_envvar("LLM_TEMPERATURE",
+                                        DEFAULT_LLM_TEMPERATURE)),
+        "max_tokens": (
+            int(get_envvar("LLM_MAX_TOKENS", "4000"))
+            if get_envvar("LLM_MAX_TOKENS") else None),
+        "timeout": int(get_envvar("LLM_TIMEOUT", "60")),
+        "api_key": get_envvar("OPENAI_API_KEY"),
+        "base_url": get_envvar("LLM_BASE_URL")
+    }
+
+
+def get_server_config() -> Dict[str, Any]:
+    """
+    Get server configuration from environment.
+
+    Returns:
+        Dict[str, Any]: Server configuration.
+    """
+    return {
+        "host": get_envvar("SERVER_HOST", "0.0.0.0"),
+        "port": int(get_envvar("SERVER_PORT", "8002")),
+        "debug": get_envvar("SERVER_DEBUG", "0") == "1",
+        "cors_origins":
+            get_envvar("CORS_ORIGIN", "http://localhost:3002").split(","),
+        "allowed_hosts":
+            get_envvar("ALLOWED_HOSTS", "localhost,127.0.0.1").split(","),
+        "max_request_size":
+            int(get_envvar("MAX_REQUEST_SIZE", "10485760"))  # 10MB default
+    }
+
+
+def format_file_size(size_bytes: int) -> str:
+    """
+    Format file size in human-readable format.
+
+    Args:
+        size_bytes: Size in bytes.
+
+    Returns:
+        str: Formatted size string.
+    """
+    if size_bytes == 0:
+        return "0 B"
+
+    size_names = ["B", "KB", "MB", "GB", "TB"]
+    i = 0
+
+    while size_bytes >= 1024 and i < len(size_names) - 1:
+        size_bytes /= 1024.0
+        i += 1
+
+    return f"{size_bytes:.1f} {size_names[i]}"
+
+
+def sanitize_path(path: str) -> str:
+    """
+    Sanitize file path to prevent directory traversal.
+
+    Args:
+        path: Original file path.
+
+    Returns:
+        str: Sanitized path.
+    """
+    import os.path
+
+    # Remove any path traversal attempts
+    path = path.replace("../", "").replace("..\\", "")
+
+    # Normalize path separators
+    path = os.path.normpath(path)
+
+    # Remove leading slashes
+    path = path.lstrip("/\\")
+
+    return path
+
+
+def sanitize_filename(filename: str) -> str:
+    """
+    Sanitize filename for safe file operations.
+
+    Args:
+        filename: Original filename.
+
+    Returns:
+        str: Sanitized filename.
+    """
+    import re
+    # Remove or replace unsafe characters
+    sanitized = re.sub(r'[^\w\-_\.]', '_', filename)
+    # Ensure it doesn't start with a dot or dash
+    sanitized = re.sub(r'^[\.\-]+', '', sanitized)
+    # Limit length
+    if len(sanitized) > 255:
+        name, ext = sanitized.rsplit('.', 1) if '.' in sanitized \
+            else (sanitized, '')
+        sanitized = name[:250] + ('.' + ext if ext else '')
+
+    return sanitized or 'unnamed_file'
+
+
+def validate_json_content(content: str) -> tuple[bool, Optional[str]]:
+    """
+    Validate JSON content.
+
+    Args:
+        content: JSON content to validate.
+
+    Returns:
+        tuple[bool, Optional[str]]: (is_valid, error_message)
+    """
+    try:
+        json.loads(content)
+        return True, None
+    except json.JSONDecodeError as e:
+        return False, str(e)
+
+
+def extract_code_blocks(
+    content: str,
+    language: Optional[str] = None
+) -> list[Dict[str, str]]:
+    """
+    Extract code blocks from markdown content.
+
+    Args:
+        content: Markdown content.
+        language: Optional language filter.
+
+    Returns:
+        list[Dict[str, str]]: List of code blocks with metadata.
+    """
+    import re
+
+    # # Clean the content to only have the code between the first and last ```
+    # content = "```" + content.split("```")[1].split("```")[0] + "```"
+
+    # Pattern to match code blocks
+    pattern = r'(.*?)```(\w+)?\n(.*?)\n```(.*?)'
+    matches = re.findall(pattern, content, re.DOTALL)
+
+    code_blocks = []
+    for _, lang, code, _ in matches:
+        if language is None or lang == language:
+            code_blocks.append({
+                "language": lang or "text",
+                "code": code.strip()
+            })
+
+    return code_blocks
+
+
+def create_file_hash(content: str) -> str:
+    """
+    Create a hash for file content.
+
+    Args:
+        content: File content.
+
+    Returns:
+        str: SHA-256 hash of the content.
+    """
+    import hashlib
+
+    return hashlib.sha256(content.encode('utf-8')).hexdigest()
+
+
+def measure_execution_time(func):
+    """
+    Decorator to measure function execution time.
+
+    Args:
+        func: Function to measure.
+
+    Returns:
+        Decorated function that logs execution time.
+    """
+    def wrapper(*args, **kwargs):
+        start_time = time.time()
+        result = func(*args, **kwargs)
+        end_time = time.time()
+
+        _ = DEBUG and log_debug(
+            f"{func.__name__} executed in {end_time - start_time:.3f} seconds")
+
+        return result
+
+    return wrapper
+
+
+async def async_measure_execution_time(func):
+    """
+    Decorator to measure async function execution time.
+
+    Args:
+        func: Async function to measure.
+
+    Returns:
+        Decorated async function that logs execution time.
+    """
+    async def wrapper(*args, **kwargs):
+        start_time = time.time()
+        result = await func(*args, **kwargs)
+        end_time = time.time()
+
+        _ = DEBUG and log_debug(
+            f"{func.__name__} executed in {end_time - start_time:.3f} seconds")
+
+        return result
+
+    return wrapper
+
+
+def get_client_ip(request) -> str:
+    """
+    Get client IP address from request.
+
+    Args:
+        request: FastAPI request object.
+
+    Returns:
+        str: Client IP address.
+    """
+    # Check for forwarded headers first (for reverse proxy setups)
+    forwarded_for = request.headers.get("X-Forwarded-For")
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip()
+
+    real_ip = request.headers.get("X-Real-IP")
+    if real_ip:
+        return real_ip
+
+    # Fall back to direct client IP
+    return request.client.host if request.client else "unknown"
+
+
+def create_pagination_info(
+    total: int,
+    page: int,
+    page_size: int
+) -> Dict[str, Any]:
+    """
+    Create pagination information.
+
+    Args:
+        total: Total number of items.
+        page: Current page number (1-based).
+        page_size: Number of items per page.
+
+    Returns:
+        Dict[str, Any]: Pagination information.
+    """
+    total_pages = (total + page_size - 1) // page_size
+
+    return {
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": total_pages,
+        "has_next": page < total_pages,
+        "has_prev": page > 1,
+        "next_page": page + 1 if page < total_pages else None,
+        "prev_page": page - 1 if page > 1 else None
+    }
+
+
+# Validation Utilities
+
+
+def validate_pagination_params(
+    page: int,
+    page_size: int,
+    max_page_size: int = 100
+) -> tuple[int, int]:
+    """
+    Validate and normalize pagination parameters.
+
+    Args:
+        page: Page number.
+        page_size: Items per page.
+        max_page_size: Maximum allowed page size.
+
+    Returns:
+        tuple[int, int]: Validated (page, page_size).
+    """
+    # Ensure page is at least 1
+    page = max(1, page)
+
+    # Ensure page_size is within bounds
+    page_size = max(1, min(page_size, max_page_size))
+
+    return page, page_size
+
+
+def validate_file_type(file_type: str) -> bool:
+    """
+    Validate file type.
+
+    Args:
+        file_type: File type to validate.
+
+    Returns:
+        bool: True if file type is supported.
+    """
+    supported_types = {
+        'json', 'py', 'js', 'jsx', 'ts', 'tsx', 'md', 'txt', 'pdf',
+        'toml', 'yaml', 'yml', 'env', 'html', 'css', 'sql'
+    }
+    return file_type.lower() in supported_types
+
+
+def validate_conversation_id(conversation_id: str) -> bool:
+    """
+    Validate conversation ID format.
+
+    Args:
+        conversation_id: Conversation ID to validate.
+
+    Returns:
+        bool: True if ID format is valid.
+    """
+    import re
+    # MongoDB ObjectId pattern
+    return bool(re.match(r'^[0-9a-fA-F]{24}$', conversation_id))
+
+
+def get_content_type(safe_filename: str) -> str:
+    """ Determine content type based on file extension """
+    content_type = "text/plain"
+    if safe_filename.endswith(".json"):
+        content_type = "application/json"
+    elif safe_filename.endswith(".py"):
+        content_type = "text/x-python"
+    elif safe_filename.endswith((".js", ".jsx")):
+        content_type = "application/javascript"
+    elif safe_filename.endswith((".ts", ".tsx")):
+        content_type = "application/typescript"
+    return content_type
+
+
+# Response Helpers
+
+
+def create_error_response(
+    error_code: str,
+    message: str,
+    details: Optional[Dict[str, Any]] = None,
+    correlation_id: Optional[str] = None
+) -> ErrorResponse:
+    """
+    Create a standardized error response.
+
+    Args:
+        error_code: Error code identifier.
+        message: Human-readable error message.
+        details: Additional error details.
+        correlation_id: Request correlation ID.
+
+    Returns:
+        ErrorResponse: Formatted error response.
+    """
+    return ErrorResponse(
+        error_code=error_code,
+        message=message,
+        details=details,
+        correlation_id=correlation_id
+    )
+
+
+def create_success_response(
+    message: str,
+    data: Optional[Dict[str, Any]] = None
+) -> SuccessResponse:
+    """
+    Create a standardized success response.
+
+    Args:
+        message: Success message.
+        data: Response data.
+
+    Returns:
+        SuccessResponse: Formatted success response.
+    """
+    return SuccessResponse(
+        message=message,
+        data=data
+    )
+
+
+def get_utcnow_fmt() -> str:
+    """
+    Get current UTC datetime as formatted string.
+
+    Returns:
+        str: Formatted datetime string.
+    """
+    return datetime.datetime.now(datetime.UTC).strftime('%Y%m%d_%H%M%S')
+
+
+def get_utcnow_iso() -> str:
+    """
+    Get current UTC datetime as ISO formatted string.
+
+    Returns:
+        str: Formatted datetime string.
+    """
+    return datetime.datetime.now(datetime.UTC).isoformat()
+
+
+def get_utcnow() -> datetime:
+    """
+    Get current UTC datetime as ISO formatted string.
+
+    Returns:
+        str: Formatted datetime string.
+    """
+    return datetime.datetime.now(datetime.UTC)
+
+
+def local_path_to_url(source: str, is_url: bool = True) -> str:
+    """
+    Convert local path to web URL.
+
+    Args:
+        source: Local path.
+        is_url: True if "source" is an URL.
+
+    Returns:
+        str: Web URL.
+    """
+    new_base_web_url = TEMP_BASE_WEB_URL if TEMP_BASE_WEB_URL else BASE_WEB_URL
+    content = source.replace(BASE_LOCAL_PATH, new_base_web_url)
+    content = content.replace(ALT_BASE_LOCAL_PATH, new_base_web_url)
+    if is_url:
+        if content.endswith('/index.md'):
+            content = content.replace('/index.md', '')
+        if content.endswith('/README.md'):
+            content = content.replace('/README.md', '')
+        if content.endswith('.md'):
+            content = content.replace('.md', '')
+    else:
+        # Replace all that starts with BASE_WEB_URL, ends with .md and has
+        # a "/" before the .md
+        content = re.sub(r'^' + re.escape(new_base_web_url) +
+                         r'(/.*?)\.md$', new_base_web_url + r'\1.html',
+                         content)
+    return content
+
+
+def get_last_url_element(url: str) -> str:
+    """
+    Returns the last element from a URL (normally a file or page name)
+    """
+    return url.split('/')[-1]
+
+
+def get_file_extension(file_path: str) -> str:
+    """
+    Returns the file extension from a path or filename.
+    If there's no "." in file_path, assumes there's no file extension, so
+    returns an empty string.
+    """
+    if file_path is None:
+        return ''
+    if len(file_path.split('.')) > 1:
+        return file_path.split('.')[-1]
+    return ''
+
+
+# Global rate limiter instance
+rate_limiter = RateLimiter(
+    max_requests=int(get_envvar("RATE_LIMIT_REQUESTS", "100")),
+    window_seconds=int(get_envvar("RATE_LIMIT_WINDOW", "60"))
+)

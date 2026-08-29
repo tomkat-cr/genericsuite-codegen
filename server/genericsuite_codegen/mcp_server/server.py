@@ -4,11 +4,9 @@ FastMCP Server implementation for GenericSuite CodeGen.
 This module implements the MCP server that exposes the AI agent capabilities
 as standardized MCP tools and resources for integration with external tools.
 """
-import os
+
 import json
-import sys
 import asyncio
-import logging
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
@@ -19,30 +17,26 @@ except ImportError:
         "FastMCP is required for MCP server functionality. "
         "Install it with: pip install fastmcp"
     )
+from fastmcp.server.dependencies import get_http_headers
 
-from ..agent.agent import GenericSuiteAgent
-from ..database.setup import DatabaseManager
-from ..api.utilities import local_path_to_url
-from ..api.endpoint_methods import get_endpoint_methods
-from ..agent.tools import KnowledgeBaseTool
+from genericsuite_codegen.agent.agent import GenericSuiteAgent
+from genericsuite_codegen.agent.tools import KnowledgeBaseTool
+from genericsuite_codegen.api.endpoint_methods import get_endpoint_methods
+from genericsuite_codegen.database.setup import DatabaseManager
+from genericsuite_codegen.utilities import local_path_to_url
+from genericsuite_codegen.utilities.app_logger import (
+    log_debug,
+    log_warning,
+    log_error,
+)
+from genericsuite_codegen.utilities.env_vars import get_envvar
+from genericsuite_codegen.utilities.utilities import \
+    DEFAULT_USER_ID, MSG_ERROR_INVALID_KEY
 
 
 DEBUG = True
 
 DEFAULT_MCP_TRANSPORT = "http"
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout),
-        logging.FileHandler('mcp_server.log')
-    ]
-)
-
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO if DEBUG else logging.WARNING)
 
 
 @dataclass
@@ -56,6 +50,8 @@ class MCPConfig:
     port: int = 8070
     debug: bool = False
     transport: str = DEFAULT_MCP_TRANSPORT  # "http" or "stdio"
+    # TODO: Use default user for now (in real app, this would come from auth)
+    user_id: str = DEFAULT_USER_ID
 
 
 class GenericSuiteMCPServer:
@@ -67,6 +63,7 @@ class GenericSuiteMCPServer:
         self.agent: Optional[GenericSuiteAgent] = None
         self.vector_db: Optional[DatabaseManager] = None
         self.kb_tool = None
+        self.user_id = config.user_id
 
         self.methods = get_endpoint_methods()
 
@@ -75,6 +72,21 @@ class GenericSuiteMCPServer:
         self._setup_authentication()
         self._register_tools()
         self._register_resources()
+
+    def verify_api_key(self):
+        """
+        Verify the API key in the Authorization header
+        """
+        access_token = get_access_token().replace("Bearer ", "")
+        if not access_token:
+            log_error("No access token found")
+            return False
+        if not self.config.api_key:
+            log_error("No configured API key found")
+            return False
+        _ = DEBUG and log_debug(
+            f"Verifying API key: {access_token} == {self.config.api_key}")
+        return access_token == self.config.api_key
 
     def _setup_components(self):
         """Initialize the AI agent and database components."""
@@ -88,10 +100,13 @@ class GenericSuiteMCPServer:
             # Initialize knowledge base tool
             self.kb_tool = KnowledgeBaseTool()
 
-            logger.info("MCP server components initialized successfully")
+            _ = DEBUG and log_debug(
+                "MCP server components initialized successfully")
 
         except Exception as e:
-            logger.error(f"Failed to initialize MCP server components: {e}")
+            log_error(
+                f"Failed to initialize MCP server components: {e}",
+                exc_info=True)
             raise
 
     def _setup_authentication(self):
@@ -99,14 +114,18 @@ class GenericSuiteMCPServer:
         try:
             # Add authentication middleware if API key is provided
             if self.config.api_key:
-                logger.info("MCP authentication enabled with API key")
+                _ = DEBUG and log_debug(
+                    "MCP authentication enabled with API key")
                 # Note: FastMCP handles authentication through the protocol
                 # The API key will be validated in tool calls
             else:
-                logger.warning("MCP server running without authentication")
+                log_warning(
+                    "MCP server running without authentication")
 
         except Exception as e:
-            logger.error(f"Failed to setup MCP authentication: {e}")
+            log_error(
+                f"Failed to setup MCP authentication: {e}",
+                exc_info=True)
             raise
 
     def _validate_request(self, request_data: Dict[str, Any]) -> bool:
@@ -122,15 +141,15 @@ class GenericSuiteMCPServer:
             return True
 
         except Exception as e:
-            logger.error(f"Request validation failed: {e}")
+            log_error(f"Request validation failed: {e}", exc_info=True)
             return False
 
     def _handle_error(self, error: Exception, context: str) -> Dict[str, Any]:
         """Centralized error handling for MCP operations."""
         error_id = f"mcp_error_{hash(str(error)) % 10000:04d}"
 
-        logger.error(f"MCP Error [{error_id}] in {context}: {error}",
-                     exc_info=True)
+        log_error(
+            f"MCP Error [{error_id}] in {context}: {error}")
 
         return {
             "success": False,
@@ -146,7 +165,7 @@ class GenericSuiteMCPServer:
         """Register MCP tools for external integration."""
 
         @self.mcp.tool()
-        async def mcp_search_knowledge_base(
+        async def search_knowledge_base(
             query: str,
             limit: int = 5
         ) -> Dict[str, Any]:
@@ -160,6 +179,11 @@ class GenericSuiteMCPServer:
             Returns:
                 Dictionary containing search results and metadata
             """
+            if not self.verify_api_key():
+                return self._handle_error(
+                    Exception(MSG_ERROR_INVALID_KEY),
+                    "search_knowledge_base"
+                )
             try:
                 if not self.agent:
                     return self._handle_error(
@@ -170,7 +194,8 @@ class GenericSuiteMCPServer:
                 # Use the agent's knowledge base search capability
                 results = await self._search_knowledge_base_async(query, limit)
 
-                logger.info(f">>> Search knowledge base results: {results}")
+                _ = DEBUG and log_debug(
+                    f">>> Search knowledge base results: {results}")
 
                 final_result = {
                     "success": results["success"],
@@ -182,7 +207,7 @@ class GenericSuiteMCPServer:
                     "error": results["error"],
                 }
 
-                logger.info(
+                _ = DEBUG and log_debug(
                     f">>> Search knowledge base final result: {final_result}")
 
                 return final_result
@@ -191,7 +216,7 @@ class GenericSuiteMCPServer:
                 return self._handle_error(e, "search_knowledge_base")
 
         @self.mcp.tool()
-        async def mcp_generate_json_config(
+        async def generate_json_config(
             requirements: str,
             table_name: str,
             config_type: str = "table",
@@ -205,6 +230,11 @@ class GenericSuiteMCPServer:
             Returns:
                 Dictionary containing the generated JSON configuration
             """
+            if not self.verify_api_key():
+                return self._handle_error(
+                    Exception(MSG_ERROR_INVALID_KEY),
+                    "generate_json_config"
+                )
             try:
                 if not self.agent:
                     return self._handle_error(
@@ -214,7 +244,11 @@ class GenericSuiteMCPServer:
 
                 # Generate JSON configuration using the agent
                 config = await self.methods.generate_json_config_endpoint(
-                    requirements, table_name, config_type)
+                    requirements=requirements,
+                    table_name=table_name,
+                    user_id=self.user_id,
+                    config_type=config_type,
+                )
 
                 return {
                     "success": True,
@@ -226,7 +260,7 @@ class GenericSuiteMCPServer:
                 return self._handle_error(e, "generate_json_config")
 
         @self.mcp.tool()
-        async def mcp_generate_langchain_tool(
+        async def generate_langchain_tool(
             requirements: str,
             tool_name: str,
             description: str,
@@ -242,6 +276,11 @@ class GenericSuiteMCPServer:
             Returns:
                 Dictionary containing the generated Python code
             """
+            if not self.verify_api_key():
+                return self._handle_error(
+                    Exception(MSG_ERROR_INVALID_KEY),
+                    "generate_langchain_tool"
+                )
             try:
                 if not self.agent:
                     return self._handle_error(
@@ -252,10 +291,11 @@ class GenericSuiteMCPServer:
 
                 # Generate Langchain tool using the agent
                 code = await self.methods.generate_python_code_endpoint(
-                    requirements,
-                    tool_name,
-                    description,
-                    "langchain_tool",
+                    requirements=requirements,
+                    tool_name=tool_name,
+                    description=description,
+                    user_id=self.user_id,
+                    code_type="langchain_tool",
                 )
 
                 return {
@@ -271,7 +311,7 @@ class GenericSuiteMCPServer:
                 return self._handle_error(e, "generate_langchain_tool")
 
         @self.mcp.tool()
-        async def mcp_generate_mcp_tool(
+        async def generate_mcp_tool(
             requirements: str,
             tool_name: str,
             description: str,
@@ -287,6 +327,11 @@ class GenericSuiteMCPServer:
             Returns:
                 Dictionary containing the generated Python code
             """
+            if not self.verify_api_key():
+                return self._handle_error(
+                    Exception(MSG_ERROR_INVALID_KEY),
+                    "generate_mcp_tool"
+                )
             try:
                 if not self.agent:
                     return self._handle_error(
@@ -296,10 +341,11 @@ class GenericSuiteMCPServer:
 
                 # Generate MCP tool using the agent
                 code = await self.methods.generate_python_code_endpoint(
-                    requirements,
-                    tool_name,
-                    description,
-                    "mcp_tool",
+                    requirements=requirements,
+                    tool_name=tool_name,
+                    description=description,
+                    user_id=self.user_id,
+                    code_type="mcp_tool",
                 )
 
                 return {
@@ -315,8 +361,8 @@ class GenericSuiteMCPServer:
                 return self._handle_error(e, "generate_mcp_tool")
 
         @self.mcp.tool()
-        async def mcp_generate_frontend_code(requirements: str
-                                             ) -> Dict[str, Any]:
+        async def generate_frontend_code(requirements: str
+                                         ) -> Dict[str, Any]:
             """
             Generate ReactJS frontend code following GenericSuite patterns.
 
@@ -326,6 +372,11 @@ class GenericSuiteMCPServer:
             Returns:
                 Dictionary containing the generated frontend code files
             """
+            if not self.verify_api_key():
+                return self._handle_error(
+                    Exception(MSG_ERROR_INVALID_KEY),
+                    "generate_frontend_code"
+                )
             try:
                 if not self.agent:
                     return self._handle_error(
@@ -349,7 +400,7 @@ class GenericSuiteMCPServer:
                 return self._handle_error(e, "generate_frontend_code")
 
         @self.mcp.tool()
-        async def mcp_generate_backend_code(
+        async def generate_backend_code(
             framework: str, requirements: str
         ) -> Dict[str, Any]:
             """
@@ -363,6 +414,11 @@ class GenericSuiteMCPServer:
             Returns:
                 Dictionary containing the generated backend code files
             """
+            if not self.verify_api_key():
+                return self._handle_error(
+                    Exception(MSG_ERROR_INVALID_KEY),
+                    "generate_backend_code"
+                )
             try:
                 if not self.agent:
                     return self._handle_error(
@@ -395,6 +451,11 @@ class GenericSuiteMCPServer:
         )
         async def get_knowledge_base_stats() -> Dict[str, Any]:
             """Get statistics about the knowledge base."""
+            if not self.verify_api_key():
+                return self._handle_error(
+                    Exception(MSG_ERROR_INVALID_KEY),
+                    "get_knowledge_base_stats"
+                )
             try:
                 if not self.vector_db:
                     return self._handle_error(
@@ -419,6 +480,11 @@ class GenericSuiteMCPServer:
                            name="Server Information")
         async def get_server_info() -> Dict[str, Any]:
             """Get information about the MCP server."""
+            if not self.verify_api_key():
+                return self._handle_error(
+                    Exception(MSG_ERROR_INVALID_KEY),
+                    "get_server_info"
+                )
             try:
                 return {
                     "success": True,
@@ -450,6 +516,11 @@ class GenericSuiteMCPServer:
         )
         async def get_agent_capabilities() -> Dict[str, Any]:
             """Get detailed information about agent capabilities."""
+            if not self.verify_api_key():
+                return self._handle_error(
+                    Exception(MSG_ERROR_INVALID_KEY),
+                    "get_agent_capabilities"
+                )
             try:
                 if not self.agent:
                     return self._handle_error(
@@ -526,13 +597,11 @@ class GenericSuiteMCPServer:
             if not self.agent:
                 raise Exception("AI agent not initialized")
 
-            # search_results = \
-            #     self.kb_tool.search(query, limit=limit)
             final_context, search_results, raw_results = \
                 self.kb_tool.get_context_for_generation(
                     query, limit=limit)
 
-            logger.info(
+            _ = DEBUG and log_debug(
                 ">>> _search_knowledge_base_async"
                 f"\n | final_context: {final_context}"
                 f"\n | search_results: {search_results}"
@@ -558,8 +627,9 @@ class GenericSuiteMCPServer:
 
         except Exception as e:
             # Get error source and line number if possible
-            logger.error(
-                f"Knowledge base search failed [SKBA-010]: {e}"
+            log_error(
+                f"Knowledge base search failed [SKBA-010]: {e}",
+                exc_info=True
             )
             # Return empty results on error
             final_result["success"] = False
@@ -573,13 +643,15 @@ class GenericSuiteMCPServer:
             "host": self.config.host,
             "port": self.config.port,
         }
-        logger.info(f">>>> MCP server run arguments: {mcp_run_args}")
+        _ = DEBUG and log_debug(
+            f">>>> MCP server run arguments: {mcp_run_args}")
         return mcp_run_args
 
     def run(self):
         """Run the MCP server synchronously."""
         try:
-            logger.info(f"Starting MCP server on {self.config.transport}")
+            _ = DEBUG and log_debug(
+                f"Starting MCP server on {self.config.transport}")
             # FastMCP typically runs on stdio for MCP protocol
             mcp_run_args = self.get_mcp_run_args()
             if self.config.transport == "http":
@@ -587,13 +659,13 @@ class GenericSuiteMCPServer:
             else:
                 asyncio.run(self.mcp.run_stdio_async())
         except Exception as e:
-            logger.error(f"MCP server failed to start: {e}")
+            log_error(f"MCP server failed to start: {e}", exc_info=True)
             raise
 
     async def run_async(self):
         """Run the MCP server asynchronously."""
         try:
-            logger.info(
+            _ = DEBUG and log_debug(
                 f"Starting MCP server (async) on {self.config.transport}")
             # FastMCP typically runs on stdio for MCP protocol
             mcp_run_args = self.get_mcp_run_args()
@@ -602,7 +674,7 @@ class GenericSuiteMCPServer:
             else:
                 await self.mcp.run_stdio_async()
         except Exception as e:
-            logger.error(f"MCP server failed to start: {e}")
+            log_error(f"MCP server failed to start: {e}", exc_info=True)
             raise
 
 
@@ -631,13 +703,13 @@ def load_environment(current_dir: str):
 
         if env_file.exists():
             load_dotenv(env_file)
-            logger.info(f"Loaded environment from {env_file}")
+            _ = DEBUG and log_debug(f"Loaded environment from {env_file}")
         else:
-            logger.warning(
+            log_warning(
                 "No .env file found, using system environment variables")
 
     except ImportError:
-        logger.warning(
+        log_warning(
             "python-dotenv not available, using system environment variables")
 
 
@@ -646,7 +718,7 @@ def validate_environment():
     required_vars = []
     optional_vars = {
         "MCP_SERVER_HOST": "0.0.0.0",
-        "MCP_SERVER_PORT": "8070",
+        "MCP_SERVER_PORT": "8072",
         "MCP_API_KEY": None,
         "MCP_DEBUG": "0",
         "MCP_TRANSPORT": DEFAULT_MCP_TRANSPORT  # "http" or "stdio"
@@ -654,52 +726,61 @@ def validate_environment():
 
     missing_vars = []
     for var in required_vars:
-        if not os.getenv(var):
+        if not get_envvar(var):
             missing_vars.append(var)
 
     if missing_vars:
-        logger.error(f"Missing required environment variables: {missing_vars}")
+        log_error(f"Missing required environment variables: {missing_vars}")
         return False
 
     # Log optional variables
     for var, default in optional_vars.items():
-        value = os.getenv(var, default)
-        logger.info(f"{var}: {value}")
+        value = get_envvar(var, default)
+        _ = DEBUG and log_debug(f"{var}: {value}")
 
     return True
 
 
-def get_mcp_config():
+def get_mcp_config() -> MCPConfig:
     """Get MCP server configuration from environment variables."""
     return MCPConfig(
-        server_name=os.getenv("MCP_SERVER_NAME", "genericsuite-codegen"),
-        server_version=os.getenv("MCP_SERVER_VERSION", "1.0.0"),
-        api_key=os.getenv("MCP_API_KEY"),
-        host=os.getenv("MCP_SERVER_HOST", "0.0.0.0"),
-        port=int(os.getenv("MCP_SERVER_PORT", "8070")),
-        debug=os.getenv("MCP_DEBUG", "0") == "1",
-        transport=os.getenv("MCP_TRANSPORT", DEFAULT_MCP_TRANSPORT)
+        server_name=get_envvar("MCP_SERVER_NAME", "genericsuite-codegen"),
+        server_version=get_envvar("MCP_SERVER_VERSION", "1.0.0"),
+        api_key=get_envvar("MCP_API_KEY"),
+        host=get_envvar("MCP_SERVER_HOST", "0.0.0.0"),
+        port=int(get_envvar("MCP_SERVER_PORT", "8072")),
+        debug=get_envvar("MCP_DEBUG", "0") == "1",
+        transport=get_envvar("MCP_TRANSPORT", DEFAULT_MCP_TRANSPORT),
     )
 
 
 def report_mcp_config(config: MCPConfig):
     """Report MCP server configuration."""
-    logger.info("Server configuration:")
-    logger.info(f"  Name: {config.server_name}")
-    logger.info(f"  Version: {config.server_version}")
-    logger.info(f"  Host: {config.host}")
-    logger.info(f"  Port: {config.port}")
-    logger.info(f"  Debug: {config.debug}")
-    logger.info(f"  API Key: {'Set' if config.api_key else 'Not set'}")
-    logger.info(f"  Transport: {config.transport}")
+    if DEBUG:
+        log_debug("Server configuration:")
+        log_debug(f"  Name: {config.server_name}")
+        log_debug(f"  Version: {config.server_version}")
+        log_debug(f"  Host: {config.host}")
+        log_debug(f"  Port: {config.port}")
+        log_debug(f"  Debug: {config.debug}")
+        log_debug(f"  API Key: {'Set' if config.api_key else 'Not set'}")
+        log_debug(f"  Transport: {config.transport}")
 
 
 def print_output(message: str):
     """Print output to the terminal."""
-    mcp_transport = os.getenv("MCP_TRANSPORT", DEFAULT_MCP_TRANSPORT)
+    mcp_transport = get_envvar("MCP_TRANSPORT", DEFAULT_MCP_TRANSPORT)
     if mcp_transport == "http":
         print(message)
     else:
         json_message = json.dumps({
             "message": message})
         print(json_message)
+
+
+def get_access_token():
+    """
+    Get the access token
+    """
+    headers = get_http_headers()
+    return headers.get("authorization")
